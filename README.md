@@ -10,20 +10,20 @@ Built as a mobile-first PWA so it works on any device without an app store. Futu
 
 ## Current Status
 
-**v1.1 — Goals, 4 strategies, lump-sum simulator, and bug fixes shipped.**
+**v1.2 — Sinking funds shipped. Surplus is now accurate.**
 
 All 6 screens built and tested with live data:
 
-- **Dashboard** — totals, monthly interest, surplus, smart alerts, goals snapshot
+- **Dashboard** — totals, monthly interest, surplus (net of sinking funds), smart alerts, goals snapshot
 - **Plan** — 4 payoff strategies with freed-minimum rollover, lump-sum simulator, extra payment slider, AI insights
 - **Goals** — set debt-free date targets, per-card payoff goals, balance targets; required-payment calculator shows exactly what it takes to hit any date
 - **Accounts** — utilization bars, due date badges, promo APR warnings
 - **Activity** — transaction history grouped by month, categorized, filterable
-- **Settings** — bank connect/disconnect, income/expenses/strategy profile
+- **Settings** — bank connect/disconnect, income/expenses/strategy profile, sinking funds manager
 - Daily Plaid sync at 8am via cron
 - Claude AI insights wired into the Plan screen (optional — gracefully skipped if no API key)
 
-**Next:** connect real Plaid production credentials, add upcoming expenses / sinking funds, build the card rewards & points engine.
+**Next:** manual APR entry as fallback for real banks, then the card rewards & points engine.
 
 ---
 
@@ -36,7 +36,7 @@ All 6 screens built and tested with live data:
 - **Plan** — Four payoff strategies, 3 scenarios, extra payment slider, lump-sum simulator, attack order with per-card payoff dates, AI analysis
 - **Goals** — Set targets and track progress; required-payment calculator answers "what does it take to be free by [date]?"
 - **Activity** — Transaction history grouped by month (after syncing via Plaid)
-- **Settings** — Connect/disconnect banks via Plaid Link, update income/expenses/strategy
+- **Settings** — Connect/disconnect banks via Plaid Link, update income/expenses/strategy, manage sinking funds
 
 ### Payoff Strategies
 
@@ -58,6 +58,10 @@ Three goal types:
 ### Lump-Sum Simulator
 
 On the Plan screen, enter any one-time amount (tax refund, bonus, gift) and pick which card to apply it to. The simulator instantly shows months saved and interest saved vs. not making that payment.
+
+### Sinking Funds
+
+In Settings, reserve a monthly amount for known future expenses — car registration, medical bills, holiday spending, travel, taxes, etc. Enter the monthly equivalent (e.g. $1,200/yr car registration = $100/mo). The total is automatically subtracted from your surplus in every calculation: dashboard, plan, lump-sum simulator, and required-payment calculator. This keeps the payoff timeline honest — a plan that ignores real expenses will always slip.
 
 ---
 
@@ -123,12 +127,13 @@ zeroed/
 ├── src/
 │   ├── server.js                 # Express server, /api/dashboard, /api/user, cron
 │   ├── db/
-│   │   ├── schema.sql            # SQLite schema (8 tables)
-│   │   └── database.js           # DB singleton, upsertAccount, savePlan, goals CRUD
+│   │   ├── schema.sql            # SQLite schema (9 tables)
+│   │   └── database.js           # DB singleton, upsertAccount, savePlan, goals + expenses CRUD
 │   ├── routes/
 │   │   ├── plaid.js              # /api/plaid/* — link token, exchange, sync, accounts
 │   │   ├── plan.js               # /api/plan/* — generate, latest, alerts, lump-sum, required-payment
 │   │   ├── goals.js              # /api/goals — CRUD + live progress computation
+│   │   ├── expenses.js           # /api/expenses — sinking funds CRUD
 │   │   └── transactions.js       # /api/transactions
 │   ├── services/
 │   │   ├── plaidService.js       # Plaid API client
@@ -141,7 +146,7 @@ zeroed/
 │       ├── plan.html             # Payoff plan + strategies + lump-sum
 │       ├── goals.html            # Goals + required-payment calculator
 │       ├── activity.html         # Transaction history
-│       └── settings.html         # Profile + bank connections
+│       └── settings.html         # Profile + bank connections + sinking funds
 ├── .env.example
 ├── .gitignore
 └── package.json
@@ -171,6 +176,9 @@ zeroed/
 | DELETE | `/api/goals/:id` | Remove a goal |
 | GET | `/api/transactions` | Transaction list with account name (`?limit=200`) |
 | GET | `/api/transactions/summary` | Spending by category |
+| GET | `/api/expenses` | All sinking funds + monthly total |
+| POST | `/api/expenses` | Add a sinking fund (`name`, `amount`, `category`) |
+| DELETE | `/api/expenses/:id` | Remove a sinking fund |
 
 ---
 
@@ -251,13 +259,13 @@ pm2 logs zeroed   # view logs
 - [x] AI insights stored persistently per plan
 - [x] Promo APR and high-utilization alerts
 - [x] Daily Plaid sync cron
+- [x] Sinking funds — reserve monthly amounts for known future expenses; flows into all surplus calculations
 
 ### Up Next 🔜
-- [ ] **Upcoming expenses / sinking funds** — enter known future costs (car registration, holiday spending, medical bills); system automatically reduces available surplus in payoff simulations so the plan stays realistic
+- [ ] **Manual APR entry** — Settings form to manually set APR, minimum payment, and due date per card; needed as a fallback when Plaid Liabilities product isn't approved for production
 - [ ] **Card recommendation engine** — given a purchase category (dining, groceries, travel, gas), recommend which card to use based on reward multipliers, point valuations, and a hard rule against using cards you're actively paying down
 - [ ] **Rewards & points profiles** — preset profiles for Chase Sapphire, Amex Gold, Bilt, Citi Double Cash, BofA Cash Rewards, etc. with category multipliers and estimated point values
 - [ ] Connect Plaid production credentials + get Liabilities product approved
-- [ ] Manual APR entry in Settings as fallback when Plaid liabilities aren't available
 - [ ] Push notifications for payment due dates and promo APR expiry
 
 ### Later 📋
