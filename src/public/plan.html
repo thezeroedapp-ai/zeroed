@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zeroed — Plan</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+  <div class="top-bar">
+    <h1>Payoff Plan</h1>
+    <div class="sub" id="plan-sub"></div>
+  </div>
+
+  <div class="content">
+    <div id="page-loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading your plan…</p>
+    </div>
+    <div id="page-error" class="error-state" style="display:none">
+      <div class="error-icon">⚠️</div>
+      <p>Could not load plan</p>
+      <small id="error-msg">Check that the server is running</small>
+      <button class="btn btn-primary" onclick="load()">Try Again</button>
+    </div>
+    <div id="page-content" style="display:none">
+      <div class="section-title">Strategy</div>
+      <div class="strategy-toggle">
+        <button id="btn-avalanche" class="active" onclick="setStrategy('avalanche')">🏔 Avalanche</button>
+        <button id="btn-snowball" onclick="setStrategy('snowball')">⛄ Snowball</button>
+      </div>
+      <div class="card mt-8" style="font-size:13px;color:var(--text-sm);line-height:1.5" id="strategy-desc">
+        <strong>Avalanche</strong> — Highest APR first. Minimizes total interest paid.
+      </div>
+
+      <div class="section-title">Scenarios</div>
+      <div class="scenarios" id="scenarios"></div>
+
+      <div class="card">
+        <div class="flex-between mb-8">
+          <span style="font-size:13px;font-weight:600">Extra Monthly Payment</span>
+          <span style="font-size:16px;font-weight:700;color:var(--blue)" id="slider-val">$0/mo</span>
+        </div>
+        <div class="slider-wrap">
+          <input type="range" id="extra-slider" min="0" max="1000" step="50" value="0">
+          <div class="slider-labels"><span>$0</span><span>$500</span><span>$1,000</span></div>
+        </div>
+        <div style="font-size:12px;color:var(--text-sm);margin-top:4px" id="slider-result">Move the slider to see how extra payments accelerate payoff</div>
+      </div>
+
+      <div class="section-title">Attack Order</div>
+      <div class="card" id="attack-list"></div>
+
+      <div id="analysis-section" style="display:none">
+        <div class="section-title">AI Analysis</div>
+        <blockquote class="analysis" id="analysis-text"></blockquote>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </a>
+    <a href="accounts.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      <span>Accounts</span>
+    </a>
+    <a href="plan.html" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      <span>Plan</span>
+    </a>
+    <a href="activity.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Activity</span>
+    </a>
+    <a href="settings.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span>
+    </a>
+  </nav>
+</div>
+
+<script>
+const fmtD = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const fmt  = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+
+let strategy='avalanche', debts=[], surplus=0;
+
+function show(state) {
+  document.getElementById('page-loading').style.display = state==='loading' ? 'block' : 'none';
+  document.getElementById('page-error').style.display   = state==='error'   ? 'block' : 'none';
+  document.getElementById('page-content').style.display = state==='content' ? 'block' : 'none';
+}
+
+function simulatePayoff(debtList, extraBudget, strat) {
+  const active=debtList.filter(d=>d.balance>0);
+  if (!active.length) return {months:0,totalInterest:0,cardPayoffMonths:{}};
+  const w=[...active].sort((a,b)=>strat==='avalanche'?(b.apr-a.apr)||(a.balance-b.balance):a.balance-b.balance).map(d=>({...d,rem:d.balance}));
+  let months=0,interest=0,freed=0;
+  const extra=Math.max(0,extraBudget);
+  const cpM={};
+  while(w.some(d=>d.rem>0)&&months<600){
+    months++;
+    for(const d of w){if(d.rem<=0)continue;const i=d.rem*d.apr/100/12;d.rem+=i;interest+=i;}
+    for(const d of w){if(d.rem<=0)continue;const p=Math.min(d.minimumPayment,d.rem);d.rem-=p;if(d.rem<0.01){d.rem=0;freed+=d.minimumPayment;if(!cpM[d.name])cpM[d.name]=months;}}
+    let atk=extra+freed;for(const d of w){if(d.rem<=0||atk<=0.005)continue;const p=Math.min(atk,d.rem);d.rem-=p;atk-=p;if(d.rem<0.01){d.rem=0;freed+=d.minimumPayment;if(!cpM[d.name])cpM[d.name]=months;}}
+  }
+  return {months,totalInterest:Math.round(interest*100)/100,cardPayoffMonths:cpM};
+}
+
+function debtFreeDate(months) {
+  const d=new Date();d.setMonth(d.getMonth()+months);
+  return d.toLocaleDateString('en-US',{month:'short',year:'numeric'});
+}
+
+function renderScenarios(sliderExtra) {
+  const sc=[0,300,500].map(e=>{
+    const r=simulatePayoff(debts,surplus+sliderExtra+e,strategy);
+    return{extra:e,...r};
+  });
+  document.getElementById('scenarios').innerHTML=sc.map((s,i)=>`
+    <div class="scenario${i===0?' active':''}">
+      <div class="sc-label">${s.extra===0?'Current':'+'+fmt(s.extra)+'/mo'}</div>
+      <div class="sc-months">${s.months}</div>
+      <div class="sc-unit">months</div>
+      <div class="sc-interest">${fmt(s.totalInterest)} interest</div>
+    </div>`).join('');
+}
+
+function renderAttackOrder(cpMonths) {
+  const sorted=[...debts].filter(d=>d.balance>0).sort((a,b)=>strategy==='avalanche'?(b.apr-a.apr)||(a.balance-b.balance):a.balance-b.balance);
+  document.getElementById('attack-list').innerHTML=sorted.length?sorted.map((d,i)=>`
+    <div class="attack-item">
+      <div class="attack-num">${i+1}</div>
+      <div class="attack-body">
+        <div class="attack-name">${d.name}</div>
+        <div class="attack-sub">${d.apr}% APR · ${fmtD(d.minimumPayment)}/mo min</div>
+      </div>
+      <div class="attack-right">
+        <div class="attack-balance">${fmtD(d.balance)}</div>
+        <div class="attack-payoff">${cpMonths[d.name]?'~'+debtFreeDate(cpMonths[d.name]):'—'}</div>
+      </div>
+    </div>`).join(''):'<div style="font-size:14px;color:var(--text-sm);padding:8px 0">No debt accounts found</div>';
+}
+
+function setStrategy(s) {
+  strategy=s;
+  document.getElementById('btn-avalanche').classList.toggle('active',s==='avalanche');
+  document.getElementById('btn-snowball').classList.toggle('active',s==='snowball');
+  document.getElementById('strategy-desc').innerHTML=s==='avalanche'
+    ?'<strong>Avalanche</strong> — Highest APR first. Minimizes total interest paid.'
+    :'<strong>Snowball</strong> — Lowest balance first. Builds momentum with quick wins.';
+  const extra=parseInt(document.getElementById('extra-slider').value,10);
+  const {months,totalInterest,cardPayoffMonths}=simulatePayoff(debts,surplus+extra,s);
+  renderScenarios(extra);
+  renderAttackOrder(cardPayoffMonths);
+  updateSliderResult(extra,months,totalInterest);
+  fetch('/api/user',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy:s})}).catch(()=>{});
+}
+
+function updateSliderResult(extra,months,totalInterest) {
+  document.getElementById('slider-val').textContent='$'+extra+'/mo';
+  document.getElementById('slider-result').textContent=extra>0
+    ?`With $${extra}/mo extra → debt free ${debtFreeDate(months)} (${months} months) · ${fmt(totalInterest)} total interest`
+    :'Move the slider to see how extra payments accelerate payoff';
+}
+
+document.getElementById('extra-slider').addEventListener('input',function(){
+  const extra=parseInt(this.value,10);
+  const {months,totalInterest,cardPayoffMonths}=simulatePayoff(debts,surplus+extra,strategy);
+  renderScenarios(extra);
+  renderAttackOrder(cardPayoffMonths);
+  updateSliderResult(extra,months,totalInterest);
+});
+
+async function load() {
+  show('loading');
+  try {
+    const [accounts,user]=await Promise.all([
+      fetch('/api/plaid/accounts').then(r=>{if(!r.ok)throw new Error(`Server returned ${r.status}`);return r.json();}),
+      fetch('/api/user').then(r=>r.json()).catch(()=>({monthly_income:7008,monthly_expenses:3900,strategy:'avalanche'})),
+    ]);
+
+    strategy=user?.strategy||'avalanche';
+    document.getElementById('btn-avalanche').classList.toggle('active',strategy==='avalanche');
+    document.getElementById('btn-snowball').classList.toggle('active',strategy==='snowball');
+    document.getElementById('strategy-desc').innerHTML=strategy==='avalanche'
+      ?'<strong>Avalanche</strong> — Highest APR first. Minimizes total interest paid.'
+      :'<strong>Snowball</strong> — Lowest balance first. Builds momentum with quick wins.';
+
+    const credits=accounts.filter(a=>a.type==='credit');
+    const totalMin=credits.reduce((s,a)=>s+(a.minimum_payment||0),0);
+    surplus=(user?.monthly_income||0)-(user?.monthly_expenses||0)-totalMin;
+    debts=credits.map(a=>({name:a.name,balance:a.balance_current,apr:a.apr||0,minimumPayment:a.minimum_payment||0}));
+
+    const totalDebt=debts.reduce((s,d)=>s+d.balance,0);
+    document.getElementById('plan-sub').textContent=`${fmt(totalDebt)} total · ${fmt(Math.max(0,surplus))}/mo surplus`;
+
+    const {months,totalInterest,cardPayoffMonths}=simulatePayoff(debts,surplus,strategy);
+    renderScenarios(0);
+    renderAttackOrder(cardPayoffMonths);
+    updateSliderResult(0,months,totalInterest);
+
+    try {
+      const plan=await fetch('/api/plan/latest').then(r=>r.json());
+      if(plan?.plan_data?.insight){
+        document.getElementById('analysis-section').style.display='block';
+        document.getElementById('analysis-text').textContent=plan.plan_data.insight;
+      }
+    } catch(_){}
+
+    show('content');
+  } catch(e) {
+    document.getElementById('error-msg').textContent = e.message;
+    show('error');
+  }
+}
+
+load();
+</script>
+</body>
+</html>

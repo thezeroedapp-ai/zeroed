@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zeroed — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+  <div class="top-bar">
+    <div style="font-size:17px;font-weight:700" id="greeting">Welcome back</div>
+    <div class="sub" id="date-str"></div>
+  </div>
+
+  <div class="content">
+    <div id="page-loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading your dashboard…</p>
+    </div>
+    <div id="page-error" class="error-state" style="display:none">
+      <div class="error-icon">⚠️</div>
+      <p>Could not load dashboard</p>
+      <small id="error-msg">Check that the server is running</small>
+      <button class="btn btn-primary" onclick="load()">Try Again</button>
+    </div>
+    <div id="page-content" style="display:none">
+      <!-- Total debt card -->
+      <div class="card">
+        <div class="card-label">Total Debt</div>
+        <div style="font-size:34px;font-weight:800;line-height:1" id="total-debt">—</div>
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill red" id="debt-bar" style="width:0%"></div></div>
+          <div class="progress-labels">
+            <span id="utilization-label">—</span>
+            <span id="debt-free-label" style="font-weight:600;color:var(--blue)">—</span>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text-sm);margin-top:2px" id="debt-sub"></div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="metrics">
+        <div class="metric">
+          <div class="m-label">Monthly Interest</div>
+          <div class="m-value red" id="monthly-interest">—</div>
+        </div>
+        <div class="metric">
+          <div class="m-label">Monthly Surplus</div>
+          <div class="m-value" id="monthly-surplus">—</div>
+        </div>
+      </div>
+
+      <!-- Warnings -->
+      <div id="warnings-section" style="display:none">
+        <div class="section-title">⚠️ Alerts</div>
+        <div id="warnings-list"></div>
+      </div>
+
+      <!-- Focus card -->
+      <div class="section-title">This Month's Focus</div>
+      <div class="focus-card">
+        <div class="focus-label">⚡ Priority Attack</div>
+        <div id="focus-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <a href="index.html" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </a>
+    <a href="accounts.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      <span>Accounts</span>
+    </a>
+    <a href="plan.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      <span>Plan</span>
+    </a>
+    <a href="activity.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Activity</span>
+    </a>
+    <a href="settings.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span>
+    </a>
+  </nav>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt  = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+const fmtD = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+
+function show(state) {
+  $('page-loading').style.display = state==='loading' ? 'block' : 'none';
+  $('page-error').style.display   = state==='error'   ? 'block' : 'none';
+  $('page-content').style.display = state==='content' ? 'block' : 'none';
+}
+
+function setGreeting(name) {
+  const h = new Date().getHours();
+  const g = h<12 ? 'Good morning' : h<17 ? 'Good afternoon' : 'Good evening';
+  $('greeting').textContent = `${g}, ${name}`;
+  $('date-str').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+}
+
+async function load() {
+  show('loading');
+  try {
+    const data = await fetch('/api/dashboard').then(r => {
+      if (!r.ok) throw new Error(`Server returned ${r.status}`);
+      return r.json();
+    });
+
+    setGreeting(data.user?.name || 'there');
+
+    $('total-debt').textContent = fmt(data.totalDebt);
+    $('monthly-interest').textContent = fmtD(data.monthlyInterest);
+    $('monthly-surplus').textContent  = fmt(data.surplus);
+    $('monthly-surplus').className    = 'm-value ' + (data.surplus >= 0 ? 'green' : 'red');
+    $('debt-sub').textContent = `${data.accountCount} cards · ${fmtD(data.totalMinimums)}/mo minimums`;
+
+    // Progress bar (utilization vs credit limits — fetched separately for the bar)
+    if (data.debtFreeDate) {
+      $('debt-free-label').textContent = 'Free ' + data.debtFreeDate;
+    }
+
+    // Alerts
+    if (data.alerts?.length) {
+      $('warnings-section').style.display = 'block';
+      $('warnings-list').innerHTML = data.alerts.map(a => `
+        <div class="warning">
+          <div class="warn-icon">${a.severity==='danger'?'🔴':'⚠️'}</div>
+          <div class="warn-body">
+            <div class="warn-title">${a.title}</div>
+            <div class="warn-desc">${a.description}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // Focus card
+    const p = data.priorityCard;
+    if (p) {
+      $('focus-content').innerHTML = `
+        <div style="font-size:17px;font-weight:700;margin-bottom:4px">${p.name}</div>
+        <div style="font-size:26px;font-weight:800;color:var(--red)">${fmtD(p.balance_current)}</div>
+        <div style="font-size:13px;color:var(--text-sm);margin-top:4px">
+          ${p.apr}% APR &nbsp;·&nbsp; ${fmtD(p.minimum_payment)}/mo minimum
+          ${p.payment_due_date ? ` &nbsp;·&nbsp; Due ${new Date(p.payment_due_date+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : ''}
+        </div>
+        <div style="font-size:13px;margin-top:10px;color:var(--blue);font-weight:500">
+          Highest APR — every extra dollar here saves the most in interest.
+        </div>`;
+    }
+
+    show('content');
+  } catch (e) {
+    $('error-msg').textContent = e.message || 'Could not connect to server';
+    show('error');
+  }
+}
+
+load();
+</script>
+</body>
+</html>
