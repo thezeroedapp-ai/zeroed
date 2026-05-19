@@ -3,7 +3,7 @@ const express = require('express');
 const cors    = require('cors');
 const cron    = require('node-cron');
 const path    = require('path');
-const { init, getDb } = require('./db/database');
+const { init, getDb, getExpenses } = require('./db/database');
 const payoffEngine   = require('./services/payoffEngine');
 const { syncAllAccounts } = require('./services/plaidService');
 
@@ -11,6 +11,7 @@ const plaidRoutes       = require('./routes/plaid');
 const planRoutes        = require('./routes/plan');
 const transactionRoutes = require('./routes/transactions');
 const goalsRoutes       = require('./routes/goals');
+const expensesRoutes    = require('./routes/expenses');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +24,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/plaid',        plaidRoutes);
 app.use('/api/plan',         planRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/expenses',     expensesRoutes);
 app.use('/api/goals',        goalsRoutes);
 
 app.get('/api/health', (req, res) => {
@@ -51,10 +53,12 @@ app.get('/api/dashboard', (req, res) => {
     const user     = db.prepare('SELECT * FROM users WHERE id = 1').get();
     const accounts = db.prepare(CREDIT_ACCOUNTS_QUERY).all();
 
+    const expenses       = getExpenses(1);
+    const sinkingTotal   = expenses.reduce((s, e) => s + e.amount, 0);
     const totalDebt      = accounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const monthlyInterest= accounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
     const totalMinimums  = accounts.reduce((s, a) => s + (a.minimum_payment || 0), 0);
-    const surplus        = (user?.monthly_income || 0) - (user?.monthly_expenses || 0) - totalMinimums;
+    const surplus        = (user?.monthly_income || 0) - (user?.monthly_expenses || 0) - totalMinimums - sinkingTotal;
     const strategy       = user?.strategy || 'avalanche';
 
     const debts = accounts.filter(a => a.balance_current > 0).map(a => ({

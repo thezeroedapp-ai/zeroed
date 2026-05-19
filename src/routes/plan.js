@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const payoffEngine  = require('../services/payoffEngine');
 const claudeService = require('../services/claudeService');
-const { getDb, savePlan, getPayoffPlan } = require('../db/database');
+const { getDb, savePlan, getPayoffPlan, getExpenses } = require('../db/database');
 
 const ACCOUNTS_QUERY = `
   SELECT a.id, a.name, a.balance_current, a.credit_limit, a.type,
@@ -23,7 +23,9 @@ router.post('/generate', async (req, res) => {
     const accounts = db.prepare(ACCOUNTS_QUERY + ' AND a.balance_current > 0').all();
     if (!accounts.length) return res.status(400).json({ error: 'No debt accounts found.' });
 
-    const strategy = req.body.strategy || user.strategy || 'avalanche';
+    const strategy     = req.body.strategy || user.strategy || 'avalanche';
+    const expenses     = getExpenses(1);
+    const sinkingTotal = expenses.reduce((s, e) => s + e.amount, 0);
     const debts = accounts.map(a => ({
       name:          a.name,
       balance:       a.balance_current,
@@ -32,7 +34,7 @@ router.post('/generate', async (req, res) => {
     }));
 
     const plan = payoffEngine.calculatePayoffPlan(
-      debts, user.monthly_income, user.monthly_expenses, 0, strategy
+      debts, user.monthly_income, (user.monthly_expenses || 0) + sinkingTotal, 0, strategy
     );
 
     // Claude insight — non-fatal if API key missing
@@ -96,8 +98,9 @@ router.post('/lump-sum', (req, res) => {
     const debts = accounts.map(a => ({
       id: a.id, name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
     }));
-    const totalMin = debts.reduce((s, d) => s + d.minimumPayment, 0);
-    const surplus  = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin;
+    const totalMin     = debts.reduce((s, d) => s + d.minimumPayment, 0);
+    const sinkingTotal = getExpenses(1).reduce((s, e) => s + e.amount, 0);
+    const surplus      = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin - sinkingTotal;
 
     res.json(payoffEngine.simulateLumpSum(debts, lump, accountId || null, Math.max(0, surplus), strategy));
   } catch (err) {
@@ -120,8 +123,9 @@ router.post('/required-payment', (req, res) => {
     const debts = accounts.map(a => ({
       name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
     }));
-    const totalMin = debts.reduce((s, d) => s + d.minimumPayment, 0);
-    const surplus  = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin;
+    const totalMin     = debts.reduce((s, d) => s + d.minimumPayment, 0);
+    const sinkingTotal = getExpenses(1).reduce((s, e) => s + e.amount, 0);
+    const surplus      = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin - sinkingTotal;
 
     const target = new Date(targetDate);
     const now    = new Date();

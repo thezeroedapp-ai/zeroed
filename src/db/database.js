@@ -24,6 +24,14 @@ function init() {
   const migrations = [
     "ALTER TABLE payoff_plans ADD COLUMN insight TEXT",
     "ALTER TABLE users ADD COLUMN strategy TEXT NOT NULL DEFAULT 'avalanche'",
+    `CREATE TABLE IF NOT EXISTS user_expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      category TEXT NOT NULL DEFAULT 'other',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* column already exists */ }
@@ -151,4 +159,22 @@ function deleteGoal(id, userId) {
   return getDb().prepare('UPDATE user_goals SET is_active = 0 WHERE id = ? AND user_id = ?').run(id, userId);
 }
 
-module.exports = { getDb, init, getUser, upsertAccount, saveTransactions, getPayoffPlan, savePlan, getGoals, createGoal, deleteGoal };
+// --- user_expenses ---
+
+function getExpenses(userId) {
+  return getDb().prepare('SELECT * FROM user_expenses WHERE user_id = ? ORDER BY created_at ASC').all(userId);
+}
+
+function addExpense(expense) {
+  const db = getDb();
+  const { lastInsertRowid } = db.prepare(
+    'INSERT INTO user_expenses (user_id, name, amount, category) VALUES (@user_id, @name, @amount, @category)'
+  ).run(expense);
+  return db.prepare('SELECT * FROM user_expenses WHERE id = ?').get(lastInsertRowid);
+}
+
+function deleteExpense(id, userId) {
+  return getDb().prepare('DELETE FROM user_expenses WHERE id = ? AND user_id = ?').run(id, userId);
+}
+
+module.exports = { getDb, init, getUser, upsertAccount, saveTransactions, getPayoffPlan, savePlan, getGoals, createGoal, deleteGoal, getExpenses, addExpense, deleteExpense };
