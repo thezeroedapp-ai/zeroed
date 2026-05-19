@@ -1,6 +1,26 @@
 # Zeroed — Debt Payoff Tracker
 
-A mobile-first PWA for tracking and eliminating credit card debt. Connects to your bank accounts via Plaid, calculates an optimal payoff plan (avalanche or snowball), and gives you a clear debt-free date.
+The goal of Zeroed is simple: **know exactly when you'll be debt-free, and take the fastest path there.**
+
+Most people with credit card debt don't have a clear picture — they make minimum payments, get hit with interest, and never see the finish line. Zeroed connects to your real bank accounts, surfaces your actual APRs and balances, and runs a month-by-month simulation that shows you the optimal order to attack your debt, your exact debt-free date, and how much interest you'll save by throwing even an extra $100/mo at it.
+
+Built as a mobile-first PWA so it works on any device without an app store. Future upgrade path to iOS/Android via React Native is planned.
+
+---
+
+## Current Status
+
+**v1.0 — fully working.** All 5 screens built and tested with live data:
+
+- Dashboard loads with correct totals, monthly interest burn, surplus, and smart alerts
+- Plan screen runs avalanche/snowball simulation with freed-minimum rollover
+- Accounts screen shows utilization bars, due date badges, and promo APR warnings
+- Activity screen ready for transactions once Plaid sync runs
+- Settings screen handles bank connect/disconnect and profile updates
+- Daily Plaid sync runs automatically at 8am via cron
+- Claude AI insights wired into the Plan screen (optional — gracefully skipped if no API key)
+
+**Next:** connect real Plaid production credentials, get Plaid Liabilities product approved, add manual APR entry as fallback, ship to a real device.
 
 ---
 
@@ -32,8 +52,8 @@ A mobile-first PWA for tracking and eliminating credit card debt. Connects to yo
 ### 1. Clone and install
 
 ```bash
-git clone <your-repo-url>
-cd zeroed
+git clone https://github.com/venkatbade/Zeroed.git
+cd Zeroed
 npm install
 ```
 
@@ -134,7 +154,7 @@ Each simulation month: accrue interest → pay all minimums → attack priority 
 
 ## Dev Seed Data
 
-On first run the server seeds Venkat's profile and 5 realistic credit cards (no Plaid credentials needed):
+On first run the server seeds a profile and 5 realistic credit cards (no Plaid credentials needed):
 
 | Card | Balance | APR | Min | Due |
 |------|---------|-----|-----|-----|
@@ -163,31 +183,37 @@ Accounts synced from Plaid are merged with any existing dev seed data. Real Plai
 
 ---
 
-## Deploying to Desktop / Always-On
+## Running on Desktop / Always-On
 
-To run this on another machine, or keep it running in the background:
+To keep the server running after your terminal closes:
 
 ```bash
-# Install dependencies on the new machine (after copying/cloning the repo)
-npm install
-
-# Keep the server running after terminal closes
 npm install -g pm2
 pm2 start src/server.js --name zeroed
 pm2 save
-pm2 startup   # auto-start on boot
+pm2 startup   # auto-start on reboot
 
-# Check logs
-pm2 logs zeroed
+pm2 logs zeroed   # view logs
 ```
 
-The database file (`zeroed.db`) is local — copy it alongside the code if you want to preserve existing account data.
+The database file (`zeroed.db`) is local — copy it alongside the code if you want to preserve existing data when moving machines.
 
 ---
 
-## Upgrading to iOS/Android Later
+## Roadmap
 
-The PWA can be promoted to a native app using **React Native + Expo** or wrapped with **Capacitor**. The Express backend stays identical; only the frontend layer changes. The API contract documented above is the interface between them.
+- [ ] Connect Plaid production credentials + get Liabilities product approved
+- [ ] Manual APR entry in Settings as fallback when Plaid liabilities aren't available
+- [ ] Push notifications for payment due dates and promo APR expiry
+- [ ] Lump-sum payment simulator ("what if I put my tax refund at this card?")
+- [ ] React Native / Expo upgrade for native iOS + Android apps
+- [ ] Multi-user support with proper auth
+
+---
+
+## Upgrading to iOS/Android
+
+The PWA can be promoted to a native app using **React Native + Expo** or wrapped with **Capacitor**. The Express backend stays identical — only the frontend layer changes. The API contract documented above is the interface between them.
 
 ---
 
