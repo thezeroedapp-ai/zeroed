@@ -44,10 +44,12 @@ async function getAccounts(accessToken) {
   const creditDetailMap = {};
   for (const card of creditCards) {
     const purchaseApr = (card.aprs || []).find(a => a.apr_type === 'purchase_apr') || card.aprs?.[0];
+    const isPromo = purchaseApr?.apr_type?.includes('promotional') ? 1 : 0;
     creditDetailMap[card.account_id] = {
       apr: purchaseApr?.apr_percentage ?? null,
-      is_promotional_apr: purchaseApr?.apr_type?.includes('promotional') ? 1 : 0,
-      promo_apr_expiry_date: card.last_payment_date || null,
+      is_promotional_apr: isPromo,
+      // Plaid does not expose promo expiry directly; leave null so manual entry wins
+      promo_apr_expiry_date: null,
       minimum_payment: card.minimum_payment_amount ?? null,
       payment_due_date: card.next_payment_due_date || null,
     };

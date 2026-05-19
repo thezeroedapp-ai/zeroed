@@ -18,7 +18,16 @@ function getDb() {
 
 function init() {
   const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
-  getDb().exec(schema);
+  const db = getDb();
+  db.exec(schema);
+  // Migrations for existing databases
+  const migrations = [
+    "ALTER TABLE payoff_plans ADD COLUMN insight TEXT",
+    "ALTER TABLE users ADD COLUMN strategy TEXT NOT NULL DEFAULT 'avalanche'",
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch (_) { /* column already exists */ }
+  }
   console.log('Database initialized at', DB_PATH);
 }
 
@@ -98,8 +107,8 @@ const savePlan = (() => {
   return (plan) => {
     const db = getDb();
     planStmt = planStmt || db.prepare(`
-      INSERT INTO payoff_plans (user_id, strategy, total_debt, monthly_interest, surplus, debt_free_estimate)
-      VALUES (@user_id, @strategy, @total_debt, @monthly_interest, @surplus, @debt_free_estimate)
+      INSERT INTO payoff_plans (user_id, strategy, total_debt, monthly_interest, surplus, debt_free_estimate, insight)
+      VALUES (@user_id, @strategy, @total_debt, @monthly_interest, @surplus, @debt_free_estimate, @insight)
     `);
     itemStmt = itemStmt || db.prepare(`
       INSERT INTO plan_items (payoff_plan_id, account_id, priority_order, estimated_payoff_month, monthly_interest, notes)
@@ -116,4 +125,30 @@ const savePlan = (() => {
   };
 })();
 
-module.exports = { getDb, init, getUser, upsertAccount, saveTransactions, getPayoffPlan, savePlan };
+// --- goals ---
+
+function getGoals(userId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT g.*, a.name as account_name, a.balance_current as account_balance
+    FROM user_goals g
+    LEFT JOIN accounts a ON a.id = g.account_id
+    WHERE g.user_id = ? AND g.is_active = 1
+    ORDER BY g.created_at DESC
+  `).all(userId);
+}
+
+function createGoal(goal) {
+  const db = getDb();
+  const { lastInsertRowid } = db.prepare(`
+    INSERT INTO user_goals (user_id, goal_type, target_date, target_balance, account_id, label)
+    VALUES (@user_id, @goal_type, @target_date, @target_balance, @account_id, @label)
+  `).run(goal);
+  return db.prepare('SELECT * FROM user_goals WHERE id = ?').get(lastInsertRowid);
+}
+
+function deleteGoal(id, userId) {
+  return getDb().prepare('UPDATE user_goals SET is_active = 0 WHERE id = ? AND user_id = ?').run(id, userId);
+}
+
+module.exports = { getDb, init, getUser, upsertAccount, saveTransactions, getPayoffPlan, savePlan, getGoals, createGoal, deleteGoal };

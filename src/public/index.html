@@ -63,6 +63,13 @@
         <div class="focus-label">⚡ Priority Attack</div>
         <div id="focus-content"></div>
       </div>
+
+      <!-- Goals snapshot -->
+      <div id="goals-snapshot" style="display:none">
+        <div class="section-title">Goals</div>
+        <div id="goals-snapshot-list"></div>
+        <a href="goals.html" class="btn btn-outline btn-block mt-8" style="display:block;text-align:center">View All Goals</a>
+      </div>
     </div>
   </div>
 
@@ -78,6 +85,10 @@
     <a href="plan.html">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
       <span>Plan</span>
+    </a>
+    <a href="goals.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+      <span>Goals</span>
     </a>
     <a href="activity.html">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -111,10 +122,13 @@ function setGreeting(name) {
 async function load() {
   show('loading');
   try {
-    const data = await fetch('/api/dashboard').then(r => {
-      if (!r.ok) throw new Error(`Server returned ${r.status}`);
-      return r.json();
-    });
+    const [data, goalsData] = await Promise.all([
+      fetch('/api/dashboard').then(r => {
+        if (!r.ok) throw new Error(`Server returned ${r.status}`);
+        return r.json();
+      }),
+      fetch('/api/goals').then(r => r.json()).catch(() => null),
+    ]);
 
     setGreeting(data.user?.name || 'there');
 
@@ -155,6 +169,20 @@ async function load() {
         <div style="font-size:13px;margin-top:10px;color:var(--blue);font-weight:500">
           Highest APR — every extra dollar here saves the most in interest.
         </div>`;
+    }
+
+    // Goals snapshot
+    if (goalsData?.goals?.length) {
+      $('goals-snapshot').style.display = 'block';
+      $('goals-snapshot-list').innerHTML = goalsData.goals.slice(0,2).map(g => {
+        const label = g.label || (g.goal_type==='debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
+        const status = g.onTrack ? '✅ On track' : g.requiredExtra ? `Needs +${fmt(g.requiredExtra)}/mo` : '⚠️ Review';
+        const cls = g.onTrack ? 'green' : 'yellow';
+        return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:14px;font-weight:600">${label}</div>
+          <span style="font-size:12px;font-weight:600;color:var(--${cls})">${status}</span>
+        </div>`;
+      }).join('');
     }
 
     show('content');

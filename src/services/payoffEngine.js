@@ -4,13 +4,43 @@
  */
 
 // --- getAttackOrder ---
+// Strategies:
+//   avalanche          — highest APR first (minimizes total interest)
+//   snowball           — lowest balance first (fastest psychological wins)
+//   hybrid             — 60% APR weight + 40% balance weight (balances math & motivation)
+//   highestPaymentRatio— highest (minimumPayment/balance) first (frees cash flow fastest)
 
 function getAttackOrder(debts, strategy) {
-  const sorted = [...debts].sort((a, b) =>
-    strategy === 'avalanche'
-      ? (b.apr - a.apr) || (a.balance - b.balance) // highest APR; tiebreak by lower balance
-      : a.balance - b.balance                       // lowest balance first
-  );
+  const active = debts.filter(d => d.balance > 0);
+  let sorted;
+
+  if (strategy === 'snowball') {
+    sorted = [...active].sort((a, b) => a.balance - b.balance);
+
+  } else if (strategy === 'hybrid') {
+    // Rank each debt by APR (higher = better) and by balance (lower = better), then blend
+    const byApr = [...active].sort((a, b) => b.apr - a.apr);
+    const byBal = [...active].sort((a, b) => a.balance - b.balance);
+    const aprRank = Object.fromEntries(byApr.map((d, i) => [d.name, i]));
+    const balRank = Object.fromEntries(byBal.map((d, i) => [d.name, i]));
+    sorted = [...active].sort((a, b) =>
+      (0.6 * aprRank[a.name] + 0.4 * balRank[a.name]) -
+      (0.6 * aprRank[b.name] + 0.4 * balRank[b.name])
+    );
+
+  } else if (strategy === 'highestPaymentRatio') {
+    // Highest (minimum / balance) first — frees up cash flow fastest
+    sorted = [...active].sort((a, b) => {
+      const ratioA = a.minimumPayment / (a.balance || 1);
+      const ratioB = b.minimumPayment / (b.balance || 1);
+      return ratioB - ratioA;
+    });
+
+  } else {
+    // avalanche (default)
+    sorted = [...active].sort((a, b) => (b.apr - a.apr) || (a.balance - b.balance));
+  }
+
   return sorted.map((d, i) => ({ ...d, priority: i + 1 }));
 }
 
@@ -23,7 +53,6 @@ function checkAlerts(accounts) {
   for (const acct of accounts) {
     if (acct.type !== 'credit') continue;
 
-    // Promo APR expiring within 6 months (0% BT within 3 months flagged more urgently)
     if (acct.is_promotional_apr && acct.promo_apr_expiry_date) {
       const expiry = new Date(acct.promo_apr_expiry_date + 'T12:00');
       const daysUntil = Math.ceil((expiry - now) / 86400000);
@@ -42,7 +71,6 @@ function checkAlerts(accounts) {
       }
     }
 
-    // High utilization >= 90%
     const bal = acct.balance_current || 0;
     const lim = acct.credit_limit || 0;
     if (lim > 0 && bal / lim >= 0.9) {
@@ -91,16 +119,13 @@ function simulatePayoff(debts, extraBudget, strategy) {
   let months = 0;
   let totalInterest = 0;
   const cardPayoffMonths = {};
-  // Freed minimums from paid-off cards accumulate permanently and roll
-  // into the attack fund each month (the "debt snowball/avalanche rollover").
   let freedBudget = 0;
-  // Clamp negative surplus — we can still simulate, just no extra attack money.
   const safeExtra = Math.max(0, extraBudget);
 
   while (working.some(d => !d.paid) && months < 600) {
     months++;
 
-    // 1. Accrue monthly interest on all unpaid cards
+    // 1. Accrue monthly interest
     for (const debt of working) {
       if (debt.paid) continue;
       const interest = debt.remainingBalance * (debt.apr / 100 / 12);
@@ -108,9 +133,7 @@ function simulatePayoff(debts, extraBudget, strategy) {
       totalInterest += interest;
     }
 
-    // 2. Pay minimum on every card (capped at remaining balance)
-    //    Freed minimums from cards that hit zero are added to freedBudget,
-    //    making them available for the attack phase this same month.
+    // 2. Pay minimums; freed minimums roll into attack fund immediately
     for (const debt of working) {
       if (debt.paid) continue;
       const payment = Math.min(debt.minimumPayment, debt.remainingBalance);
@@ -123,9 +146,7 @@ function simulatePayoff(debts, extraBudget, strategy) {
       }
     }
 
-    // 3. Attack phase: apply (extra + freed minimums) to priority cards in order.
-    //    If the priority card is fully paid off, any remaining budget cascades to
-    //    the next card in the same month (standard avalanche/snowball rollover).
+    // 3. Attack phase: cascade surplus + freed minimums down priority order
     let attackRemaining = safeExtra + freedBudget;
     for (const debt of working) {
       if (debt.paid || attackRemaining <= 0.005) continue;
@@ -136,9 +157,7 @@ function simulatePayoff(debts, extraBudget, strategy) {
         debt.remainingBalance = 0;
         debt.paid = true;
         cardPayoffMonths[debt.name] = months;
-        // Freed minimum is available starting next month
         freedBudget += debt.minimumPayment;
-        // Continue — cascade remaining budget to the next priority card
       }
     }
   }
@@ -147,6 +166,80 @@ function simulatePayoff(debts, extraBudget, strategy) {
     months,
     totalInterest: Math.round(totalInterest * 100) / 100,
     cardPayoffMonths,
+  };
+}
+
+// --- simulateLumpSum ---
+// Apply a one-time lump-sum payment to a specific account (by id or name), then simulate.
+// Returns a comparison: { withLump, without, monthsSaved, interestSaved }
+
+function simulateLumpSum(debts, lumpAmount, accountId, extraBudget, strategy) {
+  const lump = Math.max(0, lumpAmount || 0);
+  const modified = debts.map(d => {
+    const isTarget = accountId
+      ? (d.id === accountId || d.id === parseInt(accountId))
+      : false; // if no accountId, apply to first priority card below
+    if (isTarget) return { ...d, balance: Math.max(0, d.balance - lump) };
+    return d;
+  });
+
+  // If no specific account matched, apply to highest-priority card
+  const noneMatched = accountId && !debts.some(d => d.id === accountId || d.id === parseInt(accountId));
+  let applied = modified;
+  if (!accountId || noneMatched) {
+    const order = getAttackOrder(debts.filter(d => d.balance > 0), strategy);
+    if (order.length) {
+      const target = order[0];
+      applied = debts.map(d =>
+        d.name === target.name ? { ...d, balance: Math.max(0, d.balance - lump) } : d
+      );
+    }
+  }
+
+  const withLump = simulatePayoff(applied.filter(d => d.balance > 0), extraBudget, strategy);
+  const without  = simulatePayoff(debts.filter(d => d.balance > 0), extraBudget, strategy);
+
+  return {
+    withLump,
+    without,
+    monthsSaved:    without.months - withLump.months,
+    interestSaved:  Math.round((without.totalInterest - withLump.totalInterest) * 100) / 100,
+  };
+}
+
+// --- calculateRequiredPayment ---
+// Binary search: find the minimum extra monthly payment to pay off in ≤ targetMonths.
+// Returns { requiredExtra, achievable, currentMonths }
+
+function calculateRequiredPayment(debts, targetMonths, extraBudget, strategy) {
+  const active = debts.filter(d => d.balance > 0);
+  if (!active.length) return { requiredExtra: 0, achievable: true, currentMonths: 0 };
+
+  const base = simulatePayoff(active, extraBudget, strategy);
+  if (base.months <= targetMonths) {
+    return { requiredExtra: 0, achievable: true, currentMonths: base.months };
+  }
+
+  // Check if the goal is theoretically achievable at all (with very high payment)
+  const best = simulatePayoff(active, extraBudget + 999999, strategy);
+  if (best.months > targetMonths) {
+    return { requiredExtra: null, achievable: false, currentMonths: base.months };
+  }
+
+  // Binary search between 0 and total remaining balance
+  const totalDebt = active.reduce((s, d) => s + d.balance, 0);
+  let lo = 0, hi = totalDebt;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    const result = simulatePayoff(active, extraBudget + mid, strategy);
+    if (result.months <= targetMonths) hi = mid;
+    else lo = mid;
+  }
+
+  return {
+    requiredExtra: Math.ceil(hi),
+    achievable: true,
+    currentMonths: base.months,
   };
 }
 
@@ -182,7 +275,6 @@ function calculatePayoffPlan(debts, monthlyIncome, monthlyExpenses, extraPayment
 }
 
 // --- compareScenarios ---
-// Runs simulatePayoff with +$0, +$300, +$500 on top of the base surplus
 
 function compareScenarios(debts, surplus, strategy = 'avalanche') {
   return [0, 300, 500].map(extra => {
@@ -195,6 +287,8 @@ module.exports = {
   getAttackOrder,
   calculateMonthlyInterest,
   simulatePayoff,
+  simulateLumpSum,
+  calculateRequiredPayment,
   calculatePayoffPlan,
   compareScenarios,
   checkAlerts,

@@ -10,27 +10,54 @@ Built as a mobile-first PWA so it works on any device without an app store. Futu
 
 ## Current Status
 
-**v1.0 — fully working.** All 5 screens built and tested with live data:
+**v1.1 — Goals, 4 strategies, lump-sum simulator, and bug fixes shipped.**
 
-- Dashboard loads with correct totals, monthly interest burn, surplus, and smart alerts
-- Plan screen runs avalanche/snowball simulation with freed-minimum rollover
-- Accounts screen shows utilization bars, due date badges, and promo APR warnings
-- Activity screen ready for transactions once Plaid sync runs
-- Settings screen handles bank connect/disconnect and profile updates
-- Daily Plaid sync runs automatically at 8am via cron
+All 6 screens built and tested with live data:
+
+- **Dashboard** — totals, monthly interest, surplus, smart alerts, goals snapshot
+- **Plan** — 4 payoff strategies with freed-minimum rollover, lump-sum simulator, extra payment slider, AI insights
+- **Goals** — set debt-free date targets, per-card payoff goals, balance targets; required-payment calculator shows exactly what it takes to hit any date
+- **Accounts** — utilization bars, due date badges, promo APR warnings
+- **Activity** — transaction history grouped by month, categorized, filterable
+- **Settings** — bank connect/disconnect, income/expenses/strategy profile
+- Daily Plaid sync at 8am via cron
 - Claude AI insights wired into the Plan screen (optional — gracefully skipped if no API key)
 
-**Next:** connect real Plaid production credentials, get Plaid Liabilities product approved, add manual APR entry as fallback, ship to a real device.
+**Next:** connect real Plaid production credentials, add upcoming expenses / sinking funds, build the card rewards & points engine.
 
 ---
 
 ## What It Does
 
-- **Dashboard** — Total debt, monthly interest cost, surplus, debt-free date, and smart alerts
+### Core Features
+
+- **Dashboard** — Total debt, monthly interest cost, surplus, debt-free date, smart alerts, and a live goals status card
 - **Accounts** — All connected credit cards with APR, utilization, due dates, and promo rate warnings
-- **Plan** — Avalanche vs. snowball strategy toggle, 3 payoff scenarios, extra payment slider, attack order with per-card payoff dates
+- **Plan** — Four payoff strategies, 3 scenarios, extra payment slider, lump-sum simulator, attack order with per-card payoff dates, AI analysis
+- **Goals** — Set targets and track progress; required-payment calculator answers "what does it take to be free by [date]?"
 - **Activity** — Transaction history grouped by month (after syncing via Plaid)
 - **Settings** — Connect/disconnect banks via Plaid Link, update income/expenses/strategy
+
+### Payoff Strategies
+
+| Strategy | How it works | Best for |
+|---|---|---|
+| **Avalanche** | Highest APR first | Minimizing total interest (mathematically optimal) |
+| **Snowball** | Lowest balance first | Motivation — quick wins build momentum |
+| **Hybrid** | 60% APR + 40% balance weighting | Balanced — good math *and* visible progress |
+| **Cash Flow** | Highest min-payment/balance ratio first | Freeing up monthly cash flow fastest |
+
+### Goals System
+
+Three goal types:
+
+1. **Debt-Free Date** — "I want to be debt-free by [date]." The calculator runs a binary search to find the exact extra monthly payment required and tells you whether you're on track.
+2. **Card Payoff** — "I want [card] gone by [date]." Same math, focused on one card.
+3. **Balance Target** — "Get my total debt below $X." Shows a progress bar toward the threshold.
+
+### Lump-Sum Simulator
+
+On the Plan screen, enter any one-time amount (tax refund, bonus, gift) and pick which card to apply it to. The simulator instantly shows months saved and interest saved vs. not making that payment.
 
 ---
 
@@ -85,6 +112,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 The database (`zeroed.db`) is created automatically on first run and seeded with 5 realistic dev credit card accounts so the app is usable immediately without connecting real banks.
 
+> **Existing database?** If you're upgrading from v1.0, the server automatically runs migrations on startup (adds the `insight` column to `payoff_plans` and creates the `user_goals` table). No manual steps needed.
+
 ---
 
 ## Project Structure
@@ -94,21 +123,23 @@ zeroed/
 ├── src/
 │   ├── server.js                 # Express server, /api/dashboard, /api/user, cron
 │   ├── db/
-│   │   ├── schema.sql            # SQLite schema (7 tables)
-│   │   └── database.js           # DB singleton, upsertAccount, savePlan, getPayoffPlan
+│   │   ├── schema.sql            # SQLite schema (8 tables)
+│   │   └── database.js           # DB singleton, upsertAccount, savePlan, goals CRUD
 │   ├── routes/
 │   │   ├── plaid.js              # /api/plaid/* — link token, exchange, sync, accounts
-│   │   ├── plan.js               # /api/plan/* — generate, latest, alerts
+│   │   ├── plan.js               # /api/plan/* — generate, latest, alerts, lump-sum, required-payment
+│   │   ├── goals.js              # /api/goals — CRUD + live progress computation
 │   │   └── transactions.js       # /api/transactions
 │   ├── services/
-│   │   ├── plaidService.js       # Plaid API client — accountsGet, liabilitiesGet, transactionsGet
-│   │   ├── payoffEngine.js       # Pure math — simulate, compare scenarios, checkAlerts
+│   │   ├── plaidService.js       # Plaid API client
+│   │   ├── payoffEngine.js       # Pure math — 4 strategies, simulate, lump-sum, required-payment
 │   │   └── claudeService.js      # Claude API — AI insight for the Plan screen
 │   └── public/
 │       ├── style.css             # Full design system — mobile-first, 480px max-width
 │       ├── index.html            # Dashboard
 │       ├── accounts.html         # Account list
-│       ├── plan.html             # Payoff plan + scenarios
+│       ├── plan.html             # Payoff plan + strategies + lump-sum
+│       ├── goals.html            # Goals + required-payment calculator
 │       ├── activity.html         # Transaction history
 │       └── settings.html         # Profile + bank connections
 ├── .env.example
@@ -126,14 +157,20 @@ zeroed/
 | GET | `/api/user` | User profile (income, expenses, strategy) |
 | PUT | `/api/user` | Update income, expenses, or strategy |
 | GET | `/api/plaid/accounts` | All accounts with credit details |
-| DELETE | `/api/plaid/accounts/:id` | Disconnect account (cascades to plaid_item if last) |
+| DELETE | `/api/plaid/accounts/:id` | Disconnect account |
 | POST | `/api/plaid/create-link-token` | Start Plaid Link flow |
 | POST | `/api/plaid/exchange-token` | Complete Plaid Link, store access token |
 | POST | `/api/plaid/sync` | Refresh balances + pull new transactions |
 | POST | `/api/plan/generate` | Run payoff engine + Claude insight, persist plan |
-| GET | `/api/plan/latest` | Last saved plan |
+| GET | `/api/plan/latest` | Last saved plan (includes stored AI insight) |
 | GET | `/api/plan/alerts` | Promo APR expiry + high utilization alerts |
-| GET | `/api/transactions` | Transaction list (`?limit=200`) |
+| POST | `/api/plan/lump-sum` | Simulate one-time extra payment impact |
+| POST | `/api/plan/required-payment` | Extra monthly payment needed for a target date |
+| GET | `/api/goals` | All active goals with live progress and on-track status |
+| POST | `/api/goals` | Create a goal |
+| DELETE | `/api/goals/:id` | Remove a goal |
+| GET | `/api/transactions` | Transaction list with account name (`?limit=200`) |
+| GET | `/api/transactions/summary` | Spending by category |
 
 ---
 
@@ -141,10 +178,11 @@ zeroed/
 
 The engine (`src/services/payoffEngine.js`) runs entirely locally — no API calls.
 
-**Avalanche** — sorts by highest APR first; tiebreaker is lowest balance (minimizes total interest).  
-**Snowball** — sorts by lowest balance first (fastest psychological wins).
+**Core simulation:** Each month — accrue interest → pay all minimums → attack priority card with surplus. When a card pays off, its minimum **permanently joins** the attack budget (freed-minimum rollover).
 
-Each simulation month: accrue interest → pay all minimums → attack priority card with surplus. When a card pays off, its minimum **permanently joins** the attack budget for all future months (freed minimum rollover).
+**Lump-sum simulation:** Reduces a card's balance by the lump amount, then runs a normal simulation. Returns `monthsSaved` and `interestSaved` vs. the baseline.
+
+**Required-payment calculator:** Binary search (50 iterations) over the extra payment range `[0, totalDebt]` to find the minimum extra amount that achieves `months ≤ targetMonths`. Returns the required extra or `achievable: false` if the date is too soon.
 
 **checkAlerts** fires on:
 - Promo APR expiring within 6 months → `warning`; within 60 days → `danger`
@@ -164,9 +202,18 @@ On first run the server seeds a profile and 5 realistic credit cards (no Plaid c
 | BofA Visa Signature | $15,455.76 | 23.49% promo (exp. Aug 17) | $277 | May 14 |
 | Chase Sapphire Preferred | $27,336.01 | 19.49% | $719 | May 27 |
 
-**Total: $54,995.77 · Debt free: ~Feb 2028 (21 months) on avalanche**
+**Total: $54,995.77**
 
-To reset the seed data: `rm zeroed.db && npm start`
+| Strategy | Months to debt-free | Total interest |
+|---|---|---|
+| Avalanche | 21 months | $10,306 |
+| Hybrid | 22 months | $10,513 |
+| Snowball | 22 months | $11,092 |
+| Cash Flow | 22 months | $10,988 |
+
+To hit debt-free in 18 months instead: pay an extra **$431/mo** on the avalanche strategy.
+
+To reset: `rm zeroed.db && npm start`
 
 ---
 
@@ -177,15 +224,9 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 - **Username:** `user_good`
 - **Password:** `pass_good`
 
-These are Plaid's test credentials — they work inside the widget to simulate linking a bank. Your `.env` credentials authenticate your app to the Plaid API; these credentials are what a test "user" enters inside the Link popup.
-
-Accounts synced from Plaid are merged with any existing dev seed data. Real Plaid accounts have APR/liability data available in sandbox automatically (Liabilities product requires Plaid approval for production).
-
 ---
 
 ## Running on Desktop / Always-On
-
-To keep the server running after your terminal closes:
 
 ```bash
 npm install -g pm2
@@ -196,18 +237,34 @@ pm2 startup   # auto-start on reboot
 pm2 logs zeroed   # view logs
 ```
 
-The database file (`zeroed.db`) is local — copy it alongside the code if you want to preserve existing data when moving machines.
-
 ---
 
 ## Roadmap
 
+### Done ✅
+- [x] 4 payoff strategies: Avalanche, Snowball, Hybrid, Cash Flow
+- [x] Freed-minimum rollover in simulation
+- [x] Lump-sum payment simulator
+- [x] Goals system with required-payment calculator
+- [x] Per-card and total-debt goal types
+- [x] Transaction history with account names and category filters
+- [x] AI insights stored persistently per plan
+- [x] Promo APR and high-utilization alerts
+- [x] Daily Plaid sync cron
+
+### Up Next 🔜
+- [ ] **Upcoming expenses / sinking funds** — enter known future costs (car registration, holiday spending, medical bills); system automatically reduces available surplus in payoff simulations so the plan stays realistic
+- [ ] **Card recommendation engine** — given a purchase category (dining, groceries, travel, gas), recommend which card to use based on reward multipliers, point valuations, and a hard rule against using cards you're actively paying down
+- [ ] **Rewards & points profiles** — preset profiles for Chase Sapphire, Amex Gold, Bilt, Citi Double Cash, BofA Cash Rewards, etc. with category multipliers and estimated point values
 - [ ] Connect Plaid production credentials + get Liabilities product approved
 - [ ] Manual APR entry in Settings as fallback when Plaid liabilities aren't available
 - [ ] Push notifications for payment due dates and promo APR expiry
-- [ ] Lump-sum payment simulator ("what if I put my tax refund at this card?")
+
+### Later 📋
+- [ ] Lump-sum "split across multiple cards" optimization
 - [ ] React Native / Expo upgrade for native iOS + Android apps
 - [ ] Multi-user support with proper auth
+- [ ] PDF/CSV export of payoff plan and transaction history
 
 ---
 

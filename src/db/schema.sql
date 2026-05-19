@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   monthly_income REAL,
   monthly_expenses REAL,
-  strategy TEXT NOT NULL DEFAULT 'avalanche' CHECK(strategy IN ('avalanche', 'snowball')),
+  strategy TEXT NOT NULL DEFAULT 'avalanche' CHECK(strategy IN ('avalanche', 'snowball', 'hybrid', 'highestPaymentRatio')),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -56,12 +56,25 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE TABLE IF NOT EXISTS payoff_plans (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id),
-  strategy TEXT NOT NULL CHECK(strategy IN ('avalanche', 'snowball')),
+  strategy TEXT NOT NULL,
   total_debt REAL,
   monthly_interest REAL,
   surplus REAL,
   debt_free_estimate TEXT,
+  insight TEXT,
   generated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_goals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  goal_type TEXT NOT NULL CHECK(goal_type IN ('debt_free_date', 'card_payoff', 'balance_target')),
+  target_date TEXT,
+  target_balance REAL,
+  account_id INTEGER REFERENCES accounts(id),
+  label TEXT,
+  is_active INTEGER DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS plan_items (

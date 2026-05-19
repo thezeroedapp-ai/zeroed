@@ -52,6 +52,7 @@ router.post('/generate', async (req, res) => {
       monthly_interest: Math.round(payoffEngine.calculateMonthlyInterest(debts) * 100) / 100,
       surplus:          plan.surplus,
       debt_free_estimate: plan.debtFreeDate,
+      insight:          insight || null,
       items: plan.order.map(d => ({
         account_id:             nameToId[d.name],
         priority_order:         d.priority,
@@ -75,6 +76,60 @@ router.get('/latest', (req, res) => {
   try {
     const plan = getPayoffPlan(1);
     res.json(plan);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/plan/lump-sum — simulate applying a one-time extra payment
+router.post('/lump-sum', (req, res) => {
+  try {
+    const db   = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE id = 1').get();
+    if (!user) return res.status(400).json({ error: 'User not found' });
+
+    const accounts = db.prepare(ACCOUNTS_QUERY + ' AND a.balance_current > 0').all();
+    const { amount, accountId, strategy: reqStrategy } = req.body;
+    const strategy = reqStrategy || user.strategy || 'avalanche';
+    const lump = parseFloat(amount) || 0;
+
+    const debts = accounts.map(a => ({
+      id: a.id, name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
+    }));
+    const totalMin = debts.reduce((s, d) => s + d.minimumPayment, 0);
+    const surplus  = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin;
+
+    res.json(payoffEngine.simulateLumpSum(debts, lump, accountId || null, Math.max(0, surplus), strategy));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/plan/required-payment — how much extra per month to hit a target date
+router.post('/required-payment', (req, res) => {
+  try {
+    const db   = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE id = 1').get();
+    if (!user) return res.status(400).json({ error: 'User not found' });
+
+    const accounts = db.prepare(ACCOUNTS_QUERY + ' AND a.balance_current > 0').all();
+    const { targetDate, strategy: reqStrategy } = req.body;
+    if (!targetDate) return res.status(400).json({ error: 'targetDate required' });
+
+    const strategy = reqStrategy || user.strategy || 'avalanche';
+    const debts = accounts.map(a => ({
+      name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
+    }));
+    const totalMin = debts.reduce((s, d) => s + d.minimumPayment, 0);
+    const surplus  = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin;
+
+    const target = new Date(targetDate);
+    const now    = new Date();
+    const targetMonths = Math.round((target - now) / (1000 * 60 * 60 * 24 * 30.44));
+    if (targetMonths <= 0) return res.status(400).json({ error: 'Target date must be in the future' });
+
+    const result = payoffEngine.calculateRequiredPayment(debts, targetMonths, Math.max(0, surplus), strategy);
+    res.json({ ...result, targetMonths, currentSurplus: Math.round(surplus * 100) / 100 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

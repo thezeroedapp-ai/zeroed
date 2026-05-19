@@ -10,6 +10,7 @@ const { syncAllAccounts } = require('./services/plaidService');
 const plaidRoutes       = require('./routes/plaid');
 const planRoutes        = require('./routes/plan');
 const transactionRoutes = require('./routes/transactions');
+const goalsRoutes       = require('./routes/goals');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/plaid',        plaidRoutes);
 app.use('/api/plan',         planRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/goals',        goalsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
