@@ -12,6 +12,7 @@ const planRoutes        = require('./routes/plan');
 const transactionRoutes = require('./routes/transactions');
 const goalsRoutes       = require('./routes/goals');
 const expensesRoutes    = require('./routes/expenses');
+const insightsRoutes    = require('./routes/insights');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +27,7 @@ app.use('/api/plan',         planRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/expenses',     expensesRoutes);
 app.use('/api/goals',        goalsRoutes);
+app.use('/api/insights',     insightsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

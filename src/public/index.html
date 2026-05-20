@@ -70,6 +70,35 @@
         <div id="goals-snapshot-list"></div>
         <a href="goals.html" class="btn btn-outline btn-block mt-8" style="display:block;text-align:center">View All Goals</a>
       </div>
+
+      <!-- AI Analysis -->
+      <div class="section-title" style="margin-top:20px">AI Analysis</div>
+      <div class="card">
+        <div id="ai-loading" style="display:none;text-align:center;padding:16px 0">
+          <div class="spinner" style="margin:0 auto 10px"></div>
+          <div style="font-size:13px;color:var(--text-sm)">Analyzing your habits…</div>
+        </div>
+        <div id="ai-empty" style="text-align:center;padding:8px 0 4px">
+          <div style="font-size:32px;margin-bottom:10px">🧠</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Get personalized insights</div>
+          <div style="font-size:12px;color:var(--text-sm);margin-bottom:16px;line-height:1.6">Claude analyzes your spending patterns and debt profile to surface 3 specific actions that will get you debt-free faster.</div>
+          <button class="btn btn-primary btn-block" onclick="generateInsight()">Generate Insights</button>
+        </div>
+        <div id="ai-content" style="display:none">
+          <div id="ai-insights"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text-sm)" id="ai-meta"></div>
+            <button class="btn btn-outline btn-sm" id="ai-refresh-btn" onclick="generateInsight()">Refresh</button>
+          </div>
+        </div>
+        <div id="ai-limit" style="display:none;text-align:center;padding:8px 0 4px">
+          <div style="font-size:28px;margin-bottom:10px">🔒</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">Monthly limit reached</div>
+          <div style="font-size:12px;color:var(--text-sm);line-height:1.6">You've used all 10 free AI analyses this month.<br>Resets on the 1st.</div>
+          <a href="mailto:hello@zeroed.app" class="btn btn-primary btn-block" style="margin-top:14px;display:block;text-align:center">Contact Us to Upgrade</a>
+        </div>
+        <div id="ai-error" style="display:none;font-size:13px;color:var(--red);text-align:center;padding:8px 0"></div>
+      </div>
     </div>
   </div>
 
@@ -192,7 +221,66 @@ async function load() {
   }
 }
 
+function showAi(state) {
+  $('ai-loading').style.display = state === 'loading' ? 'block' : 'none';
+  $('ai-empty').style.display   = state === 'empty'   ? 'block' : 'none';
+  $('ai-content').style.display = state === 'content' ? 'block' : 'none';
+  $('ai-limit').style.display   = state === 'limit'   ? 'block' : 'none';
+  $('ai-error').style.display   = state === 'error'   ? 'block' : 'none';
+}
+
+function renderInsightData(data) {
+  if (!data.insight) {
+    if (data.remaining === 0 && !data.isPro) { showAi('limit'); return; }
+    showAi('empty');
+    return;
+  }
+
+  const lines = data.insight.insight.split('\n').filter(l => l.trim());
+  $('ai-insights').innerHTML = lines.map(line => {
+    const m = line.trim().match(/^(\d+)\.\s*(.*)/s);
+    if (m) return `
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--blue-light);color:var(--blue);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">${m[1]}</div>
+        <div style="font-size:13px;line-height:1.55;padding-top:3px">${m[2]}</div>
+      </div>`;
+    return `<div style="font-size:13px;color:var(--text-sm);line-height:1.55;margin-bottom:8px">${line}</div>`;
+  }).join('');
+
+  const ts = new Date(data.insight.generated_at);
+  const usageTxt = data.isPro ? 'Pro — unlimited' : `${data.used} of ${data.limit} used this month`;
+  $('ai-meta').textContent = `${ts.toLocaleDateString('en-US',{month:'short',day:'numeric'})} · ${usageTxt}`;
+  $('ai-refresh-btn').style.display = (!data.isPro && data.remaining === 0) ? 'none' : '';
+
+  showAi('content');
+}
+
+async function loadInsight() {
+  try {
+    const data = await fetch('/api/insights/latest').then(r => r.json());
+    renderInsightData(data);
+  } catch (_) { showAi('empty'); }
+}
+
+async function generateInsight() {
+  showAi('loading');
+  if ($('ai-refresh-btn')) $('ai-refresh-btn').disabled = true;
+  try {
+    const r    = await fetch('/api/insights/generate', { method: 'POST' });
+    const data = await r.json();
+    if (r.status === 429) { showAi('limit'); return; }
+    if (!r.ok) throw new Error(data.error || 'Generation failed');
+    renderInsightData(data);
+  } catch (e) {
+    $('ai-error').textContent = e.message || 'Could not generate insight. Check that ANTHROPIC_API_KEY is set.';
+    showAi('error');
+  } finally {
+    if ($('ai-refresh-btn')) $('ai-refresh-btn').disabled = false;
+  }
+}
+
 load();
+loadInsight();
 </script>
 </body>
 </html>

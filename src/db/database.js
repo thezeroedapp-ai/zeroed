@@ -24,6 +24,7 @@ function init() {
   const migrations = [
     "ALTER TABLE payoff_plans ADD COLUMN insight TEXT",
     "ALTER TABLE users ADD COLUMN strategy TEXT NOT NULL DEFAULT 'avalanche'",
+    "ALTER TABLE users ADD COLUMN is_pro INTEGER DEFAULT 0",
     `CREATE TABLE IF NOT EXISTS user_expenses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -31,6 +32,18 @@ function init() {
       amount REAL NOT NULL,
       category TEXT NOT NULL DEFAULT 'other',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_insights (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      insight TEXT NOT NULL,
+      generated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS ai_usage (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      year_month TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, year_month)
     )`,
   ];
   for (const sql of migrations) {
@@ -159,6 +172,35 @@ function deleteGoal(id, userId) {
   return getDb().prepare('UPDATE user_goals SET is_active = 0 WHERE id = ? AND user_id = ?').run(id, userId);
 }
 
+// --- ai insights ---
+
+function getLatestInsight(userId) {
+  return getDb().prepare(
+    'SELECT * FROM user_insights WHERE user_id = ? ORDER BY generated_at DESC LIMIT 1'
+  ).get(userId);
+}
+
+function saveInsight(userId, insight) {
+  const db = getDb();
+  const { lastInsertRowid } = db.prepare(
+    'INSERT INTO user_insights (user_id, insight) VALUES (?, ?)'
+  ).run(userId, insight);
+  return db.prepare('SELECT * FROM user_insights WHERE id = ?').get(lastInsertRowid);
+}
+
+function getUsage(userId, yearMonth) {
+  return getDb().prepare(
+    'SELECT count FROM ai_usage WHERE user_id = ? AND year_month = ?'
+  ).get(userId, yearMonth);
+}
+
+function incrementUsage(userId, yearMonth) {
+  getDb().prepare(`
+    INSERT INTO ai_usage (user_id, year_month, count) VALUES (?, ?, 1)
+    ON CONFLICT(user_id, year_month) DO UPDATE SET count = count + 1
+  `).run(userId, yearMonth);
+}
+
 // --- user_expenses ---
 
 function getExpenses(userId) {
@@ -177,4 +219,4 @@ function deleteExpense(id, userId) {
   return getDb().prepare('DELETE FROM user_expenses WHERE id = ? AND user_id = ?').run(id, userId);
 }
 
-module.exports = { getDb, init, getUser, upsertAccount, saveTransactions, getPayoffPlan, savePlan, getGoals, createGoal, deleteGoal, getExpenses, addExpense, deleteExpense };
+module.exports = { getDb, init, getUser, upsertAccount, saveTransactions, getPayoffPlan, savePlan, getGoals, createGoal, deleteGoal, getExpenses, addExpense, deleteExpense, getLatestInsight, saveInsight, getUsage, incrementUsage };
