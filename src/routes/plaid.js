@@ -75,6 +75,43 @@ router.get('/accounts', (req, res) => {
   }
 });
 
+router.put('/accounts/:id/credit-details', (req, res) => {
+  try {
+    const db = getDb();
+    const account = db.prepare('SELECT id, type FROM accounts WHERE id = ?').get(req.params.id);
+    if (!account) return res.status(404).json({ error: 'Account not found' });
+    if (account.type !== 'credit') return res.status(400).json({ error: 'Only credit accounts have credit details' });
+
+    const { apr, minimum_payment, payment_due_date, is_promotional_apr, promo_apr_expiry_date } = req.body;
+    if (apr !== undefined && (isNaN(parseFloat(apr)) || parseFloat(apr) < 0)) {
+      return res.status(400).json({ error: 'APR must be a non-negative number' });
+    }
+
+    db.prepare(`
+      INSERT INTO credit_details (account_id, apr, is_promotional_apr, promo_apr_expiry_date, minimum_payment, payment_due_date)
+      VALUES (@account_id, @apr, @is_promotional_apr, @promo_apr_expiry_date, @minimum_payment, @payment_due_date)
+      ON CONFLICT(account_id) DO UPDATE SET
+        apr                   = COALESCE(@apr, apr),
+        is_promotional_apr    = COALESCE(@is_promotional_apr, is_promotional_apr),
+        promo_apr_expiry_date = COALESCE(@promo_apr_expiry_date, promo_apr_expiry_date),
+        minimum_payment       = COALESCE(@minimum_payment, minimum_payment),
+        payment_due_date      = COALESCE(@payment_due_date, payment_due_date),
+        updated_at            = CURRENT_TIMESTAMP
+    `).run({
+      account_id:           parseInt(req.params.id),
+      apr:                  apr !== undefined ? parseFloat(apr) : null,
+      is_promotional_apr:   is_promotional_apr !== undefined ? (is_promotional_apr ? 1 : 0) : null,
+      promo_apr_expiry_date: promo_apr_expiry_date || null,
+      minimum_payment:      minimum_payment !== undefined ? parseFloat(minimum_payment) : null,
+      payment_due_date:     payment_due_date || null,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/accounts/:id', (req, res) => {
   try {
     const db = getDb();

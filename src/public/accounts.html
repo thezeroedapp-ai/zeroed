@@ -106,14 +106,43 @@ function renderAccounts(list) {
     const isCredit  = a.type==='credit';
     const promoBadge = a.is_promotional_apr && a.promo_apr_expiry_date
       ? `<span class="badge badge-yellow">Promo ${a.apr}% APR</span>` : '';
+    const missingData = isCredit && (!a.apr || !a.minimum_payment);
+    const editBtn = isCredit
+      ? `<button class="btn btn-sm btn-outline" style="font-size:11px;padding:4px 10px" onclick="toggleEdit(${a.id})">Edit Details</button>` : '';
+    const editForm = isCredit ? `
+      <div id="edit-${a.id}" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        ${missingData ? '<div style="font-size:12px;color:var(--yellow);margin-bottom:10px;font-weight:500">⚠️ APR or minimum payment missing — payoff math uses 0 until set</div>' : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>APR (%)</label>
+            <input type="number" id="apr-${a.id}" value="${a.apr||''}" placeholder="e.g. 21.49" min="0" max="100" step="0.01">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Min Payment ($)</label>
+            <input type="number" id="min-${a.id}" value="${a.minimum_payment||''}" placeholder="e.g. 35" min="0" step="1">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Payment Due Date</label>
+          <input type="date" id="due-${a.id}" value="${a.payment_due_date||''}">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="saveDetails(${a.id})">Save</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleEdit(${a.id})">Cancel</button>
+        </div>
+        <div id="edit-status-${a.id}" style="font-size:12px;color:var(--green);margin-top:6px;min-height:16px"></div>
+      </div>` : '';
     return `<div class="account-card">
       <div class="acct-header">
         <div class="acct-name">${a.name}</div>
-        <div class="acct-balance">${fmtD(bal)}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${editBtn}
+          <div class="acct-balance">${fmtD(bal)}</div>
+        </div>
       </div>
       <div class="acct-meta">
-        ${isCredit&&a.apr?`<span>APR <strong>${a.apr}%</strong></span>`:''}
-        ${isCredit&&a.minimum_payment?`<span>Min <strong>${fmtD(a.minimum_payment)}</strong></span>`:''}
+        ${isCredit&&a.apr?`<span>APR <strong>${a.apr}%</strong></span>`:`${isCredit?'<span style="color:var(--yellow)">APR <strong>—</strong></span>':''}`}
+        ${isCredit&&a.minimum_payment?`<span>Min <strong>${fmtD(a.minimum_payment)}</strong></span>`:`${isCredit?'<span style="color:var(--yellow)">Min <strong>—</strong></span>':''}`}
         ${lim?`<span>Limit <strong>${fmt(lim)}</strong></span>`:''}
         ${a.institution_name?`<span>${a.institution_name}</span>`:''}
       </div>
@@ -126,8 +155,38 @@ function renderAccounts(list) {
         ${promoBadge}
         <span class="badge badge-gray">${a.type==='credit'?'Credit':'Checking'}</span>
       </div>
+      ${editForm}
     </div>`;
   }).join('');
+}
+
+function toggleEdit(id) {
+  const el = document.getElementById(`edit-${id}`);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveDetails(id) {
+  const apr     = document.getElementById(`apr-${id}`).value;
+  const min     = document.getElementById(`min-${id}`).value;
+  const due     = document.getElementById(`due-${id}`).value;
+  const status  = document.getElementById(`edit-status-${id}`);
+  try {
+    const r = await fetch(`/api/plaid/accounts/${id}/credit-details`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        apr:              apr ? parseFloat(apr) : undefined,
+        minimum_payment:  min ? parseFloat(min) : undefined,
+        payment_due_date: due || undefined,
+      }),
+    });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+    status.textContent = '✓ Saved';
+    setTimeout(() => { status.textContent = ''; toggleEdit(id); loadAccounts(); }, 1200);
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = e.message;
+  }
 }
 
 function applyFilter(f) {
