@@ -10,20 +10,20 @@ Built as a mobile-first PWA so it works on any device without an app store. Futu
 
 ## Current Status
 
-**v1.2 — Sinking funds shipped. Surplus is now accurate.**
+**v1.3 — AI spending insights with free tier, manual APR entry, and sinking funds.**
 
 All 6 screens built and tested with live data:
 
-- **Dashboard** — totals, monthly interest, surplus (net of sinking funds), smart alerts, goals snapshot
+- **Dashboard** — totals, monthly interest, surplus (net of sinking funds), smart alerts, goals snapshot, AI Analysis card
 - **Plan** — 4 payoff strategies with freed-minimum rollover, lump-sum simulator, extra payment slider, AI insights
 - **Goals** — set debt-free date targets, per-card payoff goals, balance targets; required-payment calculator shows exactly what it takes to hit any date
-- **Accounts** — utilization bars, due date badges, promo APR warnings
+- **Accounts** — utilization bars, due date badges, promo APR warnings, inline edit for APR/min payment/due date
 - **Activity** — transaction history grouped by month, categorized, filterable
 - **Settings** — bank connect/disconnect, income/expenses/strategy profile, sinking funds manager
 - Daily Plaid sync at 8am via cron
-- Claude AI insights wired into the Plan screen (optional — gracefully skipped if no API key)
+- Claude AI insights on Plan screen + AI spending analysis on Dashboard (10 free/month per user, Pro tier bypasses limit)
 
-**Next:** manual APR entry as fallback for real banks, then the card rewards & points engine.
+**Next:** card rewards & points engine, then Plaid production credentials.
 
 ---
 
@@ -179,6 +179,9 @@ zeroed/
 | GET | `/api/expenses` | All sinking funds + monthly total |
 | POST | `/api/expenses` | Add a sinking fund (`name`, `amount`, `category`) |
 | DELETE | `/api/expenses/:id` | Remove a sinking fund |
+| PUT | `/api/plaid/accounts/:id/credit-details` | Manually set APR, min payment, due date for a card |
+| GET | `/api/insights/latest` | Cached AI spending insight + monthly usage stats |
+| POST | `/api/insights/generate` | Generate AI spending insight (checks 10/mo free limit) |
 
 ---
 
@@ -260,18 +263,19 @@ pm2 logs zeroed   # view logs
 - [x] Promo APR and high-utilization alerts
 - [x] Daily Plaid sync cron
 - [x] Sinking funds — reserve monthly amounts for known future expenses; flows into all surplus calculations
+- [x] Manual APR entry — inline edit per card on Accounts page; yellow warning when data is missing
+- [x] AI spending insights — 90-day habit analysis on Dashboard; 10 free/month, `is_pro` flag for unlimited
 
 ### Up Next 🔜
-- [ ] **Manual APR entry** — Settings form to manually set APR, minimum payment, and due date per card; needed as a fallback when Plaid Liabilities product isn't approved for production
 - [ ] **Card recommendation engine** — given a purchase category (dining, groceries, travel, gas), recommend which card to use based on reward multipliers, point valuations, and a hard rule against using cards you're actively paying down
 - [ ] **Rewards & points profiles** — preset profiles for Chase Sapphire, Amex Gold, Bilt, Citi Double Cash, BofA Cash Rewards, etc. with category multipliers and estimated point values
 - [ ] Connect Plaid production credentials + get Liabilities product approved
 - [ ] Push notifications for payment due dates and promo APR expiry
 
 ### Later 📋
+- [ ] Multi-user auth + Stripe upgrade flow (freemium: 10 AI analyses/mo free, Pro unlimited)
 - [ ] Lump-sum "split across multiple cards" optimization
 - [ ] React Native / Expo upgrade for native iOS + Android apps
-- [ ] Multi-user support with proper auth
 - [ ] PDF/CSV export of payoff plan and transaction history
 
 ---
