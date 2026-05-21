@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"C:/Users/rohit/.claude/projects/c--Users-rohit-Zeroed/memory/\")",
+      "Read(//c/Users/rohit/.claude/projects/c--Users-rohit-Zeroed/memory/**)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(node -e \"const r = require\\('./src/routes/plaid.js'\\); console.log\\('plaid routes OK'\\)\")",
+      "Bash(node -e \"require\\('./src/public/accounts.html'\\)\")",
+      "Bash(node -c src/routes/plaid.js)",
+      "Bash(node -c src/routes/insights.js)",
+      "Bash(node -c src/services/claudeService.js)",
+      "Bash(node -c src/db/database.js)",
+      "Bash(node -c src/server.js)",
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)",
+      "Bash(node -c src/services/plaidService.js)",
+      "Bash(node -c src/routes/plan.js)",
+      "Bash(node -c src/routes/goals.js)",
+      "Bash(node -c src/routes/expenses.js)",
+      "Bash(node -c src/routes/recommendations.js)"
+    ]
+  }
+}

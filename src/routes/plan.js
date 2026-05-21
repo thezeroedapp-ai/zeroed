@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const payoffEngine  = require('../services/payoffEngine');
 const claudeService = require('../services/claudeService');
-const { getDb, savePlan, getPayoffPlan, getExpenses } = require('../db/database');
+const { query, queryOne, savePlan, getPayoffPlan, getExpenses } = require('../db/database');
 
 const ACCOUNTS_QUERY = `
   SELECT a.id, a.name, a.balance_current, a.credit_limit, a.type,
@@ -16,28 +16,26 @@ const ACCOUNTS_QUERY = `
 // POST /api/plan/generate
 router.post('/generate', async (req, res) => {
   try {
-    const db   = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE id = 1').get();
+    const user = await queryOne('SELECT * FROM users WHERE id = 1');
     if (!user) return res.status(400).json({ error: 'User not found' });
 
-    const accounts = db.prepare(ACCOUNTS_QUERY + ' AND a.balance_current > 0').all();
+    const accounts = await query(ACCOUNTS_QUERY + ' AND a.balance_current > 0');
     if (!accounts.length) return res.status(400).json({ error: 'No debt accounts found.' });
 
     const strategy     = req.body.strategy || user.strategy || 'avalanche';
-    const expenses     = getExpenses(1);
+    const expenses     = await getExpenses(1);
     const sinkingTotal = expenses.reduce((s, e) => s + e.amount, 0);
     const debts = accounts.map(a => ({
-      name:          a.name,
-      balance:       a.balance_current,
-      apr:           a.apr || 0,
-      minimumPayment:a.minimum_payment || 0,
+      name:           a.name,
+      balance:        a.balance_current,
+      apr:            a.apr || 0,
+      minimumPayment: a.minimum_payment || 0,
     }));
 
     const plan = payoffEngine.calculatePayoffPlan(
       debts, user.monthly_income, (user.monthly_expenses || 0) + sinkingTotal, 0, strategy
     );
 
-    // Claude insight — non-fatal if API key missing
     let insight = null;
     try {
       insight = await claudeService.getPayoffInsight(plan, accounts, plan.extraBudget, strategy);
@@ -45,16 +43,15 @@ router.post('/generate', async (req, res) => {
       console.warn('[plan/generate] Claude insight skipped:', e.message);
     }
 
-    // Persist plan to DB
     const nameToId = Object.fromEntries(accounts.map(a => [a.name, a.id]));
-    savePlan({
-      user_id:          1,
+    await savePlan({
+      user_id:           1,
       strategy,
-      total_debt:       Math.round(accounts.reduce((s, a) => s + a.balance_current, 0) * 100) / 100,
-      monthly_interest: Math.round(payoffEngine.calculateMonthlyInterest(debts) * 100) / 100,
-      surplus:          plan.surplus,
+      total_debt:        Math.round(accounts.reduce((s, a) => s + a.balance_current, 0) * 100) / 100,
+      monthly_interest:  Math.round(payoffEngine.calculateMonthlyInterest(debts) * 100) / 100,
+      surplus:           plan.surplus,
       debt_free_estimate: plan.debtFreeDate,
-      insight:          insight || null,
+      insight:           insight || null,
       items: plan.order.map(d => ({
         account_id:             nameToId[d.name],
         priority_order:         d.priority,
@@ -74,32 +71,28 @@ router.post('/generate', async (req, res) => {
 });
 
 // GET /api/plan/latest
-router.get('/latest', (req, res) => {
+router.get('/latest', async (req, res) => {
   try {
-    const plan = getPayoffPlan(1);
-    res.json(plan);
+    res.json(await getPayoffPlan(1));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/plan/lump-sum — simulate applying a one-time extra payment
-router.post('/lump-sum', (req, res) => {
+// POST /api/plan/lump-sum
+router.post('/lump-sum', async (req, res) => {
   try {
-    const db   = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE id = 1').get();
+    const user     = await queryOne('SELECT * FROM users WHERE id = 1');
     if (!user) return res.status(400).json({ error: 'User not found' });
+    const accounts = await query(ACCOUNTS_QUERY + ' AND a.balance_current > 0');
 
-    const accounts = db.prepare(ACCOUNTS_QUERY + ' AND a.balance_current > 0').all();
     const { amount, accountId, strategy: reqStrategy } = req.body;
     const strategy = reqStrategy || user.strategy || 'avalanche';
-    const lump = parseFloat(amount) || 0;
+    const lump     = parseFloat(amount) || 0;
 
-    const debts = accounts.map(a => ({
-      id: a.id, name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
-    }));
+    const debts        = accounts.map(a => ({ id: a.id, name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0 }));
     const totalMin     = debts.reduce((s, d) => s + d.minimumPayment, 0);
-    const sinkingTotal = getExpenses(1).reduce((s, e) => s + e.amount, 0);
+    const sinkingTotal = (await getExpenses(1)).reduce((s, e) => s + e.amount, 0);
     const surplus      = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin - sinkingTotal;
 
     res.json(payoffEngine.simulateLumpSum(debts, lump, accountId || null, Math.max(0, surplus), strategy));
@@ -108,28 +101,24 @@ router.post('/lump-sum', (req, res) => {
   }
 });
 
-// POST /api/plan/required-payment — how much extra per month to hit a target date
-router.post('/required-payment', (req, res) => {
+// POST /api/plan/required-payment
+router.post('/required-payment', async (req, res) => {
   try {
-    const db   = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE id = 1').get();
+    const user = await queryOne('SELECT * FROM users WHERE id = 1');
     if (!user) return res.status(400).json({ error: 'User not found' });
 
-    const accounts = db.prepare(ACCOUNTS_QUERY + ' AND a.balance_current > 0').all();
+    const accounts = await query(ACCOUNTS_QUERY + ' AND a.balance_current > 0');
     const { targetDate, strategy: reqStrategy } = req.body;
     if (!targetDate) return res.status(400).json({ error: 'targetDate required' });
 
-    const strategy = reqStrategy || user.strategy || 'avalanche';
-    const debts = accounts.map(a => ({
-      name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
-    }));
+    const strategy     = reqStrategy || user.strategy || 'avalanche';
+    const debts        = accounts.map(a => ({ name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0 }));
     const totalMin     = debts.reduce((s, d) => s + d.minimumPayment, 0);
-    const sinkingTotal = getExpenses(1).reduce((s, e) => s + e.amount, 0);
+    const sinkingTotal = (await getExpenses(1)).reduce((s, e) => s + e.amount, 0);
     const surplus      = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin - sinkingTotal;
 
-    const target = new Date(targetDate);
-    const now    = new Date();
-    const targetMonths = Math.round((target - now) / (1000 * 60 * 60 * 24 * 30.44));
+    const target       = new Date(targetDate);
+    const targetMonths = Math.round((target - new Date()) / (1000 * 60 * 60 * 24 * 30.44));
     if (targetMonths <= 0) return res.status(400).json({ error: 'Target date must be in the future' });
 
     const result = payoffEngine.calculateRequiredPayment(debts, targetMonths, Math.max(0, surplus), strategy);
@@ -140,9 +129,9 @@ router.post('/required-payment', (req, res) => {
 });
 
 // GET /api/plan/alerts
-router.get('/alerts', (req, res) => {
+router.get('/alerts', async (req, res) => {
   try {
-    const accounts = getDb().prepare(ACCOUNTS_QUERY).all();
+    const accounts = await query(ACCOUNTS_QUERY);
     res.json(payoffEngine.checkAlerts(accounts));
   } catch (err) {
     res.status(500).json({ error: err.message });

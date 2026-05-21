@@ -1,9 +1,8 @@
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 const plaidService = require('../services/plaidService');
-const { getDb, upsertAccount } = require('../db/database');
+const { pool, query, queryOne, withTransaction, upsertAccount } = require('../db/database');
 
-// Hardcoded until auth is added
 const USER_ID = 1;
 
 router.post('/create-link-token', async (req, res) => {
@@ -21,25 +20,22 @@ router.post('/exchange-token', async (req, res) => {
     const { public_token, institution_name, institution_id } = req.body;
     const { accessToken, itemId } = await plaidService.exchangePublicToken(public_token);
 
-    const db = getDb();
-
-    // Upsert plaid_item (re-linking the same institution updates the token)
-    const existing = db.prepare('SELECT id FROM plaid_items WHERE item_id = ?').get(itemId);
+    const existing = await queryOne('SELECT id FROM plaid_items WHERE item_id = $1', [itemId]);
     let plaidItemId;
     if (existing) {
-      db.prepare('UPDATE plaid_items SET access_token = ? WHERE id = ?').run(accessToken, existing.id);
+      await pool.query('UPDATE plaid_items SET access_token = $1 WHERE id = $2', [accessToken, existing.id]);
       plaidItemId = existing.id;
     } else {
-      const result = db.prepare(`
+      const inserted = await queryOne(`
         INSERT INTO plaid_items (user_id, access_token, item_id, institution_name, institution_id)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(USER_ID, accessToken, itemId, institution_name || null, institution_id || null);
-      plaidItemId = result.lastInsertRowid;
+        VALUES ($1, $2, $3, $4, $5) RETURNING id
+      `, [USER_ID, accessToken, itemId, institution_name || null, institution_id || null]);
+      plaidItemId = inserted.id;
     }
 
     const accounts = await plaidService.getAccounts(accessToken);
     for (const acct of accounts) {
-      upsertAccount({ ...acct, plaid_item_id: plaidItemId });
+      await upsertAccount({ ...acct, plaid_item_id: plaidItemId });
     }
 
     res.json({ success: true, item_id: itemId, account_count: accounts.length });
@@ -59,26 +55,25 @@ router.post('/sync', async (req, res) => {
   }
 });
 
-router.get('/accounts', (req, res) => {
+router.get('/accounts', async (req, res) => {
   try {
-    const accounts = getDb().prepare(`
+    const accounts = await query(`
       SELECT a.*, cd.apr, cd.is_promotional_apr, cd.promo_apr_expiry_date,
              cd.minimum_payment, cd.payment_due_date, pi.institution_name
       FROM accounts a
       LEFT JOIN credit_details cd ON cd.account_id = a.id
       LEFT JOIN plaid_items pi ON pi.id = a.plaid_item_id
       ORDER BY a.type, a.name
-    `).all();
+    `);
     res.json(accounts);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.put('/accounts/:id/credit-details', (req, res) => {
+router.put('/accounts/:id/credit-details', async (req, res) => {
   try {
-    const db = getDb();
-    const account = db.prepare('SELECT id, type FROM accounts WHERE id = ?').get(req.params.id);
+    const account = await queryOne('SELECT id, type FROM accounts WHERE id = $1', [req.params.id]);
     if (!account) return res.status(404).json({ error: 'Account not found' });
     if (account.type !== 'credit') return res.status(400).json({ error: 'Only credit accounts have credit details' });
 
@@ -87,24 +82,25 @@ router.put('/accounts/:id/credit-details', (req, res) => {
       return res.status(400).json({ error: 'APR must be a non-negative number' });
     }
 
-    db.prepare(`
-      INSERT INTO credit_details (account_id, apr, is_promotional_apr, promo_apr_expiry_date, minimum_payment, payment_due_date)
-      VALUES (@account_id, @apr, @is_promotional_apr, @promo_apr_expiry_date, @minimum_payment, @payment_due_date)
+    await pool.query(`
+      INSERT INTO credit_details
+        (account_id, apr, is_promotional_apr, promo_apr_expiry_date, minimum_payment, payment_due_date)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT(account_id) DO UPDATE SET
-        apr                   = COALESCE(@apr, apr),
-        is_promotional_apr    = COALESCE(@is_promotional_apr, is_promotional_apr),
-        promo_apr_expiry_date = COALESCE(@promo_apr_expiry_date, promo_apr_expiry_date),
-        minimum_payment       = COALESCE(@minimum_payment, minimum_payment),
-        payment_due_date      = COALESCE(@payment_due_date, payment_due_date),
-        updated_at            = CURRENT_TIMESTAMP
-    `).run({
-      account_id:           parseInt(req.params.id),
-      apr:                  apr !== undefined ? parseFloat(apr) : null,
-      is_promotional_apr:   is_promotional_apr !== undefined ? (is_promotional_apr ? 1 : 0) : null,
-      promo_apr_expiry_date: promo_apr_expiry_date || null,
-      minimum_payment:      minimum_payment !== undefined ? parseFloat(minimum_payment) : null,
-      payment_due_date:     payment_due_date || null,
-    });
+        apr                   = COALESCE($2, credit_details.apr),
+        is_promotional_apr    = COALESCE($3, credit_details.is_promotional_apr),
+        promo_apr_expiry_date = COALESCE($4, credit_details.promo_apr_expiry_date),
+        minimum_payment       = COALESCE($5, credit_details.minimum_payment),
+        payment_due_date      = COALESCE($6, credit_details.payment_due_date),
+        updated_at            = NOW()
+    `, [
+      parseInt(req.params.id),
+      apr              !== undefined ? parseFloat(apr)              : null,
+      is_promotional_apr !== undefined ? (is_promotional_apr ? 1 : 0) : null,
+      promo_apr_expiry_date || null,
+      minimum_payment  !== undefined ? parseFloat(minimum_payment)  : null,
+      payment_due_date || null,
+    ]);
 
     res.json({ ok: true });
   } catch (err) {
@@ -112,24 +108,24 @@ router.put('/accounts/:id/credit-details', (req, res) => {
   }
 });
 
-router.delete('/accounts/:id', (req, res) => {
+router.delete('/accounts/:id', async (req, res) => {
   try {
-    const db = getDb();
-    const account = db.prepare('SELECT plaid_item_id FROM accounts WHERE id = ?').get(req.params.id);
+    const account = await queryOne('SELECT plaid_item_id FROM accounts WHERE id = $1', [req.params.id]);
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const siblings = db.prepare(
-      'SELECT COUNT(*) as count FROM accounts WHERE plaid_item_id = ? AND id != ?'
-    ).get(account.plaid_item_id, req.params.id);
+    const { rows: [{ count }] } = await pool.query(
+      'SELECT COUNT(*) as count FROM accounts WHERE plaid_item_id = $1 AND id != $2',
+      [account.plaid_item_id, req.params.id]
+    );
 
-    db.transaction(() => {
-      db.prepare('DELETE FROM credit_details WHERE account_id = ?').run(req.params.id);
-      db.prepare('DELETE FROM transactions WHERE account_id = ?').run(req.params.id);
-      db.prepare('DELETE FROM accounts WHERE id = ?').run(req.params.id);
-      if (siblings.count === 0) {
-        db.prepare('DELETE FROM plaid_items WHERE id = ?').run(account.plaid_item_id);
+    await withTransaction(async (client) => {
+      await client.query('DELETE FROM credit_details WHERE account_id = $1', [req.params.id]);
+      await client.query('DELETE FROM transactions WHERE account_id = $1', [req.params.id]);
+      await client.query('DELETE FROM accounts WHERE id = $1', [req.params.id]);
+      if (parseInt(count) === 0) {
+        await client.query('DELETE FROM plaid_items WHERE id = $1', [account.plaid_item_id]);
       }
-    })();
+    });
 
     res.json({ success: true });
   } catch (err) {

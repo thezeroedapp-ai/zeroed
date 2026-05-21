@@ -3,15 +3,15 @@ const express = require('express');
 const cors    = require('cors');
 const cron    = require('node-cron');
 const path    = require('path');
-const { init, getDb, getExpenses } = require('./db/database');
+const { init, query, queryOne, withTransaction, getExpenses } = require('./db/database');
 const payoffEngine   = require('./services/payoffEngine');
 const { syncAllAccounts } = require('./services/plaidService');
 
-const plaidRoutes       = require('./routes/plaid');
-const planRoutes        = require('./routes/plan');
-const transactionRoutes = require('./routes/transactions');
-const goalsRoutes       = require('./routes/goals');
-const expensesRoutes    = require('./routes/expenses');
+const plaidRoutes           = require('./routes/plaid');
+const planRoutes            = require('./routes/plan');
+const transactionRoutes     = require('./routes/transactions');
+const goalsRoutes           = require('./routes/goals');
+const expensesRoutes        = require('./routes/expenses');
 const insightsRoutes        = require('./routes/insights');
 const recommendationsRoutes = require('./routes/recommendations');
 
@@ -23,22 +23,26 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Routes ---
-app.use('/api/plaid',        plaidRoutes);
-app.use('/api/plan',         planRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/expenses',     expensesRoutes);
-app.use('/api/goals',        goalsRoutes);
-app.use('/api/insights',         insightsRoutes);
-app.use('/api/recommendations',  recommendationsRoutes);
+app.use('/api/plaid',           plaidRoutes);
+app.use('/api/plan',            planRoutes);
+app.use('/api/transactions',    transactionRoutes);
+app.use('/api/expenses',        expensesRoutes);
+app.use('/api/goals',           goalsRoutes);
+app.use('/api/insights',        insightsRoutes);
+app.use('/api/recommendations', recommendationsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.get('/api/user', (req, res) => {
-  const user = getDb().prepare('SELECT * FROM users WHERE id = 1').get();
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
+app.get('/api/user', async (req, res) => {
+  try {
+    const user = await queryOne('SELECT * FROM users WHERE id = 1');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 const CREDIT_ACCOUNTS_QUERY = `
@@ -51,13 +55,12 @@ const CREDIT_ACCOUNTS_QUERY = `
   ORDER BY a.balance_current DESC
 `;
 
-app.get('/api/dashboard', (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
   try {
-    const db       = getDb();
-    const user     = db.prepare('SELECT * FROM users WHERE id = 1').get();
-    const accounts = db.prepare(CREDIT_ACCOUNTS_QUERY).all();
+    const user     = await queryOne('SELECT * FROM users WHERE id = 1');
+    const accounts = await query(CREDIT_ACCOUNTS_QUERY);
 
-    const expenses       = getExpenses(1);
+    const expenses       = await getExpenses(1);
     const sinkingTotal   = expenses.reduce((s, e) => s + e.amount, 0);
     const totalDebt      = accounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const monthlyInterest= accounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
@@ -99,19 +102,23 @@ app.get('/api/dashboard', (req, res) => {
   }
 });
 
-app.put('/api/user', (req, res) => {
-  const { monthly_income, monthly_expenses, strategy } = req.body;
-  const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE id = 1').get();
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  db.prepare(`
-    UPDATE users SET
-      monthly_income   = COALESCE(?, monthly_income),
-      monthly_expenses = COALESCE(?, monthly_expenses),
-      strategy         = COALESCE(?, strategy)
-    WHERE id = 1
-  `).run(monthly_income ?? null, monthly_expenses ?? null, strategy ?? null);
-  res.json(db.prepare('SELECT * FROM users WHERE id = 1').get());
+app.put('/api/user', async (req, res) => {
+  try {
+    const { monthly_income, monthly_expenses, strategy } = req.body;
+    const user = await queryOne('SELECT id FROM users WHERE id = 1');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const updated = await queryOne(`
+      UPDATE users SET
+        monthly_income   = COALESCE($1, monthly_income),
+        monthly_expenses = COALESCE($2, monthly_expenses),
+        strategy         = COALESCE($3, strategy)
+      WHERE id = 1
+      RETURNING *
+    `, [monthly_income ?? null, monthly_expenses ?? null, strategy ?? null]);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- Error handler ---
@@ -122,143 +129,70 @@ app.use((err, req, res, next) => {
 
 // --- Seed helpers ---
 
-function seedUser(db) {
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get('venkat@zeroed.app');
+async function seedUser() {
+  const existing = await queryOne('SELECT id FROM users WHERE email = $1', ['venkat@zeroed.app']);
   if (existing) return existing.id;
-  const { lastInsertRowid } = db.prepare(`
+  const user = await queryOne(`
     INSERT INTO users (name, email, monthly_income, monthly_expenses, strategy)
-    VALUES (?, ?, ?, ?, ?)
-  `).run('Venkat', 'venkat@zeroed.app', 7008, 3900, 'avalanche');
+    VALUES ($1, $2, $3, $4, $5) RETURNING id
+  `, ['Venkat', 'venkat@zeroed.app', 7008, 3900, 'avalanche']);
   console.log('  Seeded user: Venkat');
-  return lastInsertRowid;
+  return user.id;
 }
 
-function seedDevAccounts(db, userId) {
-  // Skip if dev accounts already exist
-  const check = db.prepare("SELECT id FROM plaid_items WHERE item_id = 'dev_seed'").get();
+async function seedDevAccounts(userId) {
+  const check = await queryOne("SELECT id FROM plaid_items WHERE item_id = 'dev_seed'");
   if (check) return;
 
-  const { lastInsertRowid: plaidItemId } = db.prepare(`
+  const item = await queryOne(`
     INSERT INTO plaid_items (user_id, access_token, item_id, institution_name, institution_id)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(userId, 'access_token_dev', 'dev_seed', 'Development Seed', 'dev');
-
-  const upsertAccount = db.prepare(`
-    INSERT OR IGNORE INTO accounts
-      (plaid_item_id, plaid_account_id, name, type, balance_current, credit_limit)
-    VALUES
-      (@plaid_item_id, @plaid_account_id, @name, @type, @balance_current, @credit_limit)
-  `);
-
-  const upsertCredit = db.prepare(`
-    INSERT OR IGNORE INTO credit_details
-      (account_id, apr, is_promotional_apr, promo_apr_expiry_date, minimum_payment, payment_due_date)
-    VALUES
-      (@account_id, @apr, @is_promotional_apr, @promo_apr_expiry_date, @minimum_payment, @payment_due_date)
-  `);
-
-  const getAccountId = db.prepare('SELECT id FROM accounts WHERE plaid_account_id = ?');
+    VALUES ($1, $2, $3, $4, $5) RETURNING id
+  `, [userId, 'access_token_dev', 'dev_seed', 'Development Seed', 'dev']);
 
   const devAccounts = [
-    {
-      plaid_account_id: 'dev_chase_southwest',
-      name: 'Chase Southwest Rapid Rewards',
-      type: 'credit',
-      balance_current: 779.92,
-      credit_limit: 5000,
-      credit: {
-        apr: 23.49,
-        is_promotional_apr: 0,
-        promo_apr_expiry_date: null,
-        minimum_payment: 40,
-        payment_due_date: '2026-05-10',
-      },
-    },
-    {
-      plaid_account_id: 'dev_bilt',
-      name: 'Bilt Palladium',
-      type: 'credit',
-      balance_current: 3041.81,
-      credit_limit: 10000,
-      credit: {
-        apr: 10,
-        is_promotional_apr: 1,
-        promo_apr_expiry_date: '2026-09-17',  // ~4 months from May 2026
-        minimum_payment: 31,
-        payment_due_date: '2026-05-19',
-      },
-    },
-    {
-      plaid_account_id: 'dev_citi',
-      name: 'Citi Double Cash',
-      type: 'credit',
-      balance_current: 8382.27,
-      credit_limit: 12000,
-      credit: {
-        apr: 21.49,
-        is_promotional_apr: 0,
-        promo_apr_expiry_date: null,
-        minimum_payment: 237.47,
-        payment_due_date: '2026-05-20',
-      },
-    },
-    {
-      plaid_account_id: 'dev_bofa',
-      name: 'BofA Visa Signature',
-      type: 'credit',
-      balance_current: 15455.76,
-      credit_limit: 20000,
-      // Regular APR is 23.49%; $8,699 of the balance is at 0% promo until Aug 17 2026
-      credit: {
-        apr: 23.49,
-        is_promotional_apr: 1,
-        promo_apr_expiry_date: '2026-08-17',
-        minimum_payment: 277,
-        payment_due_date: '2026-05-14',
-      },
-    },
-    {
-      plaid_account_id: 'dev_chase_sapphire',
-      name: 'Chase Sapphire Preferred',
-      type: 'credit',
-      balance_current: 27336.01,
-      credit_limit: 35000,
-      credit: {
-        apr: 19.49,
-        is_promotional_apr: 0,
-        promo_apr_expiry_date: null,
-        minimum_payment: 719,
-        payment_due_date: '2026-05-27',
-      },
-    },
+    { plaid_account_id:'dev_chase_southwest', name:'Chase Southwest Rapid Rewards', type:'credit', balance_current:779.92,   credit_limit:5000,  credit:{ apr:23.49, is_promotional_apr:0, promo_apr_expiry_date:null,         minimum_payment:40,     payment_due_date:'2026-05-10' } },
+    { plaid_account_id:'dev_bilt',            name:'Bilt Palladium',                type:'credit', balance_current:3041.81,  credit_limit:10000, credit:{ apr:10,    is_promotional_apr:1, promo_apr_expiry_date:'2026-09-17',  minimum_payment:31,     payment_due_date:'2026-05-19' } },
+    { plaid_account_id:'dev_citi',            name:'Citi Double Cash',              type:'credit', balance_current:8382.27,  credit_limit:12000, credit:{ apr:21.49, is_promotional_apr:0, promo_apr_expiry_date:null,         minimum_payment:237.47, payment_due_date:'2026-05-20' } },
+    { plaid_account_id:'dev_bofa',            name:'BofA Visa Signature',           type:'credit', balance_current:15455.76, credit_limit:20000, credit:{ apr:23.49, is_promotional_apr:1, promo_apr_expiry_date:'2026-08-17',  minimum_payment:277,    payment_due_date:'2026-05-14' } },
+    { plaid_account_id:'dev_chase_sapphire',  name:'Chase Sapphire Preferred',      type:'credit', balance_current:27336.01, credit_limit:35000, credit:{ apr:19.49, is_promotional_apr:0, promo_apr_expiry_date:null,         minimum_payment:719,    payment_due_date:'2026-05-27' } },
   ];
 
-  db.transaction(() => {
+  await withTransaction(async (client) => {
     for (const acct of devAccounts) {
-      upsertAccount.run({ plaid_item_id: plaidItemId, ...acct });
-      const { id } = getAccountId.get(acct.plaid_account_id);
-      upsertCredit.run({ account_id: id, ...acct.credit });
+      await client.query(`
+        INSERT INTO accounts (plaid_item_id, plaid_account_id, name, type, balance_current, credit_limit)
+        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(plaid_account_id) DO NOTHING
+      `, [item.id, acct.plaid_account_id, acct.name, acct.type, acct.balance_current, acct.credit_limit]);
+
+      const { rows: [{ id }] } = await client.query(
+        'SELECT id FROM accounts WHERE plaid_account_id = $1', [acct.plaid_account_id]
+      );
+
+      await client.query(`
+        INSERT INTO credit_details
+          (account_id, apr, is_promotional_apr, promo_apr_expiry_date, minimum_payment, payment_due_date)
+        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT(account_id) DO NOTHING
+      `, [id, acct.credit.apr, acct.credit.is_promotional_apr, acct.credit.promo_apr_expiry_date,
+          acct.credit.minimum_payment, acct.credit.payment_due_date]);
     }
-  })();
+  });
 
   console.log('  Seeded 5 dev accounts');
 }
 
 // --- Startup ---
 
-function start() {
-  init();
-  const db = getDb();
+async function start() {
+  await init();
   console.log('Seeding...');
-  const userId = seedUser(db);
-  seedDevAccounts(db, userId);
+  const userId = await seedUser();
+  await seedDevAccounts(userId);
 
-  // Daily sync at 8am
   cron.schedule('0 8 * * *', async () => {
     console.log('[cron] Starting daily sync…');
     try {
       const result   = await syncAllAccounts(1);
-      const accounts = getDb().prepare(CREDIT_ACCOUNTS_QUERY).all();
+      const accounts = await query(CREDIT_ACCOUNTS_QUERY);
       const alerts   = payoffEngine.checkAlerts(accounts);
       console.log(`[cron] Synced ${result.accounts} accounts, ${result.transactions} transactions. ${alerts.length} alert(s): ${alerts.map(a => a.title).join(' | ') || 'none'}`);
     } catch (err) {
@@ -271,4 +205,4 @@ function start() {
   });
 }
 
-start();
+start().catch(err => { console.error('Startup failed:', err.message); process.exit(1); });

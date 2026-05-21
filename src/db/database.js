@@ -1,222 +1,212 @@
-const Database = require('better-sqlite3');
-const fs = require('fs');
-const path = require('path');
+require('dotenv').config();
+const { Pool } = require('pg');
 
-const DB_PATH = path.join(__dirname, '../../zeroed.db');
-const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')
+    ? { rejectUnauthorized: false }
+    : false,
+});
 
-let db;
+// --- Helpers ---
 
-function getDb() {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-  }
-  return db;
+async function query(text, params = []) {
+  const { rows } = await pool.query(text, params);
+  return rows;
 }
 
-function init() {
-  const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
-  const db = getDb();
-  db.exec(schema);
-  // Migrations for existing databases
-  const migrations = [
-    "ALTER TABLE payoff_plans ADD COLUMN insight TEXT",
-    "ALTER TABLE users ADD COLUMN strategy TEXT NOT NULL DEFAULT 'avalanche'",
-    "ALTER TABLE users ADD COLUMN is_pro INTEGER DEFAULT 0",
-    `CREATE TABLE IF NOT EXISTS user_expenses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      name TEXT NOT NULL,
-      amount REAL NOT NULL,
-      category TEXT NOT NULL DEFAULT 'other',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE TABLE IF NOT EXISTS user_insights (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      insight TEXT NOT NULL,
-      generated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE TABLE IF NOT EXISTS ai_usage (
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      year_month TEXT NOT NULL,
-      count INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (user_id, year_month)
-    )`,
-  ];
-  for (const sql of migrations) {
-    try { db.exec(sql); } catch (_) { /* column already exists */ }
-  }
-  console.log('Database initialized at', DB_PATH);
+async function queryOne(text, params = []) {
+  const { rows } = await pool.query(text, params);
+  return rows[0] || null;
 }
 
-// --- users ---
+async function withTransaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
 
-const getUser = (() => {
-  let stmt;
-  return (id) => {
-    const db = getDb();
-    stmt = stmt || db.prepare('SELECT * FROM users WHERE id = ?');
-    return stmt.get(id);
-  };
-})();
+async function init() {
+  await pool.query('SELECT 1');
+  console.log('Database connected:', process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'localhost');
+}
 
-// --- accounts ---
+// --- Users ---
 
-const upsertAccount = (() => {
-  let stmt;
-  return (account) => {
-    const db = getDb();
-    stmt = stmt || db.prepare(`
-      INSERT INTO accounts (plaid_item_id, plaid_account_id, name, type, balance_current, balance_available, credit_limit, updated_at)
-      VALUES (@plaid_item_id, @plaid_account_id, @name, @type, @balance_current, @balance_available, @credit_limit, CURRENT_TIMESTAMP)
-      ON CONFLICT(plaid_account_id) DO UPDATE SET
-        name             = excluded.name,
-        balance_current  = excluded.balance_current,
-        balance_available= excluded.balance_available,
-        credit_limit     = excluded.credit_limit,
-        updated_at       = CURRENT_TIMESTAMP
-    `);
-    return stmt.run(account);
-  };
-})();
+async function getUser(id) {
+  return queryOne('SELECT * FROM users WHERE id = $1', [id]);
+}
 
-// --- transactions ---
+// --- Accounts ---
 
-const saveTransactions = (() => {
-  let stmt;
-  return (transactions) => {
-    const db = getDb();
-    stmt = stmt || db.prepare(`
-      INSERT OR IGNORE INTO transactions (account_id, plaid_transaction_id, date, description, amount, category)
-      VALUES (@account_id, @plaid_transaction_id, @date, @description, @amount, @category)
-    `);
-    const insertMany = db.transaction((rows) => {
-      for (const row of rows) stmt.run(row);
-    });
-    insertMany(transactions);
-  };
-})();
+async function upsertAccount(account) {
+  await pool.query(`
+    INSERT INTO accounts
+      (plaid_item_id, plaid_account_id, name, type, balance_current, balance_available, credit_limit, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+    ON CONFLICT(plaid_account_id) DO UPDATE SET
+      name              = EXCLUDED.name,
+      balance_current   = EXCLUDED.balance_current,
+      balance_available = EXCLUDED.balance_available,
+      credit_limit      = EXCLUDED.credit_limit,
+      updated_at        = NOW()
+  `, [
+    account.plaid_item_id, account.plaid_account_id, account.name, account.type,
+    account.balance_current, account.balance_available, account.credit_limit,
+  ]);
+}
 
-// --- payoff plans ---
+// --- Transactions ---
 
-const getPayoffPlan = (() => {
-  let planStmt, itemsStmt;
-  return (userId) => {
-    const db = getDb();
-    planStmt = planStmt || db.prepare(`
-      SELECT * FROM payoff_plans WHERE user_id = ? ORDER BY generated_at DESC LIMIT 1
-    `);
-    itemsStmt = itemsStmt || db.prepare(`
-      SELECT pi.*, a.name AS account_name, a.balance_current, a.credit_limit
-      FROM plan_items pi
-      JOIN accounts a ON a.id = pi.account_id
-      WHERE pi.payoff_plan_id = ?
-      ORDER BY pi.priority_order
-    `);
-    const plan = planStmt.get(userId);
-    if (!plan) return null;
-    plan.items = itemsStmt.all(plan.id);
-    return plan;
-  };
-})();
+async function saveTransactions(transactions) {
+  if (!transactions.length) return;
+  return withTransaction(async (client) => {
+    for (const t of transactions) {
+      await client.query(`
+        INSERT INTO transactions
+          (account_id, plaid_transaction_id, date, description, amount, category)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT(plaid_transaction_id) DO NOTHING
+      `, [t.account_id, t.plaid_transaction_id, t.date, t.description, t.amount, t.category]);
+    }
+  });
+}
 
-const savePlan = (() => {
-  let planStmt, itemStmt;
-  return (plan) => {
-    const db = getDb();
-    planStmt = planStmt || db.prepare(`
-      INSERT INTO payoff_plans (user_id, strategy, total_debt, monthly_interest, surplus, debt_free_estimate, insight)
-      VALUES (@user_id, @strategy, @total_debt, @monthly_interest, @surplus, @debt_free_estimate, @insight)
-    `);
-    itemStmt = itemStmt || db.prepare(`
-      INSERT INTO plan_items (payoff_plan_id, account_id, priority_order, estimated_payoff_month, monthly_interest, notes)
-      VALUES (@payoff_plan_id, @account_id, @priority_order, @estimated_payoff_month, @monthly_interest, @notes)
-    `);
-    const insert = db.transaction((p) => {
-      const { lastInsertRowid } = planStmt.run(p);
-      for (const item of p.items) {
-        itemStmt.run({ ...item, payoff_plan_id: lastInsertRowid });
-      }
-      return lastInsertRowid;
-    });
-    return insert(plan);
-  };
-})();
+// --- Payoff plans ---
 
-// --- goals ---
+async function getPayoffPlan(userId) {
+  const plan = await queryOne(
+    'SELECT * FROM payoff_plans WHERE user_id = $1 ORDER BY generated_at DESC LIMIT 1',
+    [userId]
+  );
+  if (!plan) return null;
+  plan.items = await query(`
+    SELECT pi.*, a.name AS account_name, a.balance_current, a.credit_limit
+    FROM plan_items pi
+    JOIN accounts a ON a.id = pi.account_id
+    WHERE pi.payoff_plan_id = $1
+    ORDER BY pi.priority_order
+  `, [plan.id]);
+  return plan;
+}
 
-function getGoals(userId) {
-  const db = getDb();
-  return db.prepare(`
+async function savePlan(plan) {
+  return withTransaction(async (client) => {
+    const { rows: [p] } = await client.query(`
+      INSERT INTO payoff_plans
+        (user_id, strategy, total_debt, monthly_interest, surplus, debt_free_estimate, insight)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
+    `, [plan.user_id, plan.strategy, plan.total_debt, plan.monthly_interest,
+        plan.surplus, plan.debt_free_estimate, plan.insight]);
+
+    for (const item of plan.items) {
+      await client.query(`
+        INSERT INTO plan_items
+          (payoff_plan_id, account_id, priority_order, estimated_payoff_month, monthly_interest, notes)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [p.id, item.account_id, item.priority_order,
+          item.estimated_payoff_month, item.monthly_interest, item.notes]);
+    }
+    return p.id;
+  });
+}
+
+// --- Goals ---
+
+async function getGoals(userId) {
+  return query(`
     SELECT g.*, a.name as account_name, a.balance_current as account_balance
     FROM user_goals g
     LEFT JOIN accounts a ON a.id = g.account_id
-    WHERE g.user_id = ? AND g.is_active = 1
+    WHERE g.user_id = $1 AND g.is_active = 1
     ORDER BY g.created_at DESC
-  `).all(userId);
+  `, [userId]);
 }
 
-function createGoal(goal) {
-  const db = getDb();
-  const { lastInsertRowid } = db.prepare(`
+async function createGoal(goal) {
+  return queryOne(`
     INSERT INTO user_goals (user_id, goal_type, target_date, target_balance, account_id, label)
-    VALUES (@user_id, @goal_type, @target_date, @target_balance, @account_id, @label)
-  `).run(goal);
-  return db.prepare('SELECT * FROM user_goals WHERE id = ?').get(lastInsertRowid);
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+  `, [goal.user_id, goal.goal_type, goal.target_date, goal.target_balance, goal.account_id, goal.label]);
 }
 
-function deleteGoal(id, userId) {
-  return getDb().prepare('UPDATE user_goals SET is_active = 0 WHERE id = ? AND user_id = ?').run(id, userId);
+async function deleteGoal(id, userId) {
+  const { rowCount } = await pool.query(
+    'UPDATE user_goals SET is_active = 0 WHERE id = $1 AND user_id = $2',
+    [id, userId]
+  );
+  return { changes: rowCount };
 }
 
-// --- ai insights ---
+// --- Sinking funds ---
 
-function getLatestInsight(userId) {
-  return getDb().prepare(
-    'SELECT * FROM user_insights WHERE user_id = ? ORDER BY generated_at DESC LIMIT 1'
-  ).get(userId);
+async function getExpenses(userId) {
+  return query('SELECT * FROM user_expenses WHERE user_id = $1 ORDER BY created_at ASC', [userId]);
 }
 
-function saveInsight(userId, insight) {
-  const db = getDb();
-  const { lastInsertRowid } = db.prepare(
-    'INSERT INTO user_insights (user_id, insight) VALUES (?, ?)'
-  ).run(userId, insight);
-  return db.prepare('SELECT * FROM user_insights WHERE id = ?').get(lastInsertRowid);
+async function addExpense(expense) {
+  return queryOne(`
+    INSERT INTO user_expenses (user_id, name, amount, category)
+    VALUES ($1, $2, $3, $4)
+    RETURNING *
+  `, [expense.user_id, expense.name, expense.amount, expense.category]);
 }
 
-function getUsage(userId, yearMonth) {
-  return getDb().prepare(
-    'SELECT count FROM ai_usage WHERE user_id = ? AND year_month = ?'
-  ).get(userId, yearMonth);
+async function deleteExpense(id, userId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM user_expenses WHERE id = $1 AND user_id = $2',
+    [id, userId]
+  );
+  return { changes: rowCount };
 }
 
-function incrementUsage(userId, yearMonth) {
-  getDb().prepare(`
-    INSERT INTO ai_usage (user_id, year_month, count) VALUES (?, ?, 1)
-    ON CONFLICT(user_id, year_month) DO UPDATE SET count = count + 1
-  `).run(userId, yearMonth);
+// --- AI insights ---
+
+async function getLatestInsight(userId) {
+  return queryOne(
+    'SELECT * FROM user_insights WHERE user_id = $1 ORDER BY generated_at DESC LIMIT 1',
+    [userId]
+  );
 }
 
-// --- user_expenses ---
-
-function getExpenses(userId) {
-  return getDb().prepare('SELECT * FROM user_expenses WHERE user_id = ? ORDER BY created_at ASC').all(userId);
+async function saveInsight(userId, insight) {
+  return queryOne(
+    'INSERT INTO user_insights (user_id, insight) VALUES ($1, $2) RETURNING *',
+    [userId, insight]
+  );
 }
 
-function addExpense(expense) {
-  const db = getDb();
-  const { lastInsertRowid } = db.prepare(
-    'INSERT INTO user_expenses (user_id, name, amount, category) VALUES (@user_id, @name, @amount, @category)'
-  ).run(expense);
-  return db.prepare('SELECT * FROM user_expenses WHERE id = ?').get(lastInsertRowid);
+async function getUsage(userId, yearMonth) {
+  return queryOne(
+    'SELECT count FROM ai_usage WHERE user_id = $1 AND year_month = $2',
+    [userId, yearMonth]
+  );
 }
 
-function deleteExpense(id, userId) {
-  return getDb().prepare('DELETE FROM user_expenses WHERE id = ? AND user_id = ?').run(id, userId);
+async function incrementUsage(userId, yearMonth) {
+  await pool.query(`
+    INSERT INTO ai_usage (user_id, year_month, count) VALUES ($1, $2, 1)
+    ON CONFLICT(user_id, year_month) DO UPDATE SET count = ai_usage.count + 1
+  `, [userId, yearMonth]);
 }
 
-module.exports = { getDb, init, getUser, upsertAccount, saveTransactions, getPayoffPlan, savePlan, getGoals, createGoal, deleteGoal, getExpenses, addExpense, deleteExpense, getLatestInsight, saveInsight, getUsage, incrementUsage };
+module.exports = {
+  pool, query, queryOne, withTransaction,
+  init, getUser,
+  upsertAccount, saveTransactions,
+  getPayoffPlan, savePlan,
+  getGoals, createGoal, deleteGoal,
+  getExpenses, addExpense, deleteExpense,
+  getLatestInsight, saveInsight, getUsage, incrementUsage,
+};

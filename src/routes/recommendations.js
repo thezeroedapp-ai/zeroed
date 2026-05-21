@@ -1,5 +1,5 @@
 const express  = require('express');
-const { getDb } = require('../db/database');
+const { query } = require('../db/database');
 const { recommend, getCategoryMeta } = require('../services/recommendationEngine');
 const { CATEGORIES, PROFILES_LAST_UPDATED } = require('../services/cardProfiles');
 
@@ -19,7 +19,7 @@ router.get('/categories', (req, res) => {
 });
 
 // GET /api/recommendations?category=dining&amount=50
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { category, amount } = req.query;
 
@@ -34,7 +34,7 @@ router.get('/', (req, res) => {
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
 
-    const accounts = getDb().prepare(ACCOUNTS_QUERY).all();
+    const accounts = await query(ACCOUNTS_QUERY);
     const result   = recommend(accounts, category, parsedAmount);
 
     res.json(result);
