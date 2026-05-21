@@ -107,8 +107,27 @@
 - Separate project email keeps personal and product accounts cleanly separated for future team access
 
 **What's next:**
-1. Connect Supabase project (create project → run `schema.sql` → add `DATABASE_URL` to `.env`)
-2. Test the full app end-to-end with Supabase
-3. Multi-user auth: Supabase Auth, JWT scoping, remove hardcoded user_id = 1
+1. Multi-user auth: Supabase Auth, JWT scoping, remove hardcoded user_id = 1
+
+---
+
+## 2026-05-20 (continued)
+
+### v2.1 — Supabase Live + NUMERIC Fix
+
+**Supabase connected and verified working.**
+
+**Bug found and fixed:** pg returns all `NUMERIC` columns as JavaScript strings by default. This caused string concatenation instead of numeric addition everywhere (e.g. minimum payments were `"719" + "277"` = `"719277"` instead of `996`). Dashboard showed `$0` total debt and `-$719,274,129` surplus.
+
+**Fix:** Added a global pg type parser in `database.js`:
+```js
+const { Pool, types } = require('pg');
+types.setTypeParser(1700, parseFloat); // 1700 = pg OID for NUMERIC
+```
+This converts all NUMERIC fields to JS floats at the driver level — no per-query casting needed anywhere else.
+
+**Infrastructure note:** Supabase direct connections use IPv6 by default. Standard home/office networks are IPv4. Use the **Session Pooler** connection string (not Direct) — works on IPv4 and is the right choice for a persistent Express server.
+
+**Architecture:** GitHub = code only (`.env` gitignored). Supabase = live database connected at runtime via `DATABASE_URL`. New devs clone from GitHub, add `.env`, connect to shared Supabase.
 
 ---

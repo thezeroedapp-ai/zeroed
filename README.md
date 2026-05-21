@@ -12,7 +12,7 @@ Built as a mobile-first PWA today. Roadmap: React frontend → Supabase (multi-u
 
 ## Current Status
 
-**v2.0 — PostgreSQL/Supabase migration complete.** *(2026-05-20)*
+**v2.1 — Supabase live and connected.** *(2026-05-20)*
 
 All 7 screens built and tested with live data:
 
@@ -34,6 +34,7 @@ All 7 screens built and tested with live data:
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v2.1 | 2026-05-20 | pg NUMERIC type parser fix — `types.setTypeParser(1700, parseFloat)` so all NUMERIC fields return as JS numbers; Supabase session pooler required for IPv4 networks |
 | v2.0 | 2026-05-20 | PostgreSQL/Supabase migration — replaced `better-sqlite3` with `pg` Pool; all routes async/await; new `schema.sql` for Supabase; GitHub org moved to `thezeroedapp-ai`; project email `thezeroedapp@gmail.com` |
 | v1.4 | 2026-05-20 | Card recommendation engine — curated reward profiles (10 cards), TPG point valuations, debt-penalty ranking, 8-category picker, `GET /api/recommendations` |
 | v1.3 | 2026-05-20 | AI spending insights (Dashboard), manual APR inline edit (Accounts), `is_pro` bypass flag |
@@ -124,7 +125,7 @@ PORT=3000
 ```
 
 Find your Plaid credentials at [dashboard.plaid.com](https://dashboard.plaid.com) → Team Settings → Keys.
-Find your Supabase connection string at your project → Settings → Database → Connection string (URI mode).
+Find your Supabase connection string at your project → click **Connect** (top bar) → **Session pooler** tab → copy the URI. Use **Session pooler** (not Direct) if you're on a standard IPv4 network — Direct connection requires IPv6.
 
 ### 3. Set up the database
 

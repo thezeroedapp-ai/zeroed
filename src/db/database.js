@@ -1,5 +1,8 @@
 require('dotenv').config();
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// pg returns NUMERIC as strings by default — parse to float so math works
+types.setTypeParser(1700, parseFloat);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
