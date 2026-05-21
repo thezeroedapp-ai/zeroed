@@ -131,3 +131,32 @@ This converts all NUMERIC fields to JS floats at the driver level — no per-que
 **Architecture:** GitHub = code only (`.env` gitignored). Supabase = live database connected at runtime via `DATABASE_URL`. New devs clone from GitHub, add `.env`, connect to shared Supabase.
 
 ---
+
+## 2026-05-21
+
+### v3.0 — Multi-user Auth (Supabase Auth + Google OAuth)
+
+**Built:**
+- `src/middleware/auth.js` — JWT verification using `jsonwebtoken` + `SUPABASE_JWT_SECRET`; looks up user by `auth_id`; auto-creates profile on first OAuth login
+- `auth_id TEXT UNIQUE` column added to `public.users` via `ALTER TABLE` + SQL migration
+- DB trigger `on_auth_user_created` — fires on every `auth.users` INSERT, auto-creates `public.users` profile row with name from metadata
+- `GET /api/config` — public endpoint serving `SUPABASE_URL` + `SUPABASE_ANON_KEY` to the frontend
+- `app.use('/api', authenticate)` — all API routes now require a valid Supabase JWT
+- `src/public/auth.js` — shared frontend helper: `getSupabase()`, `getSession()`, `requireAuth()`, `apiFetch()`, `signOut()`
+- `login.html` + `signup.html` — email/password + Google OAuth; match existing mobile-first design
+- All 7 pages: Supabase CDN + auth.js added to head; `fetch(` → `apiFetch(`; `requireAuth()` guard at top of init
+- All routes: `user_id = 1` → `req.user.id`; account queries filter by `pi.user_id = $N`
+- Dev seed removed from startup — real users create their own data via signup
+
+**Decisions:**
+- `auth_id TEXT` (not UUID FK) keeps schema simple, avoids cross-schema FK complexity with `auth.users`
+- Profile creation in both trigger AND middleware fallback — handles OAuth timing edge cases
+- Only `/api/config` and `/api/health` are public; everything else requires JWT
+- New Supabase "Publishable key" UI: use Legacy anon tab for `eyJ...` format needed by `@supabase/supabase-js` v2
+
+**What's next:**
+- Enable Google OAuth in Supabase Auth settings + configure Google Cloud Console credentials
+- Stripe freemium — Pro gate for unlimited AI; `is_pro` already in schema
+- Plaid production credentials
+
+---

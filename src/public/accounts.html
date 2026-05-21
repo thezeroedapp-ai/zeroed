@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zeroed — Accounts</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">`n  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>`n  <script src="auth.js"></script>
 </head>
 <body>
 <div class="page">
@@ -175,7 +175,7 @@ async function saveDetails(id) {
   const due     = document.getElementById(`due-${id}`).value;
   const status  = document.getElementById(`edit-status-${id}`);
   try {
-    const r = await fetch(`/api/plaid/accounts/${id}/credit-details`, {
+    const r = await apiFetch(`/api/plaid/accounts/${id}/credit-details`, {
       method: 'PUT',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -199,9 +199,10 @@ function applyFilter(f) {
 }
 
 async function loadAccounts() {
+  if (!await requireAuth()) return;
   show('loading');
   try {
-    allAccounts = await fetch('/api/plaid/accounts').then(r => {
+    allAccounts = await apiFetch('/api/plaid/accounts').then(r => {
       if (!r.ok) throw new Error(`Server returned ${r.status}`);
       return r.json();
     });
@@ -222,12 +223,12 @@ async function openPlaidLink() {
   const btn = document.getElementById('add-btn');
   btn.textContent='Loading…'; btn.disabled=true;
   try {
-    const { link_token } = await fetch('/api/plaid/create-link-token',{method:'POST'}).then(r=>r.json());
+    const { link_token } = await apiFetch('/api/plaid/create-link-token',{method:'POST'}).then(r=>r.json());
     Plaid.create({
       token: link_token,
       onSuccess: async (public_token, meta) => {
         btn.textContent='Connecting…';
-        await fetch('/api/plaid/exchange-token',{
+        await apiFetch('/api/plaid/exchange-token',{
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ public_token, institution_name:meta.institution?.name, institution_id:meta.institution?.institution_id }),
         });
@@ -243,3 +244,4 @@ loadAccounts();
 </script>
 </body>
 </html>
+

@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zeroed — Plan</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">`n  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>`n  <script src="auth.js"></script>
 </head>
 <body>
 <div class="page">
@@ -247,7 +247,7 @@ function setStrategy(s) {
   updateSliderResult(extra, months, totalInterest);
   // Only save avalanche/snowball to user prefs (DB constraint)
   if (s === 'avalanche' || s === 'snowball') {
-    fetch('/api/user',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy:s})}).catch(()=>{});
+    apiFetch('/api/user',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({strategy:s})}).catch(()=>{});
   }
 }
 
@@ -310,7 +310,7 @@ async function regenerate(btn) {
   document.getElementById('analysis-section').style.display = 'none';
   document.getElementById('analysis-loading').style.display = 'block';
   try {
-    const res = await fetch('/api/plan/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({strategy})});
+    const res = await apiFetch('/api/plan/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({strategy})});
     const data = await res.json();
     if (data.insight) {
       document.getElementById('analysis-text').textContent = data.insight;
@@ -322,11 +322,12 @@ async function regenerate(btn) {
 }
 
 async function load() {
+  if (!await requireAuth()) return;
   show('loading');
   try {
     const [accounts, user] = await Promise.all([
-      fetch('/api/plaid/accounts').then(r=>{if(!r.ok)throw new Error(`Server returned ${r.status}`);return r.json();}),
-      fetch('/api/user').then(r=>r.json()).catch(()=>({monthly_income:7008,monthly_expenses:3900,strategy:'avalanche'})),
+      apiFetch('/api/plaid/accounts').then(r=>{if(!r.ok)throw new Error(`Server returned ${r.status}`);return r.json();}),
+      apiFetch('/api/user').then(r=>r.json()).catch(()=>({monthly_income:7008,monthly_expenses:3900,strategy:'avalanche'})),
     ]);
 
     strategy = user?.strategy || 'avalanche';
@@ -358,7 +359,7 @@ async function load() {
 
     // Load latest AI insight (stored in DB)
     try {
-      const plan = await fetch('/api/plan/latest').then(r=>r.json());
+      const plan = await apiFetch('/api/plan/latest').then(r=>r.json());
       if (plan?.insight) {
         document.getElementById('analysis-section').style.display = 'block';
         document.getElementById('analysis-text').textContent = plan.insight;
@@ -376,3 +377,4 @@ load();
 </script>
 </body>
 </html>
+

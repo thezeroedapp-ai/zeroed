@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Zeroed — Recommend</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">`n  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>`n  <script src="auth.js"></script>
   <style>
     .category-grid {
       display: grid;
@@ -156,9 +156,10 @@ function show(state) {
 }
 
 async function init() {
+  if (!await requireAuth()) return;
   show('loading');
   try {
-    const r = await fetch('/api/recommendations/categories');
+    const r = await apiFetch('/api/recommendations/categories');
     if (!r.ok) throw new Error('Failed to load categories');
     const { categories, profilesLastUpdated } = await r.json();
     CATS.push(...categories);
@@ -274,3 +275,4 @@ init();
 </script>
 </body>
 </html>
+

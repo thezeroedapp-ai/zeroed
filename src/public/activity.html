@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zeroed — Activity</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">`n  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>`n  <script src="auth.js"></script>
 </head>
 <body>
 <div class="page">
@@ -138,9 +138,10 @@ function applyFilter(f) {
 }
 
 async function load() {
+  if (!await requireAuth()) return;
   show('loading');
   try {
-    const transactions = await fetch('/api/transactions?limit=200').then(r=>{
+    const transactions = await apiFetch('/api/transactions?limit=200').then(r=>{
       if(!r.ok)throw new Error(`Server returned ${r.status}`);return r.json();
     });
     allTx=transactions;
@@ -156,7 +157,7 @@ async function load() {
 async function syncNow(btn) {
   const orig=btn.textContent; btn.textContent='Syncing…'; btn.disabled=true;
   try {
-    const r=await fetch('/api/plaid/sync',{method:'POST'}).then(r=>r.json());
+    const r=await apiFetch('/api/plaid/sync',{method:'POST'}).then(r=>r.json());
     await load();
     document.getElementById('tx-sub').textContent=`Synced ${r.transactions||0} new transactions`;
   } catch(e){alert('Sync failed: '+e.message);}
@@ -168,3 +169,4 @@ load();
 </script>
 </body>
 </html>
+

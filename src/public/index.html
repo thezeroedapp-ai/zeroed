@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zeroed — Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">`n  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>`n  <script src="auth.js"></script>
 </head>
 <body>
 <div class="page">
@@ -153,14 +153,15 @@ function setGreeting(name) {
 }
 
 async function load() {
+  if (!await requireAuth()) return;
   show('loading');
   try {
     const [data, goalsData] = await Promise.all([
-      fetch('/api/dashboard').then(r => {
+      apiFetch('/api/dashboard').then(r => {
         if (!r.ok) throw new Error(`Server returned ${r.status}`);
         return r.json();
       }),
-      fetch('/api/goals').then(r => r.json()).catch(() => null),
+      apiFetch('/api/goals').then(r => r.json()).catch(() => null),
     ]);
 
     setGreeting(data.user?.name || 'there');
@@ -261,7 +262,7 @@ function renderInsightData(data) {
 
 async function loadInsight() {
   try {
-    const data = await fetch('/api/insights/latest').then(r => r.json());
+    const data = await apiFetch('/api/insights/latest').then(r => r.json());
     renderInsightData(data);
   } catch (_) { showAi('empty'); }
 }
@@ -270,7 +271,7 @@ async function generateInsight() {
   showAi('loading');
   if ($('ai-refresh-btn')) $('ai-refresh-btn').disabled = true;
   try {
-    const r    = await fetch('/api/insights/generate', { method: 'POST' });
+    const r    = await apiFetch('/api/insights/generate', { method: 'POST' });
     const data = await r.json();
     if (r.status === 429) { showAi('limit'); return; }
     if (!r.ok) throw new Error(data.error || 'Generation failed');
@@ -288,3 +289,4 @@ loadInsight();
 </script>
 </body>
 </html>
+

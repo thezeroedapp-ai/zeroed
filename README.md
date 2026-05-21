@@ -12,7 +12,7 @@ Built as a mobile-first PWA today. Roadmap: React frontend → Supabase (multi-u
 
 ## Current Status
 
-**v2.1 — Supabase live and connected.** *(2026-05-20)*
+**v3.0 — Multi-user auth live.** *(2026-05-21)*
 
 All 7 screens built and tested with live data:
 
@@ -26,7 +26,7 @@ All 7 screens built and tested with live data:
 - Daily Plaid sync at 8am via cron
 - Claude AI insights on Plan screen + AI spending analysis on Dashboard (10 free/month per user, Pro tier bypasses limit)
 
-**Next:** Multi-user auth — Supabase Auth (email/password + Google OAuth), scope all queries to JWT `user_id`, remove hardcoded `WHERE id = 1`.
+**Next:** Stripe freemium — Pro gate for unlimited AI insights; `is_pro` flag already in schema.
 
 ---
 
@@ -34,6 +34,7 @@ All 7 screens built and tested with live data:
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v3.0 | 2026-05-21 | Multi-user auth — Supabase Auth (email/password + Google OAuth); JWT middleware on all API routes; `auth_id` column + auto-profile trigger; login.html + signup.html; all 7 pages gated behind auth; hardcoded `user_id = 1` removed |
 | v2.1 | 2026-05-20 | pg NUMERIC type parser fix — `types.setTypeParser(1700, parseFloat)` so all NUMERIC fields return as JS numbers; Supabase session pooler required for IPv4 networks |
 | v2.0 | 2026-05-20 | PostgreSQL/Supabase migration — replaced `better-sqlite3` with `pg` Pool; all routes async/await; new `schema.sql` for Supabase; GitHub org moved to `thezeroedapp-ai`; project email `thezeroedapp@gmail.com` |
 | v1.4 | 2026-05-20 | Card recommendation engine — curated reward profiles (10 cards), TPG point valuations, debt-penalty ranking, 8-category picker, `GET /api/recommendations` |
@@ -122,6 +123,11 @@ PLAID_ENV=sandbox
 ANTHROPIC_API_KEY=sk-ant-...
 DATABASE_URL=postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
 PORT=3000
+
+# Supabase Auth — Settings → API
+SUPABASE_URL=https://[project-ref].supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_JWT_SECRET=your-jwt-secret
 ```
 
 Find your Plaid credentials at [dashboard.plaid.com](https://dashboard.plaid.com) → Team Settings → Keys.
@@ -303,7 +309,7 @@ pm2 logs zeroed   # view logs
 ### Up Next 🔜
 
 **Phase 2 — Multi-user foundation**
-- [ ] **Multi-user auth** — Supabase Auth (email/password + Google OAuth); scope all queries to JWT `user_id`; remove hardcoded `WHERE id = 1`
+- [x] **Multi-user auth** — Supabase Auth (email/password + Google OAuth); JWT middleware; `auth_id` trigger; all queries scoped to authenticated user *(v3.0, 2026-05-21)*
 - [ ] **Stripe freemium** — Pro gate for unlimited AI; `is_pro` flag already in schema; pricing TBD
 - [ ] Connect Plaid production credentials + get Liabilities product approved *(apply early — 2–3 week review)*
 

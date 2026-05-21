@@ -3,11 +3,9 @@ const router  = express.Router();
 const plaidService = require('../services/plaidService');
 const { pool, query, queryOne, withTransaction, upsertAccount } = require('../db/database');
 
-const USER_ID = 1;
-
 router.post('/create-link-token', async (req, res) => {
   try {
-    const linkToken = await plaidService.createLinkToken(USER_ID);
+    const linkToken = await plaidService.createLinkToken(req.user.id);
     res.json({ link_token: linkToken });
   } catch (err) {
     console.error('create-link-token:', err.response?.data || err.message);
@@ -29,7 +27,7 @@ router.post('/exchange-token', async (req, res) => {
       const inserted = await queryOne(`
         INSERT INTO plaid_items (user_id, access_token, item_id, institution_name, institution_id)
         VALUES ($1, $2, $3, $4, $5) RETURNING id
-      `, [USER_ID, accessToken, itemId, institution_name || null, institution_id || null]);
+      `, [req.user.id, accessToken, itemId, institution_name || null, institution_id || null]);
       plaidItemId = inserted.id;
     }
 
@@ -47,7 +45,7 @@ router.post('/exchange-token', async (req, res) => {
 
 router.post('/sync', async (req, res) => {
   try {
-    const results = await plaidService.syncAllAccounts(USER_ID);
+    const results = await plaidService.syncAllAccounts(req.user.id);
     res.json({ success: true, ...results });
   } catch (err) {
     console.error('sync:', err.response?.data || err.message);
@@ -63,8 +61,9 @@ router.get('/accounts', async (req, res) => {
       FROM accounts a
       LEFT JOIN credit_details cd ON cd.account_id = a.id
       LEFT JOIN plaid_items pi ON pi.id = a.plaid_item_id
+      WHERE pi.user_id = $1
       ORDER BY a.type, a.name
-    `);
+    `, [req.user.id]);
     res.json(accounts);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -73,7 +72,10 @@ router.get('/accounts', async (req, res) => {
 
 router.put('/accounts/:id/credit-details', async (req, res) => {
   try {
-    const account = await queryOne('SELECT id, type FROM accounts WHERE id = $1', [req.params.id]);
+    const account = await queryOne(
+      'SELECT a.id, a.type FROM accounts a JOIN plaid_items pi ON pi.id = a.plaid_item_id WHERE a.id = $1 AND pi.user_id = $2',
+      [req.params.id, req.user.id]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found' });
     if (account.type !== 'credit') return res.status(400).json({ error: 'Only credit accounts have credit details' });
 
@@ -110,7 +112,10 @@ router.put('/accounts/:id/credit-details', async (req, res) => {
 
 router.delete('/accounts/:id', async (req, res) => {
   try {
-    const account = await queryOne('SELECT plaid_item_id FROM accounts WHERE id = $1', [req.params.id]);
+    const account = await queryOne(
+      'SELECT a.plaid_item_id FROM accounts a JOIN plaid_items pi ON pi.id = a.plaid_item_id WHERE a.id = $1 AND pi.user_id = $2',
+      [req.params.id, req.user.id]
+    );
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
     const { rows: [{ count }] } = await pool.query(

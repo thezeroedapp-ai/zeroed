@@ -20,7 +20,15 @@
       "Bash(node -c src/routes/plan.js)",
       "Bash(node -c src/routes/goals.js)",
       "Bash(node -c src/routes/expenses.js)",
-      "Bash(node -c src/routes/recommendations.js)"
+      "Bash(node -c src/routes/recommendations.js)",
+      "Bash(git remote *)",
+      "Bash(npm start *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3000)",
+      "Bash(taskkill /PID 27544 /F)",
+      "PowerShell(Stop-Process -Id 27544 -Force)",
+      "Bash(node -e ' *)",
+      "PowerShell(Stop-Process -Id \\(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess\\) -Force -ErrorAction SilentlyContinue)"
     ]
   }
 }

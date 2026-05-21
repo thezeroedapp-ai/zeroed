@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Zeroed — Settings</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">`n  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>`n  <script src="auth.js"></script>
 </head>
 <body>
 <div class="page">
@@ -167,7 +167,7 @@ function show(state) {
 }
 
 async function loadBanks() {
-  const accounts=await fetch('/api/plaid/accounts').then(r=>r.json()).catch(()=>[]);
+  const accounts=await apiFetch('/api/plaid/accounts').then(r=>r.json()).catch(()=>[]);
   const grouped={};
   accounts.forEach(a=>{
     const key=a.plaid_item_id||'dev';
@@ -197,7 +197,7 @@ async function loadBanks() {
 async function disconnectBank(ids, btn) {
   if (!confirm('Disconnect this bank and remove all its data?')) return;
   btn.textContent='Removing…'; btn.disabled=true;
-  for (const id of ids) await fetch(`/api/plaid/accounts/${id}`,{method:'DELETE'}).catch(()=>{});
+  for (const id of ids) await apiFetch(`/api/plaid/accounts/${id}`,{method:'DELETE'}).catch(()=>{});
   await loadBanks();
 }
 
@@ -209,7 +209,7 @@ async function saveProfile() {
   const btn=document.getElementById('save-btn');
   btn.textContent='Saving…'; btn.disabled=true;
   try {
-    await fetch('/api/user',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({monthly_income:income,monthly_expenses:expenses,strategy})});
+    await apiFetch('/api/user',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({monthly_income:income,monthly_expenses:expenses,strategy})});
     const s=document.getElementById('save-status');
     s.textContent='✓ Saved'; setTimeout(()=>s.textContent='',2500);
   } catch(e){alert('Save failed: '+e.message);}
@@ -219,11 +219,11 @@ async function saveProfile() {
 async function addBank(btn) {
   btn.textContent='Loading…'; btn.disabled=true;
   try {
-    const {link_token}=await fetch('/api/plaid/create-link-token',{method:'POST'}).then(r=>r.json());
+    const {link_token}=await apiFetch('/api/plaid/create-link-token',{method:'POST'}).then(r=>r.json());
     Plaid.create({
       token:link_token,
       onSuccess:async(public_token,meta)=>{
-        await fetch('/api/plaid/exchange-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_token,institution_name:meta.institution?.name,institution_id:meta.institution?.institution_id})});
+        await apiFetch('/api/plaid/exchange-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({public_token,institution_name:meta.institution?.name,institution_id:meta.institution?.institution_id})});
         await loadBanks();
       },
       onExit:()=>{},
@@ -235,7 +235,7 @@ async function addBank(btn) {
 const CATEGORY_ICONS = {car:'🚗',home:'🏠',medical:'🏥',travel:'✈️',education:'📚',holiday:'🎄',tax:'📋',other:'📦'};
 
 async function loadExpenses() {
-  const {expenses, monthlyTotal} = await fetch('/api/expenses').then(r=>r.json()).catch(()=>({expenses:[],monthlyTotal:0}));
+  const {expenses, monthlyTotal} = await apiFetch('/api/expenses').then(r=>r.json()).catch(()=>({expenses:[],monthlyTotal:0}));
   const list = document.getElementById('expense-list');
   const total = document.getElementById('expense-total');
   if (!expenses.length) {
@@ -267,7 +267,7 @@ async function addExpense() {
   const category = document.getElementById('exp-category').value;
   if (!name) { alert('Please enter a name.'); return; }
   if (isNaN(amount) || amount <= 0) { alert('Please enter a valid monthly amount.'); return; }
-  await fetch('/api/expenses', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, amount, category})});
+  await apiFetch('/api/expenses', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, amount, category})});
   document.getElementById('exp-name').value = '';
   document.getElementById('exp-amount').value = '';
   document.getElementById('exp-category').value = 'other';
@@ -277,16 +277,17 @@ async function addExpense() {
 async function removeExpense(id, btn) {
   if (!confirm('Remove this sinking fund?')) return;
   btn.disabled = true;
-  await fetch(`/api/expenses/${id}`, {method:'DELETE'});
+  await apiFetch(`/api/expenses/${id}`, {method:'DELETE'});
   await loadExpenses();
 }
 
 async function load() {
+  if (!await requireAuth()) return;
   show('loading');
   try {
     const [,user]=await Promise.all([
       Promise.all([loadBanks(), loadExpenses()]),
-      fetch('/api/user').then(r=>{if(!r.ok)throw new Error(`Server returned ${r.status}`);return r.json();}),
+      apiFetch('/api/user').then(r=>{if(!r.ok)throw new Error(`Server returned ${r.status}`);return r.json();}),
     ]);
     if (user) {
       document.getElementById('income').value=user.monthly_income||'';
@@ -304,3 +305,4 @@ load();
 </script>
 </body>
 </html>
+

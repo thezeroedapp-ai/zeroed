@@ -5,14 +5,6 @@ const { CATEGORIES, PROFILES_LAST_UPDATED } = require('../services/cardProfiles'
 
 const router = express.Router();
 
-const ACCOUNTS_QUERY = `
-  SELECT a.id, a.name, a.balance_current, cd.apr
-  FROM accounts a
-  LEFT JOIN credit_details cd ON cd.account_id = a.id
-  WHERE a.type = 'credit'
-  ORDER BY a.balance_current DESC
-`;
-
 // GET /api/recommendations/categories
 router.get('/categories', (req, res) => {
   res.json({ categories: getCategoryMeta(), profilesLastUpdated: PROFILES_LAST_UPDATED });
@@ -34,9 +26,16 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
 
-    const accounts = await query(ACCOUNTS_QUERY);
-    const result   = recommend(accounts, category, parsedAmount);
+    const accounts = await query(`
+      SELECT a.id, a.name, a.balance_current, cd.apr
+      FROM accounts a
+      LEFT JOIN credit_details cd ON cd.account_id = a.id
+      LEFT JOIN plaid_items pi ON pi.id = a.plaid_item_id
+      WHERE a.type = 'credit' AND pi.user_id = $1
+      ORDER BY a.balance_current DESC
+    `, [req.user.id]);
 
+    const result = recommend(accounts, category, parsedAmount);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

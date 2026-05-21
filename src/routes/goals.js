@@ -3,20 +3,31 @@ const router  = express.Router();
 const { query, queryOne, getGoals, createGoal, deleteGoal } = require('../db/database');
 const payoffEngine = require('../services/payoffEngine');
 
-const ACCOUNTS_QUERY = `
-  SELECT a.id, a.name, a.balance_current, a.credit_limit, a.type,
-         cd.apr, cd.minimum_payment
-  FROM accounts a
-  LEFT JOIN credit_details cd ON cd.account_id = a.id
-  WHERE a.type = 'credit' AND a.balance_current > 0
-`;
+function accountsQuery(userId) {
+  return `
+    SELECT a.id, a.name, a.balance_current, a.credit_limit, a.type,
+           cd.apr, cd.minimum_payment
+    FROM accounts a
+    LEFT JOIN credit_details cd ON cd.account_id = a.id
+    LEFT JOIN plaid_items pi ON pi.id = a.plaid_item_id
+    WHERE a.type = 'credit' AND a.balance_current > 0 AND pi.user_id = ${userId}
+  `;
+}
 
 // GET /api/goals
 router.get('/', async (req, res) => {
   try {
-    const goals    = await getGoals(1);
-    const user     = await queryOne('SELECT * FROM users WHERE id = 1');
-    const accounts = await query(ACCOUNTS_QUERY);
+    const userId   = req.user.id;
+    const goals    = await getGoals(userId);
+    const user     = req.user;
+    const accounts = await query(`
+      SELECT a.id, a.name, a.balance_current, a.credit_limit, a.type,
+             cd.apr, cd.minimum_payment
+      FROM accounts a
+      LEFT JOIN credit_details cd ON cd.account_id = a.id
+      LEFT JOIN plaid_items pi ON pi.id = a.plaid_item_id
+      WHERE a.type = 'credit' AND a.balance_current > 0 AND pi.user_id = $1
+    `, [userId]);
 
     const totalDebt = accounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const debts     = accounts.map(a => ({
@@ -68,7 +79,7 @@ router.post('/', async (req, res) => {
     const { goal_type, target_date, target_balance, account_id, label } = req.body;
     if (!goal_type) return res.status(400).json({ error: 'goal_type required' });
     const goal = await createGoal({
-      user_id:        1,
+      user_id:        req.user.id,
       goal_type,
       target_date:    target_date    || null,
       target_balance: target_balance != null ? parseFloat(target_balance) : null,
@@ -84,7 +95,7 @@ router.post('/', async (req, res) => {
 // DELETE /api/goals/:id
 router.delete('/:id', async (req, res) => {
   try {
-    await deleteGoal(parseInt(req.params.id), 1);
+    await deleteGoal(parseInt(req.params.id), req.user.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

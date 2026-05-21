@@ -7,7 +7,7 @@ const CATEGORIES = ['car', 'home', 'medical', 'travel', 'education', 'holiday', 
 // GET /api/expenses
 router.get('/', async (req, res) => {
   try {
-    const expenses     = await getExpenses(1);
+    const expenses     = await getExpenses(req.user.id);
     const monthlyTotal = expenses.reduce((s, e) => s + e.amount, 0);
     res.json({ expenses, monthlyTotal: Math.round(monthlyTotal * 100) / 100 });
   } catch (err) {
@@ -23,7 +23,7 @@ router.post('/', async (req, res) => {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Amount must be a positive number' });
     const cat     = CATEGORIES.includes(category) ? category : 'other';
-    const expense = await addExpense({ user_id: 1, name: name.trim(), amount: Math.round(amt * 100) / 100, category: cat });
+    const expense = await addExpense({ user_id: req.user.id, name: name.trim(), amount: Math.round(amt * 100) / 100, category: cat });
     res.status(201).json(expense);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -33,7 +33,7 @@ router.post('/', async (req, res) => {
 // DELETE /api/expenses/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const result = await deleteExpense(parseInt(req.params.id), 1);
+    const result = await deleteExpense(parseInt(req.params.id), req.user.id);
     if (!result.changes) return res.status(404).json({ error: 'Expense not found' });
     res.json({ ok: true });
   } catch (err) {
