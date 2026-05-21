@@ -4,26 +4,39 @@ The goal of Zeroed is simple: **know exactly when you'll be debt-free, and take 
 
 Most people with credit card debt don't have a clear picture — they make minimum payments, get hit with interest, and never see the finish line. Zeroed connects to your real bank accounts, surfaces your actual APRs and balances, and runs a month-by-month simulation that shows you the optimal order to attack your debt, your exact debt-free date, and how much interest you'll save by throwing even an extra $100/mo at it.
 
-Built as a mobile-first PWA so it works on any device without an app store. Future upgrade path to iOS/Android via React Native is planned.
+Built as a mobile-first PWA today. Roadmap: React frontend → Supabase (multi-user) → React Native + Expo (native iOS/Android). The Node.js backend API is the stable interface across all three platforms — it never changes regardless of what frontend consumes it.
 
 ---
 
 ## Current Status
 
-**v1.3 — AI spending insights with free tier, manual APR entry, and sinking funds.**
+**v1.4 — Card recommendation engine with curated reward profiles.** *(2026-05-20)*
 
-All 6 screens built and tested with live data:
+All 7 screens built and tested with live data:
 
 - **Dashboard** — totals, monthly interest, surplus (net of sinking funds), smart alerts, goals snapshot, AI Analysis card
 - **Plan** — 4 payoff strategies with freed-minimum rollover, lump-sum simulator, extra payment slider, AI insights
 - **Goals** — set debt-free date targets, per-card payoff goals, balance targets; required-payment calculator shows exactly what it takes to hit any date
 - **Accounts** — utilization bars, due date badges, promo APR warnings, inline edit for APR/min payment/due date
+- **Reward** *(new)* — pick a spend category (dining, groceries, travel, gas, etc.) and get ranked card recommendations based on reward multipliers and TPG point valuations; cards with active debt balances are ranked lower with a warning
 - **Activity** — transaction history grouped by month, categorized, filterable
 - **Settings** — bank connect/disconnect, income/expenses/strategy profile, sinking funds manager
 - Daily Plaid sync at 8am via cron
 - Claude AI insights on Plan screen + AI spending analysis on Dashboard (10 free/month per user, Pro tier bypasses limit)
 
-**Next:** card rewards & points engine, then Plaid production credentials.
+**Next:** Supabase migration (multi-user foundation), then Plaid production credentials.
+
+---
+
+## Changelog
+
+| Version | Date | What shipped |
+|---------|------|--------------|
+| v1.4 | 2026-05-20 | Card recommendation engine — curated reward profiles (10 cards), TPG point valuations, debt-penalty ranking, 8-category picker, `GET /api/recommendations` |
+| v1.3 | 2026-05 | AI spending insights (Dashboard), manual APR inline edit (Accounts), `is_pro` bypass flag |
+| v1.2 | 2026-05 | Sinking funds manager (Settings), surplus accuracy fix across all payoff calculations |
+| v1.1 | 2026-05 | 4-strategy grid UI, lump-sum simulator, Goals screen, freed-minimum rollover |
+| v1.0 | 2026-05 | Initial build: Dashboard, Plan, Accounts, Activity, Settings; Plaid sandbox; SQLite |
 
 ---
 
@@ -35,6 +48,7 @@ All 6 screens built and tested with live data:
 - **Accounts** — All connected credit cards with APR, utilization, due dates, and promo rate warnings
 - **Plan** — Four payoff strategies, 3 scenarios, extra payment slider, lump-sum simulator, attack order with per-card payoff dates, AI analysis
 - **Goals** — Set targets and track progress; required-payment calculator answers "what does it take to be free by [date]?"
+- **Reward** — Pick a spend category and get ranked card recommendations based on reward multipliers and point valuations; active-debt cards ranked lower automatically
 - **Activity** — Transaction history grouped by month (after syncing via Plaid)
 - **Settings** — Connect/disconnect banks via Plaid Link, update income/expenses/strategy, manage sinking funds
 
@@ -136,17 +150,20 @@ zeroed/
 │   │   ├── expenses.js           # /api/expenses — sinking funds CRUD
 │   │   └── transactions.js       # /api/transactions
 │   ├── services/
-│   │   ├── plaidService.js       # Plaid API client
-│   │   ├── payoffEngine.js       # Pure math — 4 strategies, simulate, lump-sum, required-payment
-│   │   └── claudeService.js      # Claude API — AI insight for the Plan screen
+│   │   ├── plaidService.js         # Plaid API client
+│   │   ├── payoffEngine.js         # Pure math — 4 strategies, simulate, lump-sum, required-payment
+│   │   ├── claudeService.js        # Claude API — AI insight for the Plan screen
+│   │   ├── cardProfiles.js         # Curated reward profiles — multipliers, TPG valuations, lastUpdated
+│   │   └── recommendationEngine.js # Ranking logic — effectiveRate, debt penalty, category matching
 │   └── public/
-│       ├── style.css             # Full design system — mobile-first, 480px max-width
-│       ├── index.html            # Dashboard
-│       ├── accounts.html         # Account list
-│       ├── plan.html             # Payoff plan + strategies + lump-sum
-│       ├── goals.html            # Goals + required-payment calculator
-│       ├── activity.html         # Transaction history
-│       └── settings.html         # Profile + bank connections + sinking funds
+│       ├── style.css               # Full design system — mobile-first, 480px max-width
+│       ├── index.html              # Dashboard
+│       ├── accounts.html           # Account list
+│       ├── plan.html               # Payoff plan + strategies + lump-sum
+│       ├── goals.html              # Goals + required-payment calculator
+│       ├── recommend.html          # Card recommender — category picker + ranked results
+│       ├── activity.html           # Transaction history
+│       └── settings.html           # Profile + bank connections + sinking funds
 ├── .env.example
 ├── .gitignore
 └── package.json
@@ -182,6 +199,8 @@ zeroed/
 | PUT | `/api/plaid/accounts/:id/credit-details` | Manually set APR, min payment, due date for a card |
 | GET | `/api/insights/latest` | Cached AI spending insight + monthly usage stats |
 | POST | `/api/insights/generate` | Generate AI spending insight (checks 10/mo free limit) |
+| GET | `/api/recommendations/categories` | All spend categories with icons and profile last-updated date |
+| GET | `/api/recommendations?category=dining&amount=50` | Ranked card recommendations for a spend category |
 
 ---
 
@@ -265,31 +284,83 @@ pm2 logs zeroed   # view logs
 - [x] Sinking funds — reserve monthly amounts for known future expenses; flows into all surplus calculations
 - [x] Manual APR entry — inline edit per card on Accounts page; yellow warning when data is missing
 - [x] AI spending insights — 90-day habit analysis on Dashboard; 10 free/month, `is_pro` flag for unlimited
+- [x] **Card recommendation engine** — curated reward profiles for 10 cards; 8 spend categories; TPG point valuations; debt-penalty ranking; `GET /api/recommendations` *(2026-05-20)*
 
 ### Up Next 🔜
-- [ ] **Card recommendation engine** — given a purchase category (dining, groceries, travel, gas), recommend which card to use based on reward multipliers, point valuations, and a hard rule against using cards you're actively paying down
-- [ ] **Rewards & points profiles** — preset profiles for Chase Sapphire, Amex Gold, Bilt, Citi Double Cash, BofA Cash Rewards, etc. with category multipliers and estimated point values
-- [ ] Connect Plaid production credentials + get Liabilities product approved
+
+**Phase 2 — Multi-user foundation**
+- [ ] **Supabase migration** — replace SQLite with Supabase Postgres; swap `better-sqlite3` driver; query syntax ~95% compatible; enables multi-user + mobile
+- [ ] **Multi-user auth** — Supabase Auth (email/password + Google OAuth); scope all queries to JWT `user_id`; remove hardcoded `WHERE id = 1`
+- [ ] **Stripe freemium** — Pro gate for unlimited AI; `is_pro` flag already in schema; $X/month or $Y/year
+- [ ] Connect Plaid production credentials + get Liabilities product approved *(apply early — 2–3 week review)*
+
+**Phase 3 — React web**
+- [ ] **React + Vite + TypeScript** — replace vanilla HTML screens; shared hooks + API client layer
+- [ ] Monorepo setup (Turborepo) — `apps/web`, `packages/api`, `packages/types`
+
+**Phase 4 — Native mobile**
+- [ ] **React Native + Expo** — iOS + Android; reuses hooks from Phase 3; Supabase Auth handles mobile tokens
 - [ ] Push notifications for payment due dates and promo APR expiry
 
 ### Later 📋
-- [ ] Multi-user auth + Stripe upgrade flow (freemium: 10 AI analyses/mo free, Pro unlimited)
+- [ ] Reward profile updates — quarterly refresh of TPG valuations and card multipliers in `src/services/cardProfiles.js`
+- [ ] User overrides for card reward multipliers (Settings page)
 - [ ] Lump-sum "split across multiple cards" optimization
-- [ ] React Native / Expo upgrade for native iOS + Android apps
 - [ ] PDF/CSV export of payoff plan and transaction history
 
 ---
 
-## Upgrading to iOS/Android
+## Platform Strategy
 
-The PWA can be promoted to a native app using **React Native + Expo** or wrapped with **Capacitor**. The Express backend stays identical — only the frontend layer changes. The API contract documented above is the interface between them.
+Zeroed is designed to run on web, iOS, and Android from a single backend. The Express API is the stable contract — every platform calls the same endpoints.
+
+### Architecture roadmap
+
+```
+Today
+  Vanilla HTML/CSS/JS (PWA)  →  Node.js API  →  SQLite
+
+Phase 2 — Multi-user foundation
+  Vanilla HTML/CSS/JS (PWA)  →  Node.js API  →  Supabase Postgres + Auth
+
+Phase 3 — React web
+  React (Vite)               →  Node.js API  →  Supabase
+  Shared: hooks, API client, TypeScript types
+
+Phase 4 — Native mobile
+  React Native + Expo        →  Node.js API  →  Supabase
+  Shared: same hooks + API client as web (monorepo)
+```
+
+### What gets shared across web + iOS + Android
+
+| Layer | Shared? | Notes |
+|---|---|---|
+| API client + fetch hooks | ✅ Yes | Same endpoints, same response shapes |
+| Business logic (payoff math, formatters) | ✅ Yes | Pure JS/TS, no platform deps |
+| TypeScript types | ✅ Yes | Account, Plan, Goal, etc. |
+| UI components | ❌ No | React uses `<div>`, React Native uses `<View>` |
+| Styles | ❌ No | CSS vs StyleSheet API |
+| Navigation | ❌ No | React Router vs React Navigation |
+
+### Why Node.js stays (not Python)
+
+The backend language doesn't affect which platforms can connect to it — iOS, Android, and web all speak HTTP. Rewriting working Express routes in Python would cost weeks with zero user-facing benefit. Python would only be added if a specific ML/data-science use case emerges (e.g. training a spending prediction model). For a REST API serving financial data, Node.js + Supabase is the right call.
 
 ---
 
 ## Tech Stack
 
+### Current
 - **Backend:** Node.js, Express, better-sqlite3, node-cron
 - **Bank data:** Plaid API v29 (Transactions + Liabilities products)
 - **AI insights:** Anthropic Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk`
-- **Frontend:** Vanilla HTML/CSS/JS — no frameworks, mobile-first PWA
-- **Database:** SQLite (WAL mode, foreign keys enabled)
+- **Frontend:** Vanilla HTML/CSS/JS — mobile-first PWA, 480px max-width
+- **Database:** SQLite (WAL mode, foreign keys, auto-migration on startup)
+- **Reward profiles:** Curated static JSON in `cardProfiles.js`, TPG valuations updated quarterly
+
+### Target (multi-user + mobile)
+- **Database:** Supabase (Postgres + Auth + Row-Level Security)
+- **Web frontend:** React + Vite + TypeScript
+- **Mobile:** React Native + Expo (iOS + Android)
+- **Monorepo:** Turborepo — `apps/web`, `apps/mobile`, `packages/api`, `packages/types`
