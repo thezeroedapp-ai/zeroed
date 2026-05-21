@@ -134,6 +134,64 @@ This converts all NUMERIC fields to JS floats at the driver level — no per-que
 
 ## 2026-05-21
 
+### v3.2 — Monorepo Restructure + Responsive Web
+
+**Built:**
+- Monorepo directory structure: `server/` (Express), `apps/web/` (React), `packages/core/` (shared)
+- `packages/core/index.ts` — shared `fmt()`, `fmtD()`, `ROUTES` constants; importable by any app in the monorepo
+- Root `package.json` converted to npm workspaces: `apps/*`, `packages/*`
+- `apps/web/vite.config.ts` — path alias `@zeroed/core → packages/core/index.ts`
+- `apps/web/tsconfig.app.json` — matching `paths` entry so TypeScript resolves the alias
+- `apps/web/src/components/SideNav.tsx` — left sidebar nav for tablet/desktop; same routes as BottomNav
+- `apps/web/src/components/Layout.tsx` — shell wrapper: renders SideNav + BottomNav + page content
+- `App.tsx` updated: `ProtectedRoute` wraps children in `Layout`; individual pages no longer import BottomNav
+- Responsive CSS breakpoints in `index.css`:
+  - Mobile (< 768px): bottom tab bar, 480px centered column (unchanged)
+  - Tablet (768–1023px): 68px icon-only sidebar, bottom nav hidden, content full-width up to 860px
+  - Desktop (≥ 1024px): 220px labeled sidebar, content up to 1000px, 4-column metrics grid
+
+**Architecture:**
+```
+zeroed/
+├── server/          ← Express API (was src/)
+├── apps/web/        ← React + Vite (was client/)
+├── packages/core/   ← shared TS (fmt, fmtD, ROUTES)
+├── package.json     ← npm workspaces root
+└── .env             ← root-level, loaded by server at startup
+```
+
+**Dev commands:**
+- `npm run dev` — Express on :3000
+- `npm run dev:web` — Vite on :5174 (proxies /api to :3000)
+- `npm run build:web` — production build to `apps/web/dist`
+
+---
+
+### v3.1 — React + Vite Frontend Migration
+
+**Built:**
+- `client/` directory: Vite 5 + React 18 + TypeScript scaffold
+- `client/src/index.css` — full design system ported from `style.css` (CSS variables, all component classes, auth page styles)
+- `client/src/lib/supabase.ts` — lazy Supabase client initialization via `/api/config`
+- `client/src/lib/api.ts` — `apiFetch()` (attaches JWT Bearer token), `fmt()`, `fmtD()` helpers
+- `client/src/context/AuthContext.tsx` — React Context: session state, loading flag, `signOut()`; wraps entire app
+- `client/src/components/BottomNav.tsx` — `NavLink`-based nav with active state via React Router
+- `client/src/App.tsx` — React Router v6; `ProtectedRoute` + `PublicRoute` wrappers; all 9 routes
+- 9 page components: `Login`, `Signup`, `Dashboard`, `Accounts`, `Plan`, `Goals`, `Activity`, `Recommend`, `Settings`
+
+**Architecture:**
+- Dev: Vite on `localhost:5174` proxies `/api/*` to Express on `localhost:3000`
+- Production: `npm run build` outputs to `client/dist`; Express serves it
+- Auth: same Supabase JWT pattern, now managed by React Context instead of global `auth.js`
+- CSS: global CSS classes (no CSS modules) — same class names as the old HTML, zero visual regression
+
+**Decisions:**
+- TypeScript chosen for type safety and autocomplete as complexity grows
+- Global CSS retained (not CSS modules) to keep migration 1:1 and avoid renames across all classes
+- `client/` subfolder keeps Express backend source (`src/`) cleanly separated
+
+---
+
 ### v3.0 — Multi-user Auth (Supabase Auth + Google OAuth)
 
 **Built:**

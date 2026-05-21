@@ -1,20 +1,19 @@
 {
   "name": "zeroed",
-  "version": "1.0.0",
-  "description": "Debt payoff app powered by Plaid and Claude AI",
-  "main": "src/server.js",
-  "scripts": {
-    "start": "node src/server.js",
-    "db:init": "node -e \"require('./src/db/database.js').init()\""
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": "21.x"
   },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.54.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.0",
-    "express": "^4.18.0",
-    "jsonwebtoken": "^9.0.3",
-    "node-cron": "^3.0.0",
-    "pg": "^8.21.0",
-    "plaid": "^29.0.0"
+  "scripts": {
+    "dev": "node server/server.js",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build:web",
+    "build:web": "npm run build --workspace=apps/web",
+    "start": "NODE_ENV=production node server/server.js",
+    "db:init": "node -e \"require('./server/db/database.js').init()\""
   }
 }

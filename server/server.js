@@ -15,12 +15,18 @@ const goalsRoutes           = require('./routes/goals');
 const expensesRoutes        = require('./routes/expenses');
 const insightsRoutes        = require('./routes/insights');
 const recommendationsRoutes = require('./routes/recommendations');
+const adminRoutes           = require('./routes/admin');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// Production: serve React build from apps/web/dist
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../apps/web/dist')));
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Public config endpoint — exposes Supabase URL + anon key to the frontend
@@ -46,6 +52,7 @@ app.use('/api/expenses',        expensesRoutes);
 app.use('/api/goals',           goalsRoutes);
 app.use('/api/insights',        insightsRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/admin',           adminRoutes);
 
 const CREDIT_ACCOUNTS_QUERY = `
   SELECT a.*, cd.apr, cd.is_promotional_apr, cd.promo_apr_expiry_date,
@@ -129,6 +136,13 @@ app.put('/api/user', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// SPA fallback — non-API routes serve React's index.html in production
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../apps/web/dist', 'index.html'));
+  });
+}
 
 // --- Error handler ---
 app.use((err, req, res, next) => {
