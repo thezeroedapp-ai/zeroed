@@ -2,6 +2,7 @@
   "name": "zeroed",
   "private": true,
   "workspaces": [
+    "server",
     "apps/*",
     "packages/*"
   ],
