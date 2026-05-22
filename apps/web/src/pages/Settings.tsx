@@ -18,7 +18,7 @@ export default function Settings() {
   const [plaidItems, setPlaidItems] = useState<PlaidItem[]>([]);
   const [sfForm, setSfForm] = useState({ category: 'car', amount: '', label: '' });
   const [sfSaving, setSfSaving] = useState(false);
-  const [appVersion] = useState('3.0');
+  const [appVersion] = useState('4.0');
 
   async function loadSettings() {
     try {

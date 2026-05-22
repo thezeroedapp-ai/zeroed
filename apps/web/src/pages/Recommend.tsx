@@ -69,7 +69,7 @@ export default function Recommend() {
     if (!activeCategory) return;
     const url = `/api/recommendations?category=${activeCategory}${amount ? '&amount=' + encodeURIComponent(amount) : ''}`;
     try {
-      const r = await fetch(url);
+      const r = await apiFetch(url);
       if (!r.ok) throw new Error('Failed to fetch recommendations');
       setResults(await r.json());
     } catch (e) {

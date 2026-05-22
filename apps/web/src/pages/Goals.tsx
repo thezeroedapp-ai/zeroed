@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 
 interface Goal {
-  id: number;
+  id: string;
   goal_type: 'debt_free_date' | 'account_payoff' | 'balance_target';
-  account_id?: number;
+  account_id?: string;
   account_name?: string;
   target_date?: string;
   target_amount?: number;
@@ -17,7 +17,7 @@ interface Goal {
   milestones?: { label: string; date: string; done: boolean; next: boolean }[];
 }
 
-interface Account { id: number; name: string; balance_current: number; }
+interface Account { id: string; name: string; balance_current: number; }
 
 export default function Goals() {
   const [state, setState] = useState<'loading' | 'error' | 'content'>('loading');
@@ -60,7 +60,7 @@ export default function Goals() {
     } finally { setSaving(false); }
   }
 
-  async function deleteGoal(id: number) {
+  async function deleteGoal(id: string) {
     if (!confirm('Delete this goal?')) return;
     await apiFetch(`/api/goals/${id}`, { method: 'DELETE' });
     load();

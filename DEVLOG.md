@@ -132,6 +132,30 @@ This converts all NUMERIC fields to JS floats at the driver level — no per-que
 
 ---
 
+## 2026-05-22 (continued)
+
+### v4.1 — Dark Premium UI Redesign + Bug Fixes
+
+**Goal:** Differentiate from Monarch/Origin with a debt-engine-first experience. Dark + premium aesthetic, interactive dashboards, bento grid layout.
+
+**Built:**
+- `apps/web/src/index.css` — complete rewrite. Dark design system: `#07090f` background, `#0d1424` card surfaces, violet accent (`#7c3aed` / `#a78bfa`). Compatibility aliases preserved so inline `var(--text-sm)`, `var(--blue-light)` etc. still resolve. Frosted-glass sticky top-bar and bottom nav via `backdrop-filter: blur`. Gradient progress bars, tabular-nums on all currency values.
+- `apps/web/src/pages/Dashboard.tsx` — bento grid layout. Mobile: single column. Tablet (768px+): 2-column CSS grid. Desktop (1024px+): 4-column grid with named span classes (`bento-hero`, `bento-stat`, `bento-chart`, `bento-focus`, `bento-ai`, `bento-goals`). Recharts `AreaChart` renders a projected debt payoff curve from `totalDebt` + `debtFreeMonths` (new field returned by `/api/dashboard`). Curve uses an exponential decay approximating the freed-minimum rollover effect.
+- Added `recharts` dependency to `apps/web`.
+
+**Bug fixes:**
+- `Recommend.tsx`: `fetchResults()` was calling plain `fetch()` without the Firebase auth token — changed to `apiFetch()`. Cards were returning 401 for all recommendation requests.
+- `Goals.tsx`: `id` typed as `number` but Firestore returns string document IDs — changed to `string` throughout.
+- `server/routes/plan.js`: Plan route now transforms engine output (`order`, `totalMonths`, `perCardTimeline`) into the shape `Plan.tsx` expects (`cards`, `months`, `scenarios`, `sinkingFundTotal`). Engine and frontend were never aligned until this fix.
+
+**Design decisions:**
+- Violet accent (`#7c3aed`) instead of blue — every other finance app uses blue; this creates immediate visual differentiation
+- Bento grid only on Dashboard (the landing screen users see most) — other pages stay as clean card stacks to keep complexity low
+- Chart generates a projected curve on the frontend from `debtFreeMonths`; no extra API call needed. Accuracy is approximate (exponential decay) but visually communicates the debt payoff trajectory clearly
+- All existing class names preserved in new CSS — no breaking changes to components that weren't redesigned
+
+---
+
 ## 2026-05-22
 
 ### v4.0 — Firebase Migration (Railway + Supabase → Firebase)

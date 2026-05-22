@@ -61,7 +61,40 @@ router.post('/generate', async (req, res) => {
       }),
     });
 
-    res.json({ plan, insight });
+    const scenarios = payoffEngine.compareScenarios(debts, Math.max(0, plan.surplus), strategy);
+    const cards = plan.order.map(d => {
+      const months = plan.perCardTimeline[d.name];
+      const payoffDate = months
+        ? (() => { const dt = new Date(); dt.setMonth(dt.getMonth() + months); return dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); })()
+        : null;
+      return {
+        name:            d.name,
+        balance_current: d.balance,
+        apr:             d.apr,
+        minimum_payment: d.minimumPayment,
+        payoffMonth:     months || null,
+        payoffDate,
+      };
+    });
+
+    res.json({
+      plan: {
+        strategy,
+        months:           plan.totalMonths,
+        totalInterest:    plan.totalInterest,
+        debtFreeDate:     plan.debtFreeDate,
+        surplus:          plan.surplus,
+        sinkingFundTotal: sinkingTotal,
+        monthlyIncome:    user.monthly_income || 0,
+        cards,
+        scenarios: scenarios.filter(s => s.extraMonthly > 0).map(s => ({
+          extra:         s.extraMonthly,
+          months:        s.months,
+          interestSaved: Math.round((plan.totalInterest - s.totalInterest) * 100) / 100,
+        })),
+      },
+      insight,
+    });
   } catch (err) {
     console.error('[plan/generate]', err.message);
     res.status(500).json({ error: err.message });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 import { apiFetch, fmt, fmtD } from '../lib/api';
 
@@ -11,6 +12,7 @@ interface DashboardData {
   accountCount: number;
   totalMinimums: number;
   debtFreeDate?: string;
+  debtFreeMonths?: number;
   alerts?: { severity: string; title: string; description: string }[];
   priorityCard?: { name: string; balance_current: number; apr: number; minimum_payment: number; payment_due_date?: string };
 }
@@ -23,8 +25,13 @@ interface InsightData {
   limit?: number;
 }
 
-interface GoalsData {
-  goals?: { id: number; goal_type: string; account_name?: string; label?: string; onTrack?: boolean; requiredExtra?: number }[];
+interface GoalRow {
+  id: string;
+  goal_type: string;
+  account_name?: string;
+  label?: string;
+  onTrack?: boolean;
+  requiredExtra?: number;
 }
 
 function greeting(name: string) {
@@ -33,10 +40,32 @@ function greeting(name: string) {
   return `${g}, ${name}`;
 }
 
+function buildChartData(totalDebt: number, months: number): { month: string; balance: number }[] {
+  if (!months || months <= 0 || months > 360 || !totalDebt) return [];
+  const cap = Math.min(months, 60);
+  const step = Math.max(1, Math.floor(cap / 24));
+  const data: { month: string; balance: number }[] = [];
+  const now = new Date();
+  for (let i = 0; i <= cap; i += step) {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() + i);
+    const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    const frac = i / months;
+    const balance = Math.max(0, Math.round(totalDebt * (1 - Math.pow(frac, 0.85))));
+    data.push({ month: label, balance });
+  }
+  if (data[data.length - 1]?.balance > 0) {
+    const end = new Date(now);
+    end.setMonth(end.getMonth() + months);
+    data.push({ month: end.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), balance: 0 });
+  }
+  return data;
+}
+
 export default function Dashboard() {
   const [state, setState] = useState<'loading' | 'error' | 'content'>('loading');
   const [data, setData] = useState<DashboardData | null>(null);
-  const [goals, setGoals] = useState<GoalsData | null>(null);
+  const [goals, setGoals] = useState<GoalRow[]>([]);
   const [error, setError] = useState('');
   const [aiState, setAiState] = useState<'loading' | 'empty' | 'content' | 'limit' | 'error'>('loading');
   const [insight, setInsight] = useState<InsightData | null>(null);
@@ -53,7 +82,7 @@ export default function Dashboard() {
       const d = await r1.json();
       const g = r2 ? await r2.json().catch(() => null) : null;
       setData(d);
-      setGoals(g);
+      setGoals(g?.goals || []);
       setState('content');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not connect to server');
@@ -67,8 +96,7 @@ export default function Dashboard() {
       const d: InsightData = await r.json();
       setInsight(d);
       if (!d.insight) {
-        if (d.remaining === 0 && !d.isPro) setAiState('limit');
-        else setAiState('empty');
+        setAiState(d.remaining === 0 && !d.isPro ? 'limit' : 'empty');
       } else {
         setAiState('content');
       }
@@ -93,13 +121,12 @@ export default function Dashboard() {
   useEffect(() => { load(); loadInsight(); }, []);
 
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const chartData = data ? buildChartData(data.totalDebt, data.debtFreeMonths || 0) : [];
 
   return (
     <div className="page">
       <div className="top-bar">
-        <div style={{ fontSize: 17, fontWeight: 700 }}>
-          {data ? greeting(data.user?.name || 'there') : 'Welcome back'}
-        </div>
+        <h1>{data ? greeting(data.user?.name || 'there') : 'Welcome back'}</h1>
         <div className="sub">{dateStr}</div>
       </div>
 
@@ -109,43 +136,118 @@ export default function Dashboard() {
         )}
         {state === 'error' && (
           <div className="error-state">
-            <div className="error-icon">⚠️</div>
+            <div className="error-icon">⚠</div>
             <p>Could not load dashboard</p>
             <small>{error}</small>
             <button className="btn btn-primary" onClick={load}>Try Again</button>
           </div>
         )}
         {state === 'content' && data && (
-          <>
-            <div className="card">
+          <div className="bento">
+
+            {/* Hero — total debt */}
+            <div className="card bento-hero">
               <div className="card-label">Total Debt</div>
-              <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1 }}>{fmt(data.totalDebt)}</div>
+              <div className="hero-value" style={{ color: 'var(--red)' }}>{fmt(data.totalDebt)}</div>
               <div className="progress-wrap">
-                <div className="progress-bar"><div className="progress-fill red" style={{ width: '100%' }} /></div>
-                <div className="progress-labels">
-                  <span>{data.accountCount} cards</span>
-                  {data.debtFreeDate && <span style={{ fontWeight: 600, color: 'var(--blue)' }}>Free {data.debtFreeDate}</span>}
+                <div className="progress-bar">
+                  <div className="progress-fill red" style={{ width: '100%' }} />
                 </div>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-sm)', marginTop: 2 }}>
-                {data.accountCount} cards · {fmtD(data.totalMinimums)}/mo minimums
+              <div className="hero-meta">
+                <span>
+                  {data.accountCount} card{data.accountCount !== 1 ? 's' : ''} ·{' '}
+                  {fmtD(data.totalMinimums)}/mo mins ·{' '}
+                  <span style={{ color: data.surplus >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+                    {data.surplus >= 0 ? '+' : ''}{fmt(data.surplus)} surplus
+                  </span>
+                </span>
+                {data.debtFreeDate && <span className="hero-date">{data.debtFreeDate}</span>}
               </div>
             </div>
 
-            <div className="metrics">
-              <div className="metric">
-                <div className="m-label">Monthly Interest</div>
-                <div className="m-value red">{fmtD(data.monthlyInterest)}</div>
-              </div>
-              <div className="metric">
-                <div className="m-label">Monthly Surplus</div>
-                <div className={`m-value ${data.surplus >= 0 ? 'green' : 'red'}`}>{fmt(data.surplus)}</div>
-              </div>
+            {/* Monthly interest */}
+            <div className="card bento-stat">
+              <div className="card-label">Monthly Interest</div>
+              <div className="stat-value red">{fmtD(data.monthlyInterest)}</div>
+              <div className="stat-sub">cost of carrying debt</div>
             </div>
 
+            {/* Monthly surplus */}
+            <div className="card bento-stat">
+              <div className="card-label">Monthly Surplus</div>
+              <div className={`stat-value ${data.surplus >= 0 ? 'green' : 'red'}`}>{fmt(data.surplus)}</div>
+              <div className="stat-sub">for extra payments</div>
+            </div>
+
+            {/* Payoff projection chart */}
+            {chartData.length > 2 && (
+              <div className="card bento-chart">
+                <div className="card-label" style={{ marginBottom: 16 }}>Payoff Projection</div>
+                <ResponsiveContainer width="100%" height={148}>
+                  <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#7c3aed" stopOpacity={0.28} />
+                        <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tickLine={false} axisLine={false}
+                      interval={Math.max(1, Math.floor(chartData.length / 5))}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: '#0d1424',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 10, fontSize: 12, color: '#e2e8f0',
+                      }}
+                      formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Balance']}
+                      labelStyle={{ color: '#64748b', marginBottom: 4, fontSize: 11 }}
+                      cursor={{ stroke: 'rgba(167,139,250,0.2)', strokeWidth: 1 }}
+                    />
+                    <Area
+                      type="monotone" dataKey="balance"
+                      stroke="#7c3aed" strokeWidth={2}
+                      fill="url(#debtGrad)" dot={false}
+                      activeDot={{ r: 4, fill: '#a78bfa', strokeWidth: 0 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Priority attack card */}
+            <div className="card bento-focus focus-card">
+              <div className="focus-label">⚡ Priority Attack</div>
+              {data.priorityCard ? (
+                <>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>
+                    {data.priorityCard.name}
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--red)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtD(data.priorityCard.balance_current)}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6 }}>
+                    {data.priorityCard.apr}% APR
+                    {data.priorityCard.payment_due_date && (
+                      <> · Due {new Date(data.priorityCard.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--accent-2)', marginTop: 10, lineHeight: 1.5 }}>
+                    Highest APR — extra dollars here save the most.
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--text-2)' }}>No debt cards found.</div>
+              )}
+            </div>
+
+            {/* Alerts */}
             {data.alerts && data.alerts.length > 0 && (
-              <>
-                <div className="section-title">⚠️ Alerts</div>
+              <div className="bento-full">
                 {data.alerts.map((a, i) => (
                   <div key={i} className="warning">
                     <div className="warn-icon">{a.severity === 'danger' ? '🔴' : '⚠️'}</div>
@@ -155,61 +257,24 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
-              </>
+              </div>
             )}
 
-            <div className="section-title">This Month's Focus</div>
-            <div className="focus-card">
-              <div className="focus-label">⚡ Priority Attack</div>
-              {data.priorityCard ? (
-                <>
-                  <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>{data.priorityCard.name}</div>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--red)' }}>{fmtD(data.priorityCard.balance_current)}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-sm)', marginTop: 4 }}>
-                    {data.priorityCard.apr}% APR &nbsp;·&nbsp; {fmtD(data.priorityCard.minimum_payment)}/mo minimum
-                    {data.priorityCard.payment_due_date && ` · Due ${new Date(data.priorityCard.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
-                  </div>
-                  <div style={{ fontSize: 13, marginTop: 10, color: 'var(--blue)', fontWeight: 500 }}>
-                    Highest APR — every extra dollar here saves the most in interest.
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 14, color: 'var(--text-sm)' }}>No cards connected yet.</div>
-              )}
-            </div>
-
-            {goals?.goals && goals.goals.length > 0 && (
-              <>
-                <div className="section-title">Goals</div>
-                {goals.goals.slice(0, 2).map((g) => {
-                  const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
-                  const status = g.onTrack ? '✅ On track' : g.requiredExtra ? `Needs +${fmt(g.requiredExtra)}/mo` : '⚠️ Review';
-                  const color = g.onTrack ? 'var(--green)' : 'var(--yellow)';
-                  return (
-                    <div key={g.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{label}</div>
-                      <span style={{ fontSize: 12, fontWeight: 600, color }}>{status}</span>
-                    </div>
-                  );
-                })}
-                <Link to="/goals" className="btn btn-outline btn-block mt-8" style={{ display: 'block', textAlign: 'center' }}>View All Goals</Link>
-              </>
-            )}
-
-            <div className="section-title" style={{ marginTop: 20 }}>AI Analysis</div>
-            <div className="card">
+            {/* AI insights */}
+            <div className="card bento-ai">
+              <div className="card-label">AI Analysis</div>
               {aiState === 'loading' && (
                 <div style={{ textAlign: 'center', padding: '16px 0' }}>
                   <div className="spinner" style={{ margin: '0 auto 10px' }} />
-                  <div style={{ fontSize: 13, color: 'var(--text-sm)' }}>Analyzing your habits…</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-2)' }}>Analyzing your habits…</div>
                 </div>
               )}
               {aiState === 'empty' && (
                 <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
                   <div style={{ fontSize: 32, marginBottom: 10 }}>🧠</div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Get personalized insights</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-sm)', marginBottom: 16, lineHeight: 1.6 }}>
-                    Claude analyzes your spending patterns and debt profile to surface 3 specific actions that will get you debt-free faster.
+                  <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.6 }}>
+                    Claude analyzes your spending and debt profile to surface 3 actions that get you debt-free faster.
                   </div>
                   <button className="btn btn-primary btn-block" onClick={generateInsight}>Generate Insights</button>
                 </div>
@@ -221,19 +286,25 @@ export default function Dashboard() {
                       const m = line.trim().match(/^(\d+)\.\s*(.*)/s);
                       if (m) return (
                         <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                          <div style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: 'var(--blue-light)', color: 'var(--blue)', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{m[1]}</div>
-                          <div style={{ fontSize: 13, lineHeight: 1.55, paddingTop: 3 }}>{m[2]}</div>
+                          <div style={{
+                            flexShrink: 0, width: 22, height: 22, borderRadius: '50%',
+                            background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
+                            color: 'var(--accent-2)', fontSize: 11, fontWeight: 700,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>{m[1]}</div>
+                          <div style={{ fontSize: 13, lineHeight: 1.6, paddingTop: 2, color: 'var(--text)' }}>{m[2]}</div>
                         </div>
                       );
-                      return <div key={i} style={{ fontSize: 13, color: 'var(--text-sm)', lineHeight: 1.55, marginBottom: 8 }}>{line}</div>;
+                      return <div key={i} style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 8 }}>{line}</div>;
                     })}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-sm)' }}>
-                      {new Date(insight.insight.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {insight.isPro ? 'Pro — unlimited' : `${insight.used} of ${insight.limit} used`}
+                    <div style={{ fontSize: 11, color: 'var(--text-2)' }}>
+                      {new Date(insight.insight.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {' · '}{insight.isPro ? 'Pro — unlimited' : `${insight.used} of ${insight.limit} used`}
                     </div>
                     {(insight.isPro || (insight.remaining ?? 0) > 0) && (
-                      <button className="btn btn-outline btn-sm" onClick={generateInsight}>Refresh</button>
+                      <button className="btn btn-ghost btn-sm" onClick={generateInsight}>Refresh</button>
                     )}
                   </div>
                 </>
@@ -242,17 +313,43 @@ export default function Dashboard() {
                 <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
                   <div style={{ fontSize: 28, marginBottom: 10 }}>🔒</div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Monthly limit reached</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-sm)', lineHeight: 1.6 }}>You've used all 10 free AI analyses this month.<br />Resets on the 1st.</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>10 free analyses used this month.<br />Resets on the 1st.</div>
                 </div>
               )}
               {aiState === 'error' && (
                 <div style={{ fontSize: 13, color: 'var(--red)', textAlign: 'center', padding: '8px 0' }}>{aiError}</div>
               )}
             </div>
-          </>
+
+            {/* Goals preview */}
+            {goals.length > 0 && (
+              <div className="card bento-goals">
+                <div className="card-label">Goals</div>
+                {goals.slice(0, 3).map(g => {
+                  const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
+                  return (
+                    <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>{label}</div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                        background: g.onTrack ? 'var(--green-dim)' : 'var(--amber-dim)',
+                        color: g.onTrack ? 'var(--green)' : 'var(--amber)',
+                        flexShrink: 0,
+                      }}>
+                        {g.onTrack ? 'On track' : g.requiredExtra ? `+${fmt(g.requiredExtra)}/mo` : 'Off track'}
+                      </span>
+                    </div>
+                  );
+                })}
+                <Link to="/goals" style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 13, color: 'var(--accent-2)', textDecoration: 'none', fontWeight: 600 }}>
+                  View All Goals →
+                </Link>
+              </div>
+            )}
+
+          </div>
         )}
       </div>
-
     </div>
   );
 }

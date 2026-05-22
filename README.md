@@ -12,18 +12,18 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v4.0 — Firebase migration complete.** *(2026-05-22)*
+**v4.1 — Dark premium UI redesign.** *(2026-05-22)*
 
-Full Firebase stack live:
+Full Firebase stack live with a dark premium UI:
 
 - **Auth:** Firebase Authentication (email/password + Google OAuth)
 - **Database:** Firestore — subcollections under `users/{uid}/`
 - **API:** Express wrapped as Firebase Cloud Functions (`exports.api`)
 - **Hosting:** Firebase Hosting (React SPA) + Rewrites to Cloud Functions
-- **Frontend:** React 18 + Vite + TypeScript — all 7 screens
+- **Frontend:** React 18 + Vite + TypeScript — all 7 screens, dark design system, bento grid dashboard
 
 All screens working:
-- **Dashboard** — totals, monthly interest, surplus, smart alerts, AI analysis card
+- **Dashboard** — bento grid layout with interactive debt payoff projection chart (recharts), monthly stats, priority attack card, AI analysis, goals preview
 - **Plan** — 4 payoff strategies, freed-minimum rollover, lump-sum simulator, extra payment calculator, AI insights
 - **Goals** — debt-free date targets, per-card payoff goals, balance targets; required-payment calculator
 - **Accounts** — utilization bars, due date badges, promo APR warnings, inline edit for APR/min payment/due date
@@ -39,6 +39,7 @@ All screens working:
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v4.1 | 2026-05-22 | Dark premium UI redesign — complete `index.css` overhaul (violet accent, navy backgrounds, glassmorphism nav); Dashboard bento grid with recharts debt payoff projection; bug fixes: Recommend auth token, Goals Firestore string IDs, plan route response shape |
 | v4.0 | 2026-05-22 | Firebase migration — replaced Railway + Supabase + PostgreSQL with Firebase Auth + Firestore + Cloud Functions + Hosting; React frontend migrated from Supabase SDK to Firebase SDK; all routes scoped to `req.user.uid` (string); Firestore subcollections under `users/{uid}/`; `firebase deploy` ships everything |
 | v3.2 | 2026-05-21 | Monorepo restructure — `server/`, `apps/web/`, `packages/core/`; responsive layout (mobile bottom nav, tablet/desktop sidebar) |
 | v3.1 | 2026-05-21 | React + Vite + TypeScript frontend — replaced vanilla HTML; React Router, AuthContext, all 9 pages |
