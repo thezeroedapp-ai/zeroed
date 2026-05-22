@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 const SINKING_CATEGORIES = ['car', 'home', 'medical', 'travel', 'education', 'holiday', 'tax', 'other'];
 
-interface SinkingFund { id: number; category: string; monthly_amount: number; label?: string; }
+interface SinkingFund { id: string; category: string; monthly_amount: number; label?: string; }
 interface PlaidItem { item_id: string; institution_name: string; last_synced?: string; }
 
 export default function Settings() {
@@ -58,7 +58,7 @@ export default function Settings() {
     } finally { setSfSaving(false); }
   }
 
-  async function deleteFund(id: number) {
+  async function deleteFund(id: string) {
     if (!confirm('Delete this sinking fund?')) return;
     await apiFetch(`/api/expenses/sinking-funds/${id}`, { method: 'DELETE' });
     loadSettings();

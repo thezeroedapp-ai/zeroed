@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { PlaidApi, PlaidEnvironments, Configuration, Products, CountryCode } = require('plaid');
-const { pool, query, queryOne, upsertAccount, saveTransactions } = require('../db/database');
+const db = require('../db/database');
 
 const client = new PlaidApi(new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
@@ -12,23 +12,20 @@ const client = new PlaidApi(new Configuration({
   },
 }));
 
-async function createLinkToken(userId) {
+async function createLinkToken(uid) {
   const response = await client.linkTokenCreate({
-    user: { client_user_id: String(userId) },
-    client_name: 'Zeroed',
-    products: [Products.Transactions, Products.Liabilities],
+    user: { client_user_id: uid },
+    client_name:   'Zeroed',
+    products:      [Products.Transactions, Products.Liabilities],
     country_codes: [CountryCode.Us],
-    language: 'en',
+    language:      'en',
   });
   return response.data.link_token;
 }
 
 async function exchangePublicToken(publicToken) {
   const response = await client.itemPublicTokenExchange({ public_token: publicToken });
-  return {
-    accessToken: response.data.access_token,
-    itemId:      response.data.item_id,
-  };
+  return { accessToken: response.data.access_token, itemId: response.data.item_id };
 }
 
 async function getAccounts(accessToken) {
@@ -43,13 +40,12 @@ async function getAccounts(accessToken) {
   const creditDetailMap = {};
   for (const card of creditCards) {
     const purchaseApr = (card.aprs || []).find(a => a.apr_type === 'purchase_apr') || card.aprs?.[0];
-    const isPromo = purchaseApr?.apr_type?.includes('promotional') ? 1 : 0;
     creditDetailMap[card.account_id] = {
-      apr:                  purchaseApr?.apr_percentage ?? null,
-      is_promotional_apr:   isPromo,
+      apr:                   purchaseApr?.apr_percentage ?? null,
+      is_promotional_apr:    purchaseApr?.apr_type?.includes('promotional') ?? false,
       promo_apr_expiry_date: null,
-      minimum_payment:      card.minimum_payment_amount ?? null,
-      payment_due_date:     card.next_payment_due_date || null,
+      minimum_payment:       card.minimum_payment_amount ?? null,
+      payment_due_date:      card.next_payment_due_date || null,
     };
   }
 
@@ -65,8 +61,8 @@ async function getAccounts(accessToken) {
 }
 
 async function getTransactions(accessToken, startDate, endDate) {
-  const now = new Date();
-  const end = endDate || now.toISOString().split('T')[0];
+  const now   = new Date();
+  const end   = endDate   || now.toISOString().split('T')[0];
   const start = startDate || (() => {
     const d = new Date(now);
     d.setDate(d.getDate() - 90);
@@ -75,9 +71,9 @@ async function getTransactions(accessToken, startDate, endDate) {
 
   const response = await client.transactionsGet({
     access_token: accessToken,
-    start_date: start,
-    end_date: end,
-    options: { count: 500 },
+    start_date:   start,
+    end_date:     end,
+    options:      { count: 500 },
   });
 
   return response.data.transactions.map(t => ({
@@ -90,26 +86,8 @@ async function getTransactions(accessToken, startDate, endDate) {
   }));
 }
 
-async function upsertCreditDetails(details) {
-  await pool.query(`
-    INSERT INTO credit_details
-      (account_id, apr, is_promotional_apr, promo_apr_expiry_date, minimum_payment, payment_due_date)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT(account_id) DO UPDATE SET
-      apr                   = EXCLUDED.apr,
-      is_promotional_apr    = EXCLUDED.is_promotional_apr,
-      promo_apr_expiry_date = EXCLUDED.promo_apr_expiry_date,
-      minimum_payment       = EXCLUDED.minimum_payment,
-      payment_due_date      = EXCLUDED.payment_due_date,
-      updated_at            = NOW()
-  `, [
-    details.account_id, details.apr, details.is_promotional_apr,
-    details.promo_apr_expiry_date, details.minimum_payment, details.payment_due_date,
-  ]);
-}
-
-async function syncAllAccounts(userId) {
-  const items   = await query('SELECT * FROM plaid_items WHERE user_id = $1', [userId]);
+async function syncAllAccounts(uid) {
+  const items   = await db.getPlaidItems(uid);
   const results = { accounts: 0, transactions: 0 };
 
   for (const item of items) {
@@ -119,23 +97,22 @@ async function syncAllAccounts(userId) {
     ]);
 
     for (const acct of accounts) {
-      await upsertAccount({ ...acct, plaid_item_id: item.id });
-      if (acct.credit_details) {
-        const row = await queryOne(
-          'SELECT id FROM accounts WHERE plaid_account_id = $1', [acct.plaid_account_id]
-        );
-        if (row) await upsertCreditDetails({ account_id: row.id, ...acct.credit_details });
-      }
+      const { credit_details, ...rest } = acct;
+      await db.upsertAccount(uid, {
+        ...rest,
+        ...(credit_details || {}),
+        plaid_item_id:    item.id,
+        institution_name: item.institution_name || null,
+      });
     }
     results.accounts += accounts.length;
 
-    const dbAccounts = await query('SELECT id, plaid_account_id FROM accounts');
-    const acctIdMap  = Object.fromEntries(dbAccounts.map(a => [a.plaid_account_id, a.id]));
+    // plaid_account_id IS the Firestore account doc ID — no mapping needed
     const mapped = transactions
-      .filter(t => acctIdMap[t.plaid_account_id])
-      .map(({ plaid_account_id, ...t }) => ({ ...t, account_id: acctIdMap[plaid_account_id] }));
+      .filter(t => t.plaid_account_id)
+      .map(({ plaid_account_id, ...t }) => ({ ...t, account_id: plaid_account_id }));
 
-    await saveTransactions(mapped);
+    await db.saveTransactions(uid, mapped);
     results.transactions += mapped.length;
   }
 

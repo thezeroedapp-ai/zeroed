@@ -1,215 +1,236 @@
 require('dotenv').config();
-const { Pool, types } = require('pg');
+const admin = require('firebase-admin');
 
-// pg returns NUMERIC as strings by default — parse to float so math works
-types.setTypeParser(1700, parseFloat);
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost')
-    ? { rejectUnauthorized: false }
-    : false,
-});
-
-// --- Helpers ---
-
-async function query(text, params = []) {
-  const { rows } = await pool.query(text, params);
-  return rows;
-}
-
-async function queryOne(text, params = []) {
-  const { rows } = await pool.query(text, params);
-  return rows[0] || null;
-}
-
-async function withTransaction(fn) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+if (!admin.apps.length) {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
+    });
+  } else {
+    // Cloud Functions runtime or GOOGLE_APPLICATION_CREDENTIALS env var
+    admin.initializeApp();
   }
 }
 
+const firestore = admin.firestore();
+const FieldValue = admin.firestore.FieldValue;
+
+// Convert Firestore Timestamps to ISO strings so JSON.stringify works
+function toObj(snap) {
+  const data = snap.data() || {};
+  const out = {};
+  for (const [k, v] of Object.entries(data)) {
+    out[k] = (v && typeof v.toDate === 'function') ? v.toDate().toISOString() : v;
+  }
+  return out;
+}
+
+function userRef(uid) {
+  return firestore.collection('users').doc(uid);
+}
+
 async function init() {
-  await pool.query('SELECT 1');
-  console.log('Database connected:', process.env.DATABASE_URL?.split('@')[1]?.split('/')[0] || 'localhost');
+  await firestore.collection('users').limit(1).get();
+  console.log('Firestore connected');
 }
 
 // --- Users ---
 
-async function getUser(id) {
-  return queryOne('SELECT * FROM users WHERE id = $1', [id]);
+async function getUser(uid) {
+  const snap = await userRef(uid).get();
+  if (!snap.exists) return null;
+  return { uid, ...toObj(snap) };
+}
+
+async function upsertUser(uid, data) {
+  await userRef(uid).set(data, { merge: true });
+  return getUser(uid);
 }
 
 // --- Accounts ---
 
-async function upsertAccount(account) {
-  await pool.query(`
-    INSERT INTO accounts
-      (plaid_item_id, plaid_account_id, name, type, balance_current, balance_available, credit_limit, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-    ON CONFLICT(plaid_account_id) DO UPDATE SET
-      name              = EXCLUDED.name,
-      balance_current   = EXCLUDED.balance_current,
-      balance_available = EXCLUDED.balance_available,
-      credit_limit      = EXCLUDED.credit_limit,
-      updated_at        = NOW()
-  `, [
-    account.plaid_item_id, account.plaid_account_id, account.name, account.type,
-    account.balance_current, account.balance_available, account.credit_limit,
-  ]);
+async function getAccountsByUser(uid) {
+  const snap = await userRef(uid).collection('accounts').get();
+  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+}
+
+async function upsertAccount(uid, account) {
+  const docId = account.plaid_account_id;
+  if (!docId) throw new Error('plaid_account_id required');
+  const { plaid_account_id, ...rest } = account;
+  const ref = userRef(uid).collection('accounts').doc(docId);
+  await ref.set({ ...rest, updated_at: FieldValue.serverTimestamp() }, { merge: true });
+  return docId;
+}
+
+// --- Plaid Items ---
+
+async function getPlaidItems(uid) {
+  const snap = await userRef(uid).collection('plaid_items').get();
+  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+}
+
+async function upsertPlaidItem(uid, itemId, data) {
+  const ref = userRef(uid).collection('plaid_items').doc(itemId);
+  await ref.set(data, { merge: true });
+  return itemId;
 }
 
 // --- Transactions ---
 
-async function saveTransactions(transactions) {
+async function saveTransactions(uid, transactions) {
   if (!transactions.length) return;
-  return withTransaction(async (client) => {
-    for (const t of transactions) {
-      await client.query(`
-        INSERT INTO transactions
-          (account_id, plaid_transaction_id, date, description, amount, category)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT(plaid_transaction_id) DO NOTHING
-      `, [t.account_id, t.plaid_transaction_id, t.date, t.description, t.amount, t.category]);
-    }
-  });
+  for (let i = 0; i < transactions.length; i += 500) {
+    const batch = firestore.batch();
+    transactions.slice(i, i + 500).forEach(t => {
+      const ref = userRef(uid).collection('transactions').doc(t.plaid_transaction_id);
+      batch.set(ref, t, { merge: true });
+    });
+    await batch.commit();
+  }
 }
 
-// --- Payoff plans ---
-
-async function getPayoffPlan(userId) {
-  const plan = await queryOne(
-    'SELECT * FROM payoff_plans WHERE user_id = $1 ORDER BY generated_at DESC LIMIT 1',
-    [userId]
-  );
-  if (!plan) return null;
-  plan.items = await query(`
-    SELECT pi.*, a.name AS account_name, a.balance_current, a.credit_limit
-    FROM plan_items pi
-    JOIN accounts a ON a.id = pi.account_id
-    WHERE pi.payoff_plan_id = $1
-    ORDER BY pi.priority_order
-  `, [plan.id]);
-  return plan;
+async function getTransactionsByUser(uid, { accountId, limit = 50, offset = 0 } = {}) {
+  let q = userRef(uid).collection('transactions').orderBy('date', 'desc');
+  if (accountId) q = q.where('account_id', '==', accountId);
+  const snap = await q.limit(parseInt(limit) + parseInt(offset)).get();
+  return snap.docs.slice(parseInt(offset)).map(d => ({ id: d.id, ...toObj(d) }));
 }
 
-async function savePlan(plan) {
-  return withTransaction(async (client) => {
-    const { rows: [p] } = await client.query(`
-      INSERT INTO payoff_plans
-        (user_id, strategy, total_debt, monthly_interest, surplus, debt_free_estimate, insight)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id
-    `, [plan.user_id, plan.strategy, plan.total_debt, plan.monthly_interest,
-        plan.surplus, plan.debt_free_estimate, plan.insight]);
-
-    for (const item of plan.items) {
-      await client.query(`
-        INSERT INTO plan_items
-          (payoff_plan_id, account_id, priority_order, estimated_payoff_month, monthly_interest, notes)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `, [p.id, item.account_id, item.priority_order,
-          item.estimated_payoff_month, item.monthly_interest, item.notes]);
-    }
-    return p.id;
+async function getTransactionSummary(uid) {
+  const snap = await userRef(uid).collection('transactions').where('amount', '>', 0).get();
+  const byCategory = {};
+  snap.docs.forEach(d => {
+    const { category, amount } = d.data();
+    if (!category) return;
+    if (!byCategory[category]) byCategory[category] = { category, count: 0, total: 0 };
+    byCategory[category].count++;
+    byCategory[category].total += amount;
   });
+  return Object.values(byCategory)
+    .sort((a, b) => b.total - a.total)
+    .map(r => ({ ...r, total: Math.round(r.total * 100) / 100 }));
+}
+
+// --- Payoff Plans ---
+
+async function getPayoffPlan(uid) {
+  const snap = await userRef(uid).collection('payoff_plans')
+    .orderBy('generated_at', 'desc').limit(1).get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, ...toObj(doc) };
+}
+
+async function savePlan(uid, plan) {
+  const ref = userRef(uid).collection('payoff_plans').doc();
+  await ref.set({ ...plan, generated_at: FieldValue.serverTimestamp() });
+  return ref.id;
 }
 
 // --- Goals ---
 
-async function getGoals(userId) {
-  return query(`
-    SELECT g.*, a.name as account_name, a.balance_current as account_balance
-    FROM user_goals g
-    LEFT JOIN accounts a ON a.id = g.account_id
-    WHERE g.user_id = $1 AND g.is_active = 1
-    ORDER BY g.created_at DESC
-  `, [userId]);
+async function getGoals(uid) {
+  const snap = await userRef(uid).collection('goals').get();
+  return snap.docs
+    .map(d => ({ id: d.id, ...toObj(d) }))
+    .filter(g => g.is_active)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
-async function createGoal(goal) {
-  return queryOne(`
-    INSERT INTO user_goals (user_id, goal_type, target_date, target_balance, account_id, label)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING *
-  `, [goal.user_id, goal.goal_type, goal.target_date, goal.target_balance, goal.account_id, goal.label]);
+async function createGoal(uid, goal) {
+  const ref = userRef(uid).collection('goals').doc();
+  await ref.set({ ...goal, is_active: true, created_at: FieldValue.serverTimestamp() });
+  const snap = await ref.get();
+  return { id: ref.id, ...toObj(snap) };
 }
 
-async function deleteGoal(id, userId) {
-  const { rowCount } = await pool.query(
-    'UPDATE user_goals SET is_active = 0 WHERE id = $1 AND user_id = $2',
-    [id, userId]
-  );
-  return { changes: rowCount };
+async function deleteGoal(uid, goalId) {
+  const ref = userRef(uid).collection('goals').doc(goalId);
+  const snap = await ref.get();
+  if (!snap.exists) return { changes: 0 };
+  await ref.update({ is_active: false });
+  return { changes: 1 };
 }
 
-// --- Sinking funds ---
+// --- Sinking Funds (Expenses) ---
 
-async function getExpenses(userId) {
-  return query('SELECT * FROM user_expenses WHERE user_id = $1 ORDER BY created_at ASC', [userId]);
+async function getExpenses(uid) {
+  const snap = await userRef(uid).collection('expenses').orderBy('created_at', 'asc').get();
+  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
 }
 
-async function addExpense(expense) {
-  return queryOne(`
-    INSERT INTO user_expenses (user_id, name, amount, category)
-    VALUES ($1, $2, $3, $4)
-    RETURNING *
-  `, [expense.user_id, expense.name, expense.amount, expense.category]);
+async function addExpense(uid, expense) {
+  const ref = userRef(uid).collection('expenses').doc();
+  await ref.set({ ...expense, created_at: FieldValue.serverTimestamp() });
+  const snap = await ref.get();
+  return { id: ref.id, ...toObj(snap) };
 }
 
-async function deleteExpense(id, userId) {
-  const { rowCount } = await pool.query(
-    'DELETE FROM user_expenses WHERE id = $1 AND user_id = $2',
-    [id, userId]
-  );
-  return { changes: rowCount };
+async function deleteExpense(uid, expenseId) {
+  const ref = userRef(uid).collection('expenses').doc(expenseId);
+  const snap = await ref.get();
+  if (!snap.exists) return { changes: 0 };
+  await ref.delete();
+  return { changes: 1 };
 }
 
-// --- AI insights ---
+// --- AI Insights ---
 
-async function getLatestInsight(userId) {
-  return queryOne(
-    'SELECT * FROM user_insights WHERE user_id = $1 ORDER BY generated_at DESC LIMIT 1',
-    [userId]
-  );
+async function getLatestInsight(uid) {
+  const snap = await userRef(uid).collection('insights')
+    .orderBy('generated_at', 'desc').limit(1).get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, ...toObj(doc) };
 }
 
-async function saveInsight(userId, insight) {
-  return queryOne(
-    'INSERT INTO user_insights (user_id, insight) VALUES ($1, $2) RETURNING *',
-    [userId, insight]
-  );
+async function saveInsight(uid, insight) {
+  const ref = userRef(uid).collection('insights').doc();
+  await ref.set({ insight, generated_at: FieldValue.serverTimestamp() });
+  const snap = await ref.get();
+  return { id: ref.id, ...toObj(snap) };
 }
 
-async function getUsage(userId, yearMonth) {
-  return queryOne(
-    'SELECT count FROM ai_usage WHERE user_id = $1 AND year_month = $2',
-    [userId, yearMonth]
-  );
+async function getUsage(uid, yearMonth) {
+  const snap = await userRef(uid).collection('ai_usage').doc(yearMonth).get();
+  return snap.exists ? snap.data() : null;
 }
 
-async function incrementUsage(userId, yearMonth) {
-  await pool.query(`
-    INSERT INTO ai_usage (user_id, year_month, count) VALUES ($1, $2, 1)
-    ON CONFLICT(user_id, year_month) DO UPDATE SET count = ai_usage.count + 1
-  `, [userId, yearMonth]);
+async function incrementUsage(uid, yearMonth) {
+  const ref = userRef(uid).collection('ai_usage').doc(yearMonth);
+  await ref.set({ year_month: yearMonth, count: FieldValue.increment(1) }, { merge: true });
+}
+
+// --- Admin ---
+
+async function getAllUsers() {
+  const snap = await firestore.collection('users').get();
+  return snap.docs.map(d => ({ uid: d.id, ...toObj(d) }));
+}
+
+async function deleteUserData(uid) {
+  const subs = ['accounts', 'transactions', 'goals', 'expenses', 'insights', 'ai_usage', 'plaid_items', 'payoff_plans'];
+  for (const sub of subs) {
+    const snap = await userRef(uid).collection(sub).get();
+    for (let i = 0; i < snap.docs.length; i += 500) {
+      const batch = firestore.batch();
+      snap.docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+  await userRef(uid).delete();
 }
 
 module.exports = {
-  pool, query, queryOne, withTransaction,
-  init, getUser,
-  upsertAccount, saveTransactions,
+  admin, firestore, FieldValue, userRef, init,
+  getUser, upsertUser,
+  getAccountsByUser, upsertAccount,
+  getPlaidItems, upsertPlaidItem,
+  saveTransactions, getTransactionsByUser, getTransactionSummary,
   getPayoffPlan, savePlan,
   getGoals, createGoal, deleteGoal,
   getExpenses, addExpense, deleteExpense,
   getLatestInsight, saveInsight, getUsage, incrementUsage,
+  getAllUsers, deleteUserData,
 };

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch, fmtD } from '../lib/api';
 
 interface Account {
-  id: number;
+  id: string;
   name: string;
   balance_current: number;
   apr: number | null;
@@ -11,8 +11,6 @@ interface Account {
   credit_limit: number | null;
   payment_due_date: string | null;
   institution_name: string;
-  missing_apr: boolean;
-  missing_minimum: boolean;
 }
 
 interface EditState {
@@ -24,8 +22,8 @@ interface EditState {
 export default function Accounts() {
   const [state, setState] = useState<'loading' | 'error' | 'content'>('loading');
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [error, setError] = useState('');
-  const [editing, setEditing] = useState<Record<number, EditState>>({});
+  const [error, setError]       = useState('');
+  const [editing, setEditing]   = useState<Record<string, EditState>>({});
 
   async function load() {
     setState('loading');
@@ -50,11 +48,11 @@ export default function Accounts() {
     }));
   }
 
-  function cancelEdit(id: number) {
+  function cancelEdit(id: string) {
     setEditing(prev => { const n = { ...prev }; delete n[id]; return n; });
   }
 
-  async function saveEdit(id: number) {
+  async function saveEdit(id: string) {
     const e = editing[id];
     setEditing(prev => ({ ...prev, [id]: { ...prev[id], saving: true } }));
     try {
@@ -71,7 +69,8 @@ export default function Accounts() {
   }
 
   const grouped = accounts.reduce<Record<string, Account[]>>((acc, a) => {
-    (acc[a.institution_name] = acc[a.institution_name] || []).push(a);
+    const key = a.institution_name || 'Unknown Bank';
+    (acc[key] = acc[key] || []).push(a);
     return acc;
   }, {});
 

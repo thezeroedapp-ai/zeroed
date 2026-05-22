@@ -15,6 +15,6 @@
     "build": "npm run build:web",
     "build:web": "npm run build --workspace=apps/web",
     "start": "NODE_ENV=production node server/server.js",
-    "db:init": "node -e \"require('./server/db/database.js').init()\""
+    "deploy": "npm run build:web && firebase deploy"
   }
 }

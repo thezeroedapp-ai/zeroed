@@ -3,12 +3,13 @@ import { apiFetch } from '../lib/api';
 
 interface Health {
   status: string;
-  checks: { database: string; plaid: string; claude: string; supabase: string };
+  checks: { database: string; plaid: string; claude: string; firebase: string };
   timestamp: string;
 }
 
 interface AdminUser {
-  id: number;
+  uid: string;
+  id: string;
   name: string;
   email: string;
   is_pro: boolean;
@@ -19,9 +20,9 @@ interface AdminUser {
 
 export default function Admin() {
   const [health, setHealth] = useState<Health | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [users, setUsers]   = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -39,28 +40,28 @@ export default function Admin() {
       });
   }, []);
 
-  const togglePro = async (id: number) => {
-    const res = await apiFetch(`/api/admin/users/${id}/pro`, { method: 'PATCH' });
+  const togglePro = async (uid: string) => {
+    const res = await apiFetch(`/api/admin/users/${uid}/pro`, { method: 'PATCH' });
     if (res.ok) {
-      const updated = await res.json() as { id: number; is_pro: boolean };
-      setUsers(prev => prev.map(u => u.id === updated.id ? { ...u, is_pro: updated.is_pro } : u));
+      const updated = await res.json() as { uid: string; is_pro: boolean };
+      setUsers(prev => prev.map(u => u.uid === updated.uid ? { ...u, is_pro: updated.is_pro } : u));
     }
   };
 
-  const deleteUser = async (id: number, name: string) => {
+  const deleteUser = async (uid: string, name: string) => {
     if (!confirm(`Delete ${name}'s account and all their data? This cannot be undone.`)) return;
-    const res = await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-    if (res.ok) setUsers(prev => prev.filter(u => u.id !== id));
+    const res = await apiFetch(`/api/admin/users/${uid}`, { method: 'DELETE' });
+    if (res.ok) setUsers(prev => prev.filter(u => u.uid !== uid));
   };
 
   const statusClass = (val: string) => {
-    if (val === 'ok' || val === 'configured') return 'health-ok';
+    if (val === 'ok' || val === 'configured' || val === 'runtime') return 'health-ok';
     if (val === 'error' || val === 'missing') return 'health-error';
     return '';
   };
 
   if (loading) return <div className="page"><div className="loading-state"><div className="spinner" /></div></div>;
-  if (error) return <div className="page"><div className="error-state"><p>Failed to load admin data</p><small>{error}</small></div></div>;
+  if (error)   return <div className="page"><div className="error-state"><p>Failed to load admin data</p><small>{error}</small></div></div>;
 
   return (
     <div className="page">
@@ -71,7 +72,6 @@ export default function Admin() {
 
       <div className="content">
 
-        {/* System Health */}
         <div className="section-title">System Health</div>
         <div className="admin-health">
           {health && Object.entries(health.checks).map(([key, val]) => (
@@ -82,7 +82,6 @@ export default function Admin() {
           ))}
         </div>
 
-        {/* Users */}
         <div className="section-title" style={{ marginTop: 20 }}>Users</div>
         {users.length === 0 ? (
           <div className="empty"><div className="empty-icon">👥</div><p>No users yet</p></div>
@@ -100,7 +99,7 @@ export default function Admin() {
                 </thead>
                 <tbody>
                   {users.map(u => (
-                    <tr key={u.id}>
+                    <tr key={u.uid}>
                       <td>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name || '—'}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-sm)' }}>{u.email}</div>
@@ -114,17 +113,11 @@ export default function Admin() {
                       <td style={{ fontSize: 13 }}>{u.ai_uses_this_month}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          <button
-                            className="btn btn-sm btn-outline"
-                            onClick={() => togglePro(u.id)}
-                          >
+                          <button className="btn btn-sm btn-outline" onClick={() => togglePro(u.uid)}>
                             {u.is_pro ? 'Remove Pro' : 'Make Pro'}
                           </button>
                           {!u.is_admin && (
-                            <button
-                              className="btn btn-sm btn-danger"
-                              onClick={() => deleteUser(u.id, u.name)}
-                            >
+                            <button className="btn btn-sm btn-danger" onClick={() => deleteUser(u.uid, u.name)}>
                               Delete
                             </button>
                           )}

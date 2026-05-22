@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { getSupabase } from '../lib/supabase';
+import { User, onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { apiFetch } from '../lib/api';
 
 export interface DbProfile {
-  id: number;
+  uid: string;
   name: string;
   email: string;
   is_pro: boolean;
@@ -15,66 +15,47 @@ export interface DbProfile {
 }
 
 interface AuthContextType {
-  session: Session | null;
   user: User | null;
-  // undefined = still loading, null = not signed in / fetch failed
+  // undefined = still loading profile, null = not signed in / fetch failed
   profile: DbProfile | null | undefined;
   loading: boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
-  session: null,
-  user: null,
+  user:    null,
   profile: undefined,
   loading: true,
   signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser]       = useState<User | null>(null);
   const [profile, setProfile] = useState<DbProfile | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let sub: { unsubscribe: () => void } | null = null;
-
-    getSupabase().then((sb) => {
-      sb.auth.getSession().then(({ data: { session } }) => {
-        setSession(session);
-        setLoading(false);
-      });
-
-      const { data: listener } = sb.auth.onAuthStateChange((_event, session) => {
-        setSession(session);
-        setLoading(false);
-      });
-      sub = listener.subscription;
+    const unsub = onAuthStateChanged(auth, (fbUser) => {
+      setUser(fbUser);
+      setLoading(false);
     });
-
-    return () => { sub?.unsubscribe(); };
+    return unsub;
   }, []);
 
-  // Fetch DB profile (includes is_admin, is_pro) whenever session changes
+  // Fetch DB profile (includes is_admin, is_pro) whenever Firebase user changes
   useEffect(() => {
-    if (!session) {
-      setProfile(null);
-      return;
-    }
+    if (!user) { setProfile(null); return; }
     setProfile(undefined);
     apiFetch('/api/user')
       .then(r => r.ok ? r.json() : null)
       .then(data => setProfile(data as DbProfile | null))
       .catch(() => setProfile(null));
-  }, [session]);
+  }, [user]);
 
-  const signOut = async () => {
-    const sb = await getSupabase();
-    await sb.auth.signOut();
-  };
+  const signOut = () => fbSignOut(auth);
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

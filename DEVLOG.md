@@ -132,6 +132,41 @@ This converts all NUMERIC fields to JS floats at the driver level — no per-que
 
 ---
 
+## 2026-05-22
+
+### v4.0 — Firebase Migration (Railway + Supabase → Firebase)
+
+**Why:** Railway JWT secret corruption caused persistent 401 errors that couldn't be reproduced locally. Root cause was Railway corrupting the `SUPABASE_JWT_SECRET` env var, invalidating all existing tokens. Migrated to Firebase to eliminate the Railway dependency and consolidate to a single platform.
+
+**What changed:**
+
+- `server/db/database.js` — full rewrite. Replaced `pg` Pool with Firebase Admin SDK + Firestore. All user data in subcollections under `users/{uid}/`. `plaid_account_id` string = Firestore document ID (eliminates numeric-to-plaid mapping).
+- `server/middleware/auth.js` — replaced `jsonwebtoken` + `SUPABASE_JWT_SECRET` with `admin.auth().verifyIdToken(token)`.
+- `server/index.js` — new Cloud Functions entry: `exports.api = functions.https.onRequest(app)` + `exports.dailySync` scheduled function replaces node-cron in production.
+- `server/server.js` — exports `app` for Cloud Functions; starts locally via `require.main === module` guard.
+- All routes rewritten for Firestore: no SQL, no JOINs, subcollections, `req.user.uid` (string) throughout.
+- `apps/web/src/lib/firebase.ts` — new Firebase client init.
+- `apps/web/src/lib/api.ts` — `apiFetch` now attaches Firebase ID token (`auth.currentUser.getIdToken()`).
+- `apps/web/src/context/AuthContext.tsx` — `onAuthStateChanged` replaces Supabase listener.
+- `apps/web/src/pages/Login.tsx` + `Signup.tsx` — Firebase Auth SDK calls.
+- `firebase.json` + `.firebaserc` + `firestore.rules` + `firestore.indexes.json` — new deploy config.
+- Removed: `@supabase/supabase-js`, `pg`, `jsonwebtoken`, `DATABASE_URL`, `SUPABASE_*` env vars.
+- Added: `firebase-admin`, `firebase-functions`, `firebase` (client SDK).
+
+**Firestore schema decisions:**
+- No `credit_details` subcollection — APR, minimum_payment etc. merged directly into account document on Plaid sync.
+- `payoff_plans/{id}` uses embedded `items: [...]` array instead of a separate `plan_items` table.
+- Timestamp serialization: `toObj()` helper converts Firestore Timestamp objects to ISO strings before JSON responses.
+
+**Local dev:**
+- `npm run dev` → Express on :3000 (reads `FIREBASE_SERVICE_ACCOUNT` from `.env`)
+- `npm run dev:web` → Vite on :5173 (proxies `/api` to :3000)
+- `FIREBASE_SERVICE_ACCOUNT` = full service account JSON on one line; Cloud Functions auto-initialize in production without it.
+
+**Deploy:** `npm run deploy` = `npm run build:web && firebase deploy`
+
+---
+
 ## 2026-05-21
 
 ### v3.2 — Monorepo Restructure + Responsive Web

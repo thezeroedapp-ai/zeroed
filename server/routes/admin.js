@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { query, queryOne, withTransaction, pool } = require('../db/database');
+const db = require('../db/database');
 const { requireAdmin } = require('../middleware/requireAdmin');
 
 const router = Router();
@@ -8,94 +8,67 @@ router.use(requireAdmin);
 // GET /api/admin/users — all users with AI usage stats
 router.get('/users', async (req, res) => {
   try {
-    const users = await query(`
-      SELECT
-        u.id, u.name, u.email, u.is_pro, u.is_admin, u.created_at,
-        COALESCE(au.count, 0) AS ai_uses_this_month
-      FROM users u
-      LEFT JOIN ai_usage au
-        ON au.user_id = u.id AND au.year_month = TO_CHAR(NOW(), 'YYYY-MM')
-      ORDER BY u.created_at DESC
-    `);
-    res.json(users);
+    const ym    = new Date().toISOString().slice(0, 7);
+    const users = await db.getAllUsers();
+
+    const withUsage = await Promise.all(users.map(async u => {
+      const usage = await db.getUsage(u.uid, ym);
+      return { ...u, id: u.uid, ai_uses_this_month: usage?.count || 0 };
+    }));
+
+    withUsage.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    res.json(withUsage);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// PATCH /api/admin/users/:id/pro — toggle is_pro
-router.patch('/users/:id/pro', async (req, res) => {
+// PATCH /api/admin/users/:uid/pro — toggle is_pro
+router.patch('/users/:uid/pro', async (req, res) => {
   try {
-    const user = await queryOne(
-      'UPDATE users SET is_pro = NOT is_pro WHERE id = $1 RETURNING id, name, email, is_pro',
-      [req.params.id]
-    );
+    const { uid } = req.params;
+    const user = await db.getUser(uid);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    const updated = await db.upsertUser(uid, { is_pro: !user.is_pro });
+    res.json({ uid, id: uid, name: updated.name, email: updated.email, is_pro: updated.is_pro });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// DELETE /api/admin/users/:id — delete user + all their data
-router.delete('/users/:id', async (req, res) => {
+// DELETE /api/admin/users/:uid — delete user + all their data
+router.delete('/users/:uid', async (req, res) => {
   try {
-    const targetId = parseInt(req.params.id);
-    if (targetId === req.user.id) {
-      return res.status(400).json({ error: 'Cannot delete your own account' });
-    }
-    await withTransaction(async (client) => {
-      await client.query('DELETE FROM ai_usage WHERE user_id = $1', [targetId]);
-      await client.query('DELETE FROM user_insights WHERE user_id = $1', [targetId]);
-      await client.query('DELETE FROM user_expenses WHERE user_id = $1', [targetId]);
-      await client.query('DELETE FROM user_goals WHERE user_id = $1', [targetId]);
-      await client.query(
-        'DELETE FROM plan_items WHERE payoff_plan_id IN (SELECT id FROM payoff_plans WHERE user_id = $1)',
-        [targetId]
-      );
-      await client.query('DELETE FROM payoff_plans WHERE user_id = $1', [targetId]);
-      await client.query(`
-        DELETE FROM transactions WHERE account_id IN (
-          SELECT a.id FROM accounts a
-          JOIN plaid_items pi ON pi.id = a.plaid_item_id
-          WHERE pi.user_id = $1
-        )`, [targetId]);
-      await client.query(`
-        DELETE FROM credit_details WHERE account_id IN (
-          SELECT a.id FROM accounts a
-          JOIN plaid_items pi ON pi.id = a.plaid_item_id
-          WHERE pi.user_id = $1
-        )`, [targetId]);
-      await client.query(`
-        DELETE FROM accounts WHERE plaid_item_id IN (
-          SELECT id FROM plaid_items WHERE user_id = $1
-        )`, [targetId]);
-      await client.query('DELETE FROM plaid_items WHERE user_id = $1', [targetId]);
-      await client.query('DELETE FROM users WHERE id = $1', [targetId]);
-    });
+    const { uid } = req.params;
+    if (uid === req.user.uid) return res.status(400).json({ error: 'Cannot delete your own account' });
+
+    await db.deleteUserData(uid);
+    try { await db.admin.auth().deleteUser(uid); } catch { /* auth user may not exist */ }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/admin/health — system status check
+// GET /api/admin/health — system status
 router.get('/health', async (req, res) => {
   const checks = {};
 
   try {
-    await pool.query('SELECT 1');
+    await db.firestore.collection('users').limit(1).get();
     checks.database = 'ok';
   } catch {
     checks.database = 'error';
   }
 
-  checks.plaid     = process.env.PLAID_CLIENT_ID    ? 'configured' : 'missing';
-  checks.claude    = process.env.ANTHROPIC_API_KEY  ? 'configured' : 'missing';
-  checks.supabase  = process.env.SUPABASE_URL        ? 'configured' : 'missing';
+  checks.plaid    = process.env.PLAID_CLIENT_ID   ? 'configured' : 'missing';
+  checks.claude   = process.env.ANTHROPIC_API_KEY ? 'configured' : 'missing';
+  checks.firebase = (process.env.FIREBASE_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS)
+    ? 'configured' : 'runtime';
 
   res.json({
-    status: checks.database === 'ok' ? 'ok' : 'degraded',
+    status:    checks.database === 'ok' ? 'ok' : 'degraded',
     checks,
     timestamp: new Date().toISOString(),
   });

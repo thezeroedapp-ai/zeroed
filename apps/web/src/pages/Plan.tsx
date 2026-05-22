@@ -44,13 +44,13 @@ export default function Plan() {
   async function load(strat: Strategy = strategy) {
     setState('loading');
     try {
-      const r = await apiFetch('/api/plan', {
+      const r = await apiFetch('/api/plan/generate', {
         method: 'POST',
         body: JSON.stringify({ strategy: strat }),
       });
-      if (!r.ok) throw new Error(`Server returned ${r.status}`);
       const d = await r.json();
-      setPlan(d);
+      if (!r.ok) throw new Error(d.error || `Server returned ${r.status}`);
+      setPlan(d.plan);
       setState('content');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load plan');

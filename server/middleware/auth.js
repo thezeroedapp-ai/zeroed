@@ -1,5 +1,4 @@
-const jwt     = require('jsonwebtoken');
-const { queryOne } = require('../db/database');
+const db = require('../db/database');
 
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -9,28 +8,26 @@ async function authenticate(req, res, next) {
 
   const token = authHeader.slice(7);
   try {
-    const decoded = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
-    const authId  = decoded.sub;
+    const decoded = await db.admin.auth().verifyIdToken(token);
+    const uid = decoded.uid;
 
-    let user = await queryOne('SELECT * FROM users WHERE auth_id = $1', [authId]);
-
+    let user = await db.getUser(uid);
     if (!user) {
-      // First request after OAuth signup — trigger may not have fired yet, create profile now
-      user = await queryOne(`
-        INSERT INTO users (auth_id, name, email)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (auth_id) DO UPDATE SET email = EXCLUDED.email
-        RETURNING *
-      `, [
-        authId,
-        decoded.user_metadata?.name || decoded.user_metadata?.full_name || decoded.email?.split('@')[0] || 'User',
-        decoded.email,
-      ]);
+      user = await db.upsertUser(uid, {
+        name:             decoded.name || decoded.email?.split('@')[0] || 'User',
+        email:            decoded.email || '',
+        is_pro:           false,
+        is_admin:         false,
+        monthly_income:   null,
+        monthly_expenses: null,
+        strategy:         'avalanche',
+      });
     }
 
     req.user = user;
     next();
   } catch (err) {
+    console.error('[auth] verifyIdToken failed:', err.code, err.message);
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

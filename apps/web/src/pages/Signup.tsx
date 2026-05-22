@@ -1,34 +1,24 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { getSupabase } from '../lib/supabase';
+import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
 export default function Signup() {
   const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [name, setName]         = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
-    setInfo('');
     setLoading(true);
     try {
-      const sb = await getSupabase();
-      const { data, error } = await sb.auth.signUp({
-        email,
-        password,
-        options: { data: { name, full_name: name } },
-      });
-      if (error) throw error;
-      if (data.session) {
-        navigate('/');
-      } else {
-        setInfo('Check your email to confirm your account, then sign in.');
-      }
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      if (name) await updateProfile(cred.user, { displayName: name });
+      navigate('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
@@ -37,11 +27,12 @@ export default function Signup() {
   }
 
   async function handleGoogle() {
-    const sb = await getSupabase();
-    await sb.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin + '/' },
-    });
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+      navigate('/');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Google sign in failed');
+    }
   }
 
   return (
@@ -53,7 +44,6 @@ export default function Signup() {
         <div className="auth-title">Create account</div>
 
         {error && <div className="auth-error">{error}</div>}
-        {info && <div style={{ background: 'var(--blue-light)', color: 'var(--blue)', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 14 }}>{info}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
