@@ -692,7 +692,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-dvh bg-background">
       {/* Top bar */}
-      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 top-bar border-b border-border">
         <div className="max-w-5xl mx-auto flex items-start justify-between">
           <div>
             <h1 className="text-[17px] font-bold text-foreground">
@@ -735,7 +735,7 @@ export default function Dashboard() {
         {state === 'content' && data && (
           <>
             {/* ── Hero card ── */}
-            <Card className="mb-4 bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-border overflow-hidden">
+            <Card className="mb-5 card-hero bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-[var(--primary)]/20 overflow-hidden">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
