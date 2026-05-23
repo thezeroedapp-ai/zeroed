@@ -7,7 +7,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <TooltipProvider delayDuration={300}>
       <SideNav />
-      <main className="app-main min-h-dvh bg-background">
+      <main className="app-main min-h-dvh">
         {children}
       </main>
       <BottomNav />

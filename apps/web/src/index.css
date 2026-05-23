@@ -146,8 +146,8 @@ html.dark {
 
   --destructive:     oklch(0.64 0.22 22);
 
-  --border:        oklch(1 0 0 / 7%);
-  --border-strong: oklch(1 0 0 / 13%);
+  --border:        oklch(1 0 0 / 10%);
+  --border-strong: oklch(1 0 0 / 16%);
   --input:         oklch(0.08 0.02 260);
   --ring:          oklch(0.49 0.21 290);
 
@@ -160,10 +160,10 @@ html.dark {
   --blue:      oklch(0.62 0.20 264);
   --blue-dim:  oklch(0.62 0.20 264 / 10%);
 
-  --shadow-card:     0 2px 8px oklch(0 0 0 / 35%), 0 0 0 1px oklch(1 0 0 / 4%);
-  --shadow-elevated: 0 8px 40px oklch(0 0 0 / 55%), 0 0 0 1px oklch(1 0 0 / 5%);
-  --shadow-hero:     0 4px 32px oklch(0 0 0 / 50%), 0 0 0 1px oklch(1 0 0 / 5%), 0 0 80px oklch(0.49 0.21 290 / 14%);
-  --shadow-nav:      2px 0 24px oklch(0 0 0 / 40%), 1px 0 0 oklch(1 0 0 / 7%);
+  --shadow-card:     0 2px 8px oklch(0 0 0 / 40%), 0 0 0 1px oklch(1 0 0 / 7%);
+  --shadow-elevated: 0 8px 40px oklch(0 0 0 / 55%), 0 0 0 1px oklch(1 0 0 / 8%);
+  --shadow-hero:     0 4px 32px oklch(0 0 0 / 50%), 0 0 0 1px oklch(1 0 0 / 8%), 0 0 80px oklch(0.49 0.21 290 / 22%);
+  --shadow-nav:      2px 0 24px oklch(0 0 0 / 40%), 1px 0 0 oklch(1 0 0 / 10%);
 
   --chart-1: oklch(0.49 0.21 290);
   --chart-2: oklch(0.70 0.16 162);
@@ -190,9 +190,11 @@ html.theme-transitioning *::after {
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   background-color: var(--background);
-  /* Subtle violet radial bloom — gives glass cards something to reveal */
+  /* Violet bloom: centered top (covers full width incl. sidebar) + left-edge accent */
   background-image:
-    radial-gradient(ellipse 70% 45% at 65% -10%, oklch(0.49 0.21 290 / 10%) 0%, transparent 70%);
+    radial-gradient(ellipse 90% 55% at 50% -8%, oklch(0.49 0.21 290 / 14%) 0%, transparent 65%),
+    radial-gradient(ellipse 30% 50% at 0% 35%, oklch(0.49 0.21 290 / 7%) 0%, transparent 55%);
+  background-repeat: no-repeat;
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -297,7 +299,7 @@ body {
 .widget-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 18px;
 }
 @media (min-width: 768px) {
   .widget-grid { grid-template-columns: 1fr 1fr; }

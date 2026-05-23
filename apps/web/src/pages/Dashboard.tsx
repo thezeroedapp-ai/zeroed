@@ -308,10 +308,10 @@ export default function Dashboard() {
       case 'interest_cost':
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-1 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Monthly Interest</CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4">
+            <CardContent className="px-5 pb-5">
               <div className="text-3xl font-extrabold tabular text-red mt-1">{fmtD(data.monthlyInterest)}</div>
               <p className="text-xs text-muted-foreground mt-1">cost of carrying debt</p>
             </CardContent>
@@ -321,10 +321,10 @@ export default function Dashboard() {
       case 'savings_rate':
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-1 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Monthly Surplus</CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4">
+            <CardContent className="px-5 pb-5">
               <div className={cn('text-3xl font-extrabold tabular mt-1', data.surplus >= 0 ? 'text-green' : 'text-red')}>
                 {fmt(data.surplus)}
               </div>
@@ -337,10 +337,10 @@ export default function Dashboard() {
         if (chartData.length <= 2) return null;
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Payoff Projection</CardTitle>
             </CardHeader>
-            <CardContent className="px-2 pb-3">
+            <CardContent className="px-3 pb-4">
               <ChartContainer config={debtChartConfig} className="h-[150px] w-full">
                 <AreaChart data={chartData} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
                   <defs>
@@ -361,12 +361,12 @@ export default function Dashboard() {
       case 'priority_attack':
         return (
           <Card className="h-full border-[var(--primary)]/30 bg-violet-dim/5">
-            <CardHeader className="pb-1 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-violet-light flex items-center gap-1.5">
                 ⚡ Priority Attack
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4">
+            <CardContent className="px-5 pb-5">
               {data.priorityCard ? (
                 <>
                   <div className="text-sm font-bold text-foreground mb-1">{data.priorityCard.name}</div>
@@ -390,10 +390,10 @@ export default function Dashboard() {
         if (!data.alerts || data.alerts.length === 0) return null;
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-1 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Alerts</CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-2">
+            <CardContent className="px-5 pb-5 space-y-3">
               {data.alerts.map((a, i) => (
                 <div key={i} className="flex gap-3 p-3 rounded-lg bg-amber-dim border border-amber/20">
                   <span className="text-base shrink-0 mt-0.5">{a.severity === 'danger' ? '🔴' : '⚠️'}</span>
@@ -414,7 +414,7 @@ export default function Dashboard() {
         const DeltaIcon = delta >= 0 ? TrendingUp : TrendingDown;
         return (
           <Card className="h-full bg-card border-border cursor-pointer group" onClick={() => setSheet({ open: true, type: 'networth', payload: latest })}>
-            <CardHeader className="pb-2 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <div className="flex justify-between items-start">
                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Net Worth</CardTitle>
                 <ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />
@@ -429,7 +429,7 @@ export default function Dashboard() {
                 </span>
               </div>
             </CardHeader>
-            <CardContent className="px-2 pb-3">
+            <CardContent className="px-3 pb-4">
               <ChartContainer config={netWorthChartConfig} className="h-[120px] w-full">
                 <LineChart data={netWorthHistory} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 5))} />
@@ -450,10 +450,10 @@ export default function Dashboard() {
         const COLORS = ['var(--primary)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Spending by Category</CardTitle>
             </CardHeader>
-            <CardContent className="px-2 pb-3">
+            <CardContent className="px-3 pb-4">
               <ChartContainer config={spendingChartConfig} className="h-[160px] w-full">
                 <BarChart
                   data={top5}
@@ -482,7 +482,7 @@ export default function Dashboard() {
         if (!goals.length) return null;
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Goals</CardTitle>
                 <Link to="/plan?tab=goals" className="text-xs text-violet-light font-semibold no-underline flex items-center gap-0.5 hover:opacity-80">
@@ -490,7 +490,7 @@ export default function Dashboard() {
                 </Link>
               </div>
             </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-3">
+            <CardContent className="px-5 pb-5 space-y-3">
               {goals.slice(0, 3).map(g => {
                 const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
                 return (
@@ -513,10 +513,10 @@ export default function Dashboard() {
       case 'ai_insights':
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-1 pt-4 px-4">
+            <CardHeader className="pb-2 pt-5 px-5">
               <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Insights</CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4">
+            <CardContent className="px-5 pb-5">
               {aiState === 'loading' && (
                 <div className="flex flex-col items-center py-4 gap-2">
                   <div className="spinner" />
@@ -690,7 +690,7 @@ export default function Dashboard() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className="min-h-dvh">
       {/* Top bar */}
       <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 top-bar border-b border-border">
         <div className="max-w-5xl mx-auto flex items-start justify-between">
@@ -713,7 +713,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-5xl mx-auto">
+      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+32px)] md:pb-10 pt-6 max-w-5xl mx-auto">
         {/* Loading */}
         {state === 'loading' && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -735,47 +735,47 @@ export default function Dashboard() {
         {state === 'content' && data && (
           <>
             {/* ── Hero card ── */}
-            <Card className="mb-5 card-hero bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-[var(--primary)]/20 overflow-hidden">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-4">
+            <Card className="mb-6 card-hero bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-[var(--primary)]/20 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-6">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Debt</p>
-                    <div className="text-[40px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Total Debt</p>
+                    <div className="text-[48px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
                     {data.debtFreeDate && (
-                      <p className="text-xs text-muted-foreground mt-2">
+                      <p className="text-sm text-muted-foreground mt-2.5">
                         Debt-free by <span className="font-bold text-violet-light">{data.debtFreeDate}</span>
                       </p>
                     )}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Monthly Interest</p>
-                    <div className="text-xl font-extrabold tabular text-red leading-none">{fmtD(data.monthlyInterest)}</div>
-                    <p className="text-xs text-muted-foreground mt-1">cost of debt</p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Monthly Interest</p>
+                    <div className="text-2xl font-extrabold tabular text-red leading-none">{fmtD(data.monthlyInterest)}</div>
+                    <p className="text-xs text-muted-foreground mt-1.5">cost of debt</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
+                <div className="grid grid-cols-3 gap-5 mt-5 pt-5 border-t border-border">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Minimums</p>
-                    <p className="text-sm font-bold tabular text-foreground">{fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Minimums</p>
+                    <p className="text-base font-bold tabular text-foreground">{fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Surplus</p>
-                    <p className={cn('text-sm font-bold tabular', data.surplus >= 0 ? 'text-green' : 'text-red')}>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Surplus</p>
+                    <p className={cn('text-base font-bold tabular', data.surplus >= 0 ? 'text-green' : 'text-red')}>
                       {data.surplus >= 0 ? '+' : ''}{fmt(data.surplus)}
                     </p>
                   </div>
                   {data.netWorth != null ? (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Net Worth</p>
-                      <p className={cn('text-sm font-bold tabular', data.netWorth >= 0 ? 'text-green' : 'text-red')}>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Net Worth</p>
+                      <p className={cn('text-base font-bold tabular', data.netWorth >= 0 ? 'text-green' : 'text-red')}>
                         {data.netWorth < 0 ? '−' : ''}{fmt(Math.abs(data.netWorth))}
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Cards</p>
-                      <p className="text-sm font-bold tabular text-foreground">{data.accountCount}</p>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Cards</p>
+                      <p className="text-base font-bold tabular text-foreground">{data.accountCount}</p>
                     </div>
                   )}
                 </div>
