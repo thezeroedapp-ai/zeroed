@@ -12,7 +12,9 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v4.1 — Dark premium UI redesign.** *(2026-05-22)*
+**v4.2 — Monarch/Origin feature parity + first production deploy.** *(2026-05-22)*
+
+Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
 Full Firebase stack live with a dark premium UI:
 
@@ -20,15 +22,16 @@ Full Firebase stack live with a dark premium UI:
 - **Database:** Firestore — subcollections under `users/{uid}/`
 - **API:** Express wrapped as Firebase Cloud Functions (`exports.api`)
 - **Hosting:** Firebase Hosting (React SPA) + Rewrites to Cloud Functions
-- **Frontend:** React 18 + Vite + TypeScript — all 7 screens, dark design system, bento grid dashboard
+- **Frontend:** React 18 + Vite + TypeScript — all 8 screens, dark design system, bento grid dashboard
 
 All screens working:
-- **Dashboard** — bento grid layout with interactive debt payoff projection chart (recharts), monthly stats, priority attack card, AI analysis, goals preview
+- **Dashboard** — bento grid layout with interactive debt payoff projection chart (recharts), monthly stats, net worth summary (assets − liabilities), priority attack card, AI analysis, goals preview
 - **Plan** — 4 payoff strategies, freed-minimum rollover, lump-sum simulator, extra payment calculator, AI insights
 - **Goals** — debt-free date targets, per-card payoff goals, balance targets; required-payment calculator
-- **Accounts** — utilization bars, due date badges, promo APR warnings, inline edit for APR/min payment/due date
+- **Accounts** — all account types (depository, credit, investment, loan, mortgage, brokerage), net worth strip, grouped by type, utilization bars, due date badges, promo APR warnings, inline edit for APR/min payment/due date
+- **Budget** — per-category monthly budgets with progress bars, spent/remaining/limit, overall summary strip
 - **Reward** — category-based card recommendations ranked by reward multipliers and TPG point valuations
-- **Activity** — transaction history grouped by month, categorized, filterable
+- **Spending** — 3 tabs: transaction history (filterable by expenses/payments), spending trends (stacked bar chart by category, 6-month view), recurring subscriptions (detected from transaction history, annual cost estimate)
 - **Settings** — bank connect/disconnect, income profile, sinking funds manager
 
 **Next:** Connect Plaid production; Stripe freemium gate.
@@ -39,6 +42,7 @@ All screens working:
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v4.2 | 2026-05-22 | Monarch/Origin parity — all Plaid account types (investment, loan, mortgage, brokerage); net worth on Dashboard + Accounts; Budget screen with per-category progress; Spending screen (transactions + stacked trends chart + recurring detection); first production Firebase deploy to zeroed-3331d.web.app |
 | v4.1 | 2026-05-22 | Dark premium UI redesign — complete `index.css` overhaul (violet accent, navy backgrounds, glassmorphism nav); Dashboard bento grid with recharts debt payoff projection; bug fixes: Recommend auth token, Goals Firestore string IDs, plan route response shape |
 | v4.0 | 2026-05-22 | Firebase migration — replaced Railway + Supabase + PostgreSQL with Firebase Auth + Firestore + Cloud Functions + Hosting; React frontend migrated from Supabase SDK to Firebase SDK; all routes scoped to `req.user.uid` (string); Firestore subcollections under `users/{uid}/`; `firebase deploy` ships everything |
 | v3.2 | 2026-05-21 | Monorepo restructure — `server/`, `apps/web/`, `packages/core/`; responsive layout (mobile bottom nav, tablet/desktop sidebar) |
@@ -58,12 +62,13 @@ All screens working:
 
 ### Core Features
 
-- **Dashboard** — Total debt, monthly interest cost, surplus, debt-free date, smart alerts, and a live goals status card
-- **Accounts** — All connected credit cards with APR, utilization, due dates, promo rate warnings, and inline edit
+- **Dashboard** — Total debt, monthly interest cost, surplus, debt-free date, net worth (assets − liabilities), smart alerts, and a live goals status card
+- **Accounts** — All connected accounts grouped by type (Cash & Savings, Investments, Credit Cards, Loans); net worth summary strip; inline edit for APR/min payment/due date on credit cards
 - **Plan** — Four payoff strategies, 3 scenarios, extra payment slider, lump-sum simulator, attack order with per-card payoff dates, AI analysis
 - **Goals** — Set targets and track progress; required-payment calculator answers "what does it take to be free by [date]?"
+- **Budget** — Set per-category monthly spending limits; see progress bars (spent/remaining/pct), overall summary strip; add/remove budgets
 - **Reward** — Pick a spend category and get ranked card recommendations; active-debt cards ranked lower automatically
-- **Activity** — Transaction history grouped by month (after syncing via Plaid)
+- **Spending** — 3 tabs: transaction history (filterable expenses/payments, account name lookup), 6-month category spending trends (stacked bar chart), recurring subscription detection (2+ months, annual estimate)
 - **Settings** — Connect/disconnect banks via Plaid Link, update income/strategy, manage sinking funds
 
 ### Payoff Strategies
@@ -99,7 +104,7 @@ npm install
 
 ### 2. Configure environment
 
-Create a `.env` file at the project root:
+Create a `.env` file at the project root (see `.env.example` for all keys):
 
 ```
 # Firebase (server-side) — Firebase console → Project settings → Service accounts → Generate new private key
@@ -116,17 +121,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 PORT=3000
 ```
 
-Create `apps/web/.env.local` for the frontend:
-
-```
-# Firebase (client-side) — Firebase console → Project settings → Your apps → Web app → Config
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project
-VITE_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-```
+`apps/web/.env.local` (Firebase client config) is **committed to git** — no manual creation needed. The values are public by design (Firebase client config is not secret).
 
 ### 3. Start local development
 
@@ -139,6 +134,12 @@ npm run dev:web
 ```
 
 Open [http://localhost:5173](http://localhost:5173).
+
+**UI-only development (no local server needed)** — proxies API calls to production Firebase:
+
+```bash
+npm run dev:web:remote
+```
 
 ### 4. Deploy to Firebase
 
@@ -165,12 +166,13 @@ zeroed/
 │   │   ├── plan.js           # /api/plan/* — generate, latest, lump-sum, required-payment, alerts
 │   │   ├── goals.js          # /api/goals — CRUD + live progress computation
 │   │   ├── expenses.js       # /api/expenses — income + sinking funds CRUD
-│   │   ├── transactions.js   # /api/transactions — history + category summary
+│   │   ├── transactions.js   # /api/transactions — history, category summary, trends, recurring
+│   │   ├── budgets.js        # /api/budgets — CRUD + current-month spending enrichment
 │   │   ├── insights.js       # /api/insights — AI spending analysis, freemium gate
 │   │   ├── recommendations.js # /api/recommendations — ranked card suggestions
 │   │   └── admin.js          # /api/admin — admin-only user management
 │   ├── services/
-│   │   ├── plaidService.js         # Plaid API — sync accounts + transactions
+│   │   ├── plaidService.js         # Plaid API — sync accounts + transactions (all account types)
 │   │   ├── payoffEngine.js         # Pure math — 4 strategies, simulate, lump-sum, required-payment
 │   │   ├── claudeService.js        # Claude API — plan insight + spending analysis
 │   │   ├── cardProfiles.js         # Curated reward profiles — multipliers, TPG valuations
@@ -189,9 +191,9 @@ zeroed/
 │   │   │   └── BottomNav.tsx
 │   │   └── pages/
 │   │       ├── Dashboard.tsx, Accounts.tsx, Plan.tsx, Goals.tsx
-│   │       ├── Activity.tsx, Recommend.tsx, Settings.tsx
+│   │       ├── Budget.tsx, Activity.tsx, Recommend.tsx, Settings.tsx
 │   │       ├── Admin.tsx, Login.tsx, Signup.tsx
-│   ├── .env.local             # VITE_FIREBASE_* vars (gitignored)
+│   ├── .env.local             # VITE_FIREBASE_* vars (committed — Firebase client config is public)
 │   └── package.json
 ├── packages/core/
 │   └── index.ts               # Shared: fmt(), fmtD(), ROUTES constants
@@ -199,6 +201,7 @@ zeroed/
 ├── .firebaserc                # Project: zeroed-3331d
 ├── firestore.rules            # Deny-all (Admin SDK bypasses)
 ├── firestore.indexes.json     # Composite indexes
+├── .env.example               # Documents required server env vars
 ├── DEVLOG.md
 └── package.json               # npm workspaces root
 ```
@@ -232,6 +235,11 @@ All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`.
 | DELETE | `/api/goals/:id` | Remove a goal |
 | GET | `/api/transactions` | Transaction list |
 | GET | `/api/transactions/summary` | Spending by category |
+| GET | `/api/transactions/trends` | 6-month spending by category (top 7, stacked chart data) |
+| GET | `/api/transactions/recurring` | Recurring transactions detected from 2+ months of history |
+| GET | `/api/budgets` | All budgets enriched with current-month spent/remaining/pct |
+| POST | `/api/budgets` | Create budget (`category` + `monthly_limit`) |
+| DELETE | `/api/budgets/:id` | Remove budget |
 | GET | `/api/expenses/income` | Saved monthly income |
 | PUT | `/api/expenses/income` | Update monthly income |
 | GET | `/api/expenses/sinking-funds` | All sinking funds |
@@ -250,10 +258,11 @@ All user data lives under `users/{uid}/`:
 
 | Subcollection | Document ID | Key fields |
 |---|---|---|
-| `accounts` | `plaid_account_id` | name, type, balance_current, apr, minimum_payment, credit_limit, institution_name |
+| `accounts` | `plaid_account_id` | name, type (`depository`/`credit`/`investment`/`loan`/`mortgage`/`brokerage`), subtype, balance_current, apr, minimum_payment, credit_limit, institution_name |
 | `transactions` | `plaid_transaction_id` | account_id, amount, date, name, category |
 | `goals` | auto | goal_type, target_date, target_balance, account_id, is_active |
 | `expenses` | auto | category, monthly_amount, label (sinking funds) |
+| `budgets` | auto | category, monthly_limit, created_at, updated_at |
 | `insights` | auto | content, created_at |
 | `ai_usage` | `YYYY-MM` | count |
 | `plaid_items` | `plaid_item_id` | access_token, institution_name, last_synced |
@@ -297,6 +306,13 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 - [x] **Monorepo** — `server/`, `apps/web/`, `packages/core/`
 - [x] **Multi-user auth** — email/password + Google OAuth
 - [x] **Firebase migration** — Auth + Firestore + Cloud Functions + Hosting; Railway + Supabase + PostgreSQL removed *(v4.0, 2026-05-22)*
+- [x] **All Plaid account types** — depository, credit, investment, loan, mortgage, brokerage *(v4.2)*
+- [x] **Net worth tracking** — Total Assets − Total Liabilities on Dashboard + Accounts *(v4.2)*
+- [x] **Budget system** — per-category monthly limits, progress bars, spent/remaining *(v4.2)*
+- [x] **Spending trends** — 6-month stacked bar chart by category (recharts) *(v4.2)*
+- [x] **Recurring detection** — auto-detect subscriptions from 2+ months of history, annual cost *(v4.2)*
+- [x] **Firebase production deploy** — live at zeroed-3331d.web.app *(v4.2, 2026-05-22)*
+- [x] **Mac + Windows simultaneous dev** — `.env.local` committed, `dev:web:remote` script proxies to production *(v4.2)*
 
 ### Up Next 🔜
 - [ ] Plaid production credentials (apply early — 2–3 week review)
@@ -325,5 +341,6 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 | Monorepo | npm workspaces |
 | Deploy | `firebase deploy` |
 
-**Firebase project:** `zeroed-3331d`
-**Repository:** [github.com/adornedbyveena/zeroed](https://github.com/adornedbyveena/zeroed)
+**Firebase project:** `zeroed-3331d`  
+**Production URL:** [zeroed-3331d.web.app](https://zeroed-3331d.web.app)  
+**Repository:** [github.com/thezeroedapp-ai/zeroed](https://github.com/thezeroedapp-ai/zeroed)

@@ -134,6 +134,77 @@ This converts all NUMERIC fields to JS floats at the driver level — no per-que
 
 ## 2026-05-22 (continued)
 
+### v4.2 — Monarch/Origin Feature Parity + Production Deploy
+
+**Goal:** Close the gap with Monarch Money and Origin — add all account types, net worth, budgets, spending trends, and recurring subscription detection. Ship to production.
+
+**Built:**
+
+**All Plaid account types:**
+- `plaidService.js` was collapsing all non-credit accounts to `depository`. Fixed to pass through native Plaid `type` and `subtype` (`investment`, `loan`, `mortgage`, `brokerage`).
+- `Accounts.tsx` fully rewritten: grouped by type (Cash & Savings, Investments, Credit Cards, Loans), net worth strip at top, subtype label shown below account name, APR/min edit only shown for credit accounts.
+
+**Net worth:**
+- Dashboard route in `server.js` extended: computes `totalAssets` (depository + investment + brokerage), `totalLiabilities` (credit + loan + mortgage), `netWorth = totalAssets - totalLiabilities`. All three returned in dashboard response.
+- Dashboard hero card shows Assets / Net Worth inline row below main stats.
+- Bug fixed: `sinkingTotal` was summing `e.amount` but Firestore stores it as `e.monthly_amount` — caused wrong surplus. Fixed to `e.monthly_amount || 0`.
+
+**Budget system:**
+- `server/routes/budgets.js` (new): GET enriches budgets with current-month `spent`, `remaining`, `pct` by fetching transactions in parallel; POST creates; DELETE removes.
+- `server/db/database.js`: `getBudgets`, `upsertBudget`, `deleteBudget` added; `budgets` added to `deleteUserData`.
+- `apps/web/src/pages/Budget.tsx` (new): preset category dropdown, monthly limit input, progress bars with green/amber/red coloring at 80%/100%, overall summary strip.
+- Route registered in `server.js`: `app.use('/api/budgets', budgetsRoutes)`.
+
+**Spending screen (renamed from Activity):**
+- `Activity.tsx` rewritten with 3 tabs: Transactions, Trends, Recurring.
+- Transactions tab: account name lookup from `accountMap[tx.account_id]`, filter by expenses (`amount > 0`) or payments (`amount < 0`), amount color (green for credits/payments, red for charges).
+- Trends tab: `GET /api/transactions/trends` returns 6-month data (top 7 categories). Recharts `BarChart` with `stackId="a"` stacked bars, 7-color palette. TypeScript fix: recharts Tooltip `formatter` `name` param is `NameType | undefined`, must use `String(name ?? '')`.
+- Recurring tab: `GET /api/transactions/recurring` groups by normalized description, finds 2+ distinct months, returns `avgAmount`, `annualEstimate`, `lastDate`. Annual total shown in hero.
+- Trends + recurring lazy-load (only fetch on first tab select).
+
+**Navigation:**
+- `BottomNav.tsx` rewritten: 7 items — Home, Accounts, Plan, Budget, Spending, Reward, Settings. Goals removed from bottom nav.
+- `SideNav.tsx` rewritten: 8 items — Home, Accounts, Plan, Budget, Goals, Spending, Reward, Settings. Goals stays in side nav.
+- `App.tsx`: Budget route added (`/budget`).
+
+**Decisions:**
+- Lazy loading trends/recurring avoids slow API calls on tab load — only pay the cost when the user actually navigates there
+- Recurring detection is pure server logic — no ML, just group by normalized description and count distinct months
+- Budget categories use Plaid's own category names (Food and Drink, Travel, etc.) so they match transaction data without any mapping
+
+---
+
+### Firebase Production Deploy
+
+First-ever production deploy. Lessons learned:
+
+1. **Blaze plan required** — Firebase Cloud Functions needs the Blaze pay-as-you-go plan. Project was on free Spark plan; upgraded via console before deploy.
+2. **GCP IAM permissions** — First deploy failed: `Storage Object Viewer` permission missing on `gcf-sources-537812060594-us-central1` bucket for `537812060594-compute@developer.gserviceaccount.com`. Fixed via GCP Console → IAM → grant Storage Object Viewer.
+3. **Broken function state** — Second deploy got "Precondition failed" because the function was stuck in a failed CREATE state. Fixed by deleting the function: `firebase functions:delete api --region us-central1 --force`, then redeploying.
+4. **Firebase account** — Must deploy with `thezeroedapp@gmail.com`, not personal account. `firebase logout && firebase login` before deploying.
+
+Deploy command: `npm run deploy` (`npm run build:web && firebase deploy`)
+
+**Live:** https://zeroed-3331d.web.app
+
+---
+
+### Mac + Windows Simultaneous Development Setup
+
+Problem: `.env.local` (Firebase client config) was gitignored by the `*.local` pattern, so Mac users had to manually recreate it after cloning.
+
+Solution:
+1. `apps/web/.gitignore` — added `!.env.local` exception so the file is committed to git. Firebase client config is public by design (it's not a secret — it's the same config you paste into `<script>` tags on public websites).
+2. `vite.config.ts` — proxy target now supports `API_TARGET` env var override: `process.env.API_TARGET ?? 'http://localhost:3000'`.
+3. `package.json` — added `dev:web:remote` script: `cross-env API_TARGET=https://zeroed-3331d.web.app npm run dev --workspace=apps/web`. Added `cross-env` devDependency for cross-platform env var setting.
+4. `.env.example` — documents all required server env vars with comments. AirDrop `.env` from Windows to Mac for full-stack dev.
+
+**Mac dev workflows:**
+- Full-stack: AirDrop `.env` from Windows, then `npm run dev` + `npm run dev:web`
+- UI-only: `npm run dev:web:remote` — no server needed, proxies to production Firebase
+
+---
+
 ### v4.1 — Dark Premium UI Redesign + Bug Fixes
 
 **Goal:** Differentiate from Monarch/Origin with a debt-engine-first experience. Dark + premium aesthetic, interactive dashboards, bento grid layout.
