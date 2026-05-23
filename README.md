@@ -12,7 +12,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v5.0 — Phase 1: Dashboard overhaul (design system lock-in + net worth history + dashboard manager).** *(2026-05-23)*
+**v5.1 — Drag-and-drop dashboard + comprehensive demo seed data.** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
@@ -22,10 +22,10 @@ Full Firebase stack live with a dark premium UI:
 - **Database:** Firestore — subcollections under `users/{uid}/`
 - **API:** Express wrapped as Firebase Cloud Functions (`exports.api`)
 - **Hosting:** Firebase Hosting (React SPA) + Rewrites to Cloud Functions
-- **Frontend:** React 18 + Vite + TypeScript — 5-tab nav with subtabs, dark design system, bento grid dashboard
+- **Frontend:** React 18 + Vite + TypeScript — 5-tab nav with subtabs, dark design system, drag-and-drop dashboard
 
 All screens working (5-tab structure):
-- **Home (Dashboard)** — customizable 9-widget bento grid: debt payoff projection, net worth history sparkline, spending by category bars, goals preview, interest/surplus stats, priority attack, AI analysis, alerts. Widget order + visibility saved to Firestore per user. Edit mode via top-bar "Edit" button.
+- **Home (Dashboard)** — customizable 9-widget drag-and-drop grid: debt payoff projection, net worth history sparkline, spending by category bars, goals preview, interest/surplus stats, priority attack, AI analysis, alerts. Widget order + visibility saved to Firestore per user. Edit mode via top-bar "Edit" button — drag handle `⠿` on each widget, `×` to remove. Touch-friendly (dnd-kit).
 - **Plan** — 3 subtabs: Strategy (4 payoff strategies, freed-minimum rollover, lump-sum simulator, extra payment calculator), Goals (debt-free date targets, per-card payoff goals, balance targets, required-payment calculator), AI Insights (Claude-powered spending analysis)
 - **Accounts** — 3 subtabs: Accounts (all types grouped by institution, net worth strip, inline APR/min edit), Budget (per-category monthly budgets with progress bars), Rewards (category-based card recommendations ranked by reward multipliers and TPG valuations)
 - **Spending** — 3 subtabs: Transactions (filterable by expenses/payments, "Explore cards →" teaser linking to Accounts › Rewards), Trends (6-month stacked bar chart by category), Recurring (auto-detected subscriptions with annual cost estimate)
@@ -39,6 +39,7 @@ All screens working (5-tab structure):
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v5.1 | 2026-05-23 | Drag-and-drop dashboard: replaced ↑/↓ reorder buttons with dnd-kit (`@dnd-kit/core`, `@dnd-kit/sortable`) — `PointerSensor` (8px) + `TouchSensor` (200ms/8px) for desktop+mobile, `DragOverlay` ghost card, debounced 600ms auto-save to Firestore; `SortableWidgetShell` with dedicated `⠿` drag handle + `×` remove; uniform `.widget-grid` (2-col tablet/desktop); comprehensive demo seed (`scripts/seed-demo.js`) — 10 accounts, 201 transactions, 6 months Dec 2025–May 2026, 6 net worth snapshots, 3 goals, 7 budgets, 3 sinking funds |
 | v5.0 | 2026-05-23 | Phase 1 complete: design system lock-in (`--font-mono`, `.widget-card`, compat alias sweep); net worth monthly snapshots on every sync stored to `net_worth_history/{YYYY-MM}`; Dashboard manager — 9 configurable widgets with Firestore-backed layout (`dashboard_config/default`), edit mode with toggle + reorder |
 | v4.5 | 2026-05-23 | Plaid production readiness: update mode (reconnect broken connections), item-level disconnect with Plaid token revocation, cursor-based `transactionsSync` replacing legacy `transactionsGet`, `error_status` on plaid items, Settings UI with Connect/Reconnect/Disconnect/Sync Now |
 | v4.4 | 2026-05-23 | Firebase Cloud Functions upgraded: Node 20 1st Gen → Node 22 2nd Gen; firebase-functions v4 → v5; index.js migrated from v1 API (functions.https/pubsub) to v2 API (onRequest/onSchedule) |
@@ -502,13 +503,13 @@ No Figma yet — design is being built directly in code. When a component is fin
 - [x] **Cloud Functions 2nd Gen** — Node 20 → 22, firebase-functions v4 → v5, v1 API → v2 `onRequest`/`onSchedule` *(v4.4, 2026-05-23)*
 - [x] **Plaid production readiness** — update mode link token, `itemRemove` token revocation, cursor-based `transactionsSync` (incremental + handles removed transactions), `error_status` per item, Settings UI with Connect/Reconnect/Disconnect/Sync Now *(v4.5, 2026-05-23)*
 
-### Phase 1 — Dashboard UI + Design System 🔜
+### Phase 1 — Dashboard UI + Design System ✅
 The Dashboard is the first screen every user sees. Nail this before adding features so the design language is locked before new screens are built.
 
-- [ ] **Dashboard manager** — users can add, remove, and reorder up to 9 chart widgets on the Home screen (debt projection, net worth trend, cash flow, spending by category, credit score, goals progress, upcoming bills, interest cost over time, savings rate)
-- [ ] **Net worth history chart** — month-over-month sparkline/trend (store monthly snapshots in Firestore)
-- [ ] **Design system lock-in** — audit and finalize design tokens, card styles, typography scale, spacing so all future screens inherit consistently
-- [ ] **`index.html` title** — change from "Vite + React + TS" to "Zeroed"
+- [x] **Dashboard manager** — 9 configurable widgets with drag-and-drop reorder (dnd-kit), add/remove, Firestore-backed layout, touch-friendly *(v5.0–5.1, 2026-05-23)*
+- [x] **Net worth history chart** — month-over-month line chart; monthly snapshots written to `net_worth_history/{YYYY-MM}` on every Plaid sync *(v5.0, 2026-05-23)*
+- [x] **Design system lock-in** — `--font-mono` token, `.widget-card` / `.widget-grid` classes, compat alias sweep *(v5.0, 2026-05-23)*
+- [x] **`index.html` title** — changed from "Vite + React + TS" to "Zeroed"
 - [ ] **Promo APR expiry date** — wire up the field Plaid already returns (currently hardcoded `null`); expose in Accounts inline edit
 
 ### Phase 2 — Feature Parity with Monarch/Origin 📋

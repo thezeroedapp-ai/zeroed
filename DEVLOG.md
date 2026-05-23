@@ -6,6 +6,64 @@
 
 ## 2026-05-23
 
+### v5.1 — Drag-and-Drop Dashboard + Demo Seed Data
+
+**What changed:**
+
+**Drag-and-drop widget reordering (`apps/web/src/pages/Dashboard.tsx`):**
+- Replaced the ↑/↓ button reorder system with `@dnd-kit/core` + `@dnd-kit/sortable` (added to `apps/web/package.json`)
+- `SortableWidgetShell` component wraps each widget: uses `useSortable`, renders a `⠿` drag handle (top-left, `setActivatorNodeRef`) and a `×` remove button (top-right) — both only visible in edit mode. Handle activates drag so card content (buttons, charts, links) stays interactive.
+- Sensors: `PointerSensor` (8px distance threshold) + `TouchSensor` (200ms delay, 8px tolerance) — distinguishes intentional drag from scroll on touch devices
+- `DragOverlay` renders a ghost of the active widget at `transform: scale(1.02)` with violet drop shadow during drag
+- `handleDragEnd` calls `arrayMove` then `persistConfig` — auto-saves debounced 600ms after every drag, add, or remove (no Save button needed)
+- Widget grid: uniform `.widget-grid` CSS class — 1-col mobile, 2-col tablet/desktop (768px+), `min-height: 180px` per card. Hero card (Total Debt) is pinned above the `DndContext` — always visible, not draggable.
+- "Add Widgets" section below the grid in edit mode: hidden widget IDs shown as `btn-outline btn-sm` chips to add back to the grid
+- Edit button in top-bar: `.btn-primary` (violet fill) when in edit mode, `.btn-ghost` otherwise
+
+**React hooks fix:** `draftWidgets` `useState` was declared after a `useEffect` in an earlier draft — violates React rules of hooks. Fixed by moving all state declarations to the top of the component before all `useEffect` calls.
+
+**CSS additions (`apps/web/src/index.css`):**
+- `.widget-grid`: `display: grid; grid-template-columns: 1fr; gap: 12px;`
+- `.widget-grid .card { min-height: 180px; overflow: hidden; }`
+- `.widget-grid-full { grid-column: 1/-1; }`
+- `@media (min-width: 768px)`: `.widget-grid { grid-template-columns: 1fr 1fr; gap: 12px; }`
+
+**Comprehensive demo seed data (`scripts/seed-demo.js` — complete rewrite):**
+
+UID: `eUD7KA6dMgbx6YcL2u6Q3jy43gn2` (Venkat / venkatrbade@gmail.com)
+
+10 accounts:
+- Cash: Chase Checking ($3,240), Joint Checking ($1,887), Marcus Savings ($18,400)
+- Assets: Fidelity 401k ($87,650)
+- Loans: Chase Mortgage ($312,450/6.75%), Toyota Camry ($18,750/5.9%), Honda CR-V ($9,200/4.5%)
+- Credit cards: Citi ($12,450/19.99%/$249 min), Chase Sapphire ($7,820/22.49%/$156 min), Amex Gold ($4,340/29.99%/$87 min)
+
+201 transactions across 6 months (Dec 2025 – May 2026):
+- Per month: 8 recurring subs (Netflix $22.99, Spotify $11.99, Hulu $17.99, AT&T $165, Comcast $79.99, PG&E, Apple One $29.95, Equinox $185), 3x groceries ($85–$165), 5x dining ($18–$85), 3x gas ($45–$72), 2-3x shopping, health, 2x rideshare, 2 paychecks (-$4,250), mortgage/car/CC payments
+- Seasonal: Dec (holiday shopping, travel), Feb (travel), May (Memorial Day)
+
+6 net worth snapshots: Dec 2025 (-$264,200) → May 2026 (-$249,580) — ~$2,400/mo improvement arc
+
+Also seeded: 3 goals, 7 budgets, 3 sinking funds ($600/mo total: Emergency $300, Car $150, Vacation $150), dashboard config (9 widgets), user profile ($8,500 income, $6,500 expenses → $908 surplus)
+
+Script output:
+```
+✓ 10 accounts  (3 credit · 4 assets · 3 loans)
+✓ 201 transactions across 6 months
+✓ 6 net worth snapshots (Dec 2025 – May 2026)
+✓ 3 goals · 7 budgets · 3 sinking funds ($600/mo total)
+Credit card debt: $24,610, Net worth: -$253,832
+```
+
+**Decisions:**
+- Auto-save (debounced 600ms) instead of a "Save Layout" button — cleaner UX; user sees changes immediately
+- Touch sensor uses 200ms delay + 8px tolerance — tested threshold that reliably distinguishes swipe-to-scroll from drag intent
+- Drag handle (`setActivatorNodeRef`) instead of full-card drag — keeps all interactive content (buttons, charts) clickable
+- Demo data uses Dec 2025–May 2026 date range so "last 6 months" query windows populate correctly as of the current date
+- `clearCollection()` at script start makes seed idempotent — safe to re-run
+
+---
+
 ### v5.0 — Phase 1: Dashboard Overhaul
 
 **What changed:**
@@ -31,14 +89,14 @@
 - Added `WIDGET_CATALOG` (9 widgets: debt_projection, net_worth_trend, spending_by_category, goals_progress, interest_cost, savings_rate, priority_attack, ai_insights, alerts)
 - `load()` now fetches 5 in parallel: dashboard data, goals, net worth history, spending summary, dashboard config
 - `renderWidget(id)` switch renders each widget as the correct bento card class; conditionally returns null if required data isn't available (e.g., no history for net_worth_trend)
-- Edit mode: "Edit" button in top-bar; bottom sheet with checkbox toggles + ↑/↓ reorder buttons; "Save Layout" persists to Firestore via PUT
+- Edit mode: "Edit" button in top-bar; ↑/↓ reorder buttons + checkbox toggles (upgraded to dnd-kit drag-and-drop in v5.1)
 - Net worth trend widget: Recharts `LineChart` with `ReferenceLine` at y=0, shows `δ` vs first month
 - Spending by category widget: top-5 categories with CSS progress bars (no extra chart)
 - Fixed Goals link: `/goals` → `/plan?tab=goals`
 
 **Decisions:**
 - Hero widget (Total Debt) is not configurable — it's always shown. The 9-widget system covers secondary widgets.
-- Edit mode uses ↑/↓ buttons instead of drag-and-drop (CSS for drag not yet in design system; listed as Phase 2 gap)
+- Edit mode initially used ↑/↓ buttons; upgraded to dnd-kit drag-and-drop in v5.1
 - Dashboard config saves as `string[]` (not a map) — order is layout order, presence = active
 - Net worth snapshot uses `set({ merge: true })` so it overwrites the same YYYY-MM doc on re-sync — last sync of the month wins
 
