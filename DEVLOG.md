@@ -82,6 +82,18 @@ Reasoning: Consumer fintech lives on first impressions. A test user decides in 1
 
 ---
 
+### Design System Reference (DESIGN.md)
+
+Created `DESIGN.md` — the canonical reference for all UI work. Documents every CSS token, component class, responsive breakpoint, chart color, gradient, and anti-pattern from the actual `index.css` (not aspirational spec). Cross-linked from README.
+
+**Why:** Without a reference artifact, every new screen risks drifting — hardcoded hex values, magic pixel numbers, one-off card divs. Now the rule is: read `DESIGN.md` first, use the tokens and classes, document any new patterns added.
+
+**Current gaps identified:** no `--font-mono` token, compat alias tokens still used in some inline styles, no `.widget-card` for dashboard manager, no drag-and-drop CSS yet. These are Phase 1 items.
+
+Also fixed: `index.html` title changed from "Vite + React + TS" → "Zeroed"; README Node prereq updated to v22.
+
+---
+
 ### v4.4 — Cloud Functions 2nd Gen + Node 22
 
 **Why:** Deploy warnings after v4.3 ship — Node 20 deprecated (EOL 2026-10-30) and firebase-functions SDK v4 flagged as outdated.

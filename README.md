@@ -1,6 +1,6 @@
 # Zeroed — Debt Payoff Tracker
 
-> **Keep this README updated.** After every dev session, update Current Status, Changelog, and Roadmap. The README is the single source of truth for where the project stands — if it's not in here, it didn't happen. See `DEVLOG.md` for day-by-day session notes.
+> **Keep this README updated.** After every dev session, update Current Status, Changelog, and Roadmap. The README is the single source of truth for where the project stands — if it's not in here, it didn't happen. See `DEVLOG.md` for day-by-day session notes. See `DESIGN.md` for the UI design system — read it before touching any CSS or inline styles.
 
 The goal of Zeroed is simple: **know exactly when you'll be debt-free, and take the fastest path there.**
 
@@ -351,6 +351,8 @@ Zeroed's freemium model is a user acquisition advantage — lower friction to si
 ---
 
 ## UI Design Plan
+
+> **See [`DESIGN.md`](DESIGN.md) for the full token reference, component class catalog, rules, and anti-patterns. Read it before any UI change.**
 
 ### Philosophy
 
