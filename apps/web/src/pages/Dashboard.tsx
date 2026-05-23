@@ -738,7 +738,7 @@ export default function Dashboard() {
             <Card className="mb-4 bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-border overflow-hidden">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
+                  <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Debt</p>
                     <div className="text-[40px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
                     {data.debtFreeDate && (

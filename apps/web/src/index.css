@@ -166,7 +166,7 @@ body {
   grid-template-columns: 1fr;
   gap: 12px;
 }
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .widget-grid { grid-template-columns: 1fr 1fr; }
 }
 
