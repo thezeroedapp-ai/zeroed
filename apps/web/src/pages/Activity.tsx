@@ -223,7 +223,7 @@ export default function Activity() {
                         />
                         <Tooltip
                           contentStyle={{ background: '#0d1424', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, color: '#e2e8f0' }}
-                          formatter={(v: unknown, name: string) => [`$${Number(v).toFixed(0)}`, name]}
+                          formatter={(v, name) => [`$${Number(v).toFixed(0)}`, String(name ?? '')]}
                           cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                         />
                         {trends.categories.map((cat, i) => (
