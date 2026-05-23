@@ -6,6 +6,84 @@
 
 ## 2026-05-23
 
+### v5.2 — shadcn/ui + Tailwind v4 Migration
+
+**Why:** The hand-rolled CSS design system was showing cracks — subtle alignment bugs, inconsistent card sizing, no component hierarchy, and chart widgets that looked out of place across screens. The goal was a polished consumer-fintech UI with better charts and drill-down capability. Evaluated Tremor and Nivo; chose shadcn/ui because it gives the most control (copy-paste, not a dependency to fight), pairs natively with recharts (already installed), and Tailwind v4 removes all config friction.
+
+**What changed:**
+
+**Infrastructure (Tailwind v4 + shadcn/ui setup):**
+- Added `tailwindcss`, `@tailwindcss/vite`, `class-variance-authority`, `clsx`, `tailwind-merge`, `tw-animate-css` to `apps/web/package.json`
+- `apps/web/vite.config.ts`: added `tailwindcss()` plugin (first in array), added `'@': path.resolve(__dirname, './src')` alias
+- `apps/web/tsconfig.app.json`: added `"@/*": ["./src/*"]` to `paths` for TypeScript resolution
+- `apps/web/components.json`: shadcn config (`style: "new-york"`, `rsc: false`, `tsx: true`, CSS variables on)
+- `apps/web/src/lib/utils.ts`: `cn()` helper — `clsx` + `tailwind-merge`
+- `apps/web/src/index.css`: complete rewrite — `@import "tailwindcss"`, `@import "tw-animate-css"`, `@theme inline` block mapping shadcn CSS vars to Tailwind color utilities, `:root` block defining all tokens in oklch. Kept `.spinner`, `.skeleton`, `.gradient-text`, `.widget-grid`, `.pills`, auth page classes.
+
+**shadcn/ui components installed** (`apps/web/src/components/ui/`):
+`avatar`, `badge`, `button`, `card`, `chart`, `dialog`, `input`, `label`, `progress`, `scroll-area`, `select`, `separator`, `sheet`, `tabs`, `tooltip` — 15 components.
+
+> **Windows path gotcha:** `npx shadcn@latest add` on Windows creates a literal `@/` directory at `apps/web/@/components/ui/` instead of resolving `@/` to `src/`. Fixed by: `cp -r "apps/web/@/components/ui/." "apps/web/src/components/ui/"` then `rm -rf "apps/web/@"`.
+
+**Color system (`apps/web/src/index.css`):**
+All oklch values — chosen to match the existing hex palette exactly so the visual change was upgrade, not redesign:
+
+| Token | oklch | Hex equiv | Use |
+|---|---|---|---|
+| `--background` | `oklch(0.065 0.015 264)` | `#07090f` | Page background |
+| `--card` | `oklch(0.105 0.024 258)` | `#0d1424` | Card surfaces |
+| `--primary` | `oklch(0.49 0.21 290)` | `#7c3aed` | Violet accent |
+| `--violet-light` | `oklch(0.72 0.14 290)` | `#a78bfa` | Text on accents, active states |
+| `--green` | `oklch(0.70 0.16 162)` | `#10b981` | Positive values |
+| `--red` | `oklch(0.64 0.22 22)` | `#f43f5e` | Debt, expenses |
+| `--amber` | `oklch(0.78 0.19 82)` | `#f59e0b` | Warnings |
+| `--blue` | `oklch(0.62 0.20 264)` | `#3b82f6` | Charts |
+
+**Navigation rewrites:**
+- `SideNav.tsx`: lucide-react icons (Home, Target, CreditCard, TrendingUp, Settings, Shield), `hidden md:flex`, `w-[68px] lg:w-[220px]`, gradient "Z"/"Zeroed" logo. At md (collapsed): icon-only 40×40 squares, `Tooltip` on hover. At lg (expanded): icon + label side by side.
+- `BottomNav.tsx`: `md:hidden`, lucide-react icons, Tailwind active state (`text-violet-light`).
+- `SubNav.tsx`: replaced `.pills`/`.pill` CSS with Tailwind + `cn()` — `rounded-full` pills with violet active state.
+
+**Layout fix (`Layout.tsx`):**
+Critical bug: the original layout used `flex min-h-dvh` as the wrapper with `SideNav` fixed (removed from flow). `flex-1 ml-[68px]` on the content div was theoretically correct (flex free-space calculation accounts for margins) but caused content to render overlapping the sidebar in practice. Switched to a non-flex approach: `SideNav` fixed, `<main className="md:ml-[68px] lg:ml-[220px]">` as a plain block. Sidebar content is now always fully visible.
+
+**Dashboard.tsx — complete rewrite:**
+- Drill-down state: `sheet: { open: boolean; type: 'spending'|'networth'|'goal'|null; payload? }` drives a shadcn `Sheet` that slides in from the right.
+- `SortableWidgetShell` updated: lucide `GripVertical` + `X` icons, shadcn `Card` as the drag wrapper.
+- Three `ChartConfig` objects for recharts color/label mapping (`debtChartConfig`, `netWorthChartConfig`, `spendingChartConfig`).
+- Widget changes: `debt_projection` → `ChartContainer` + `AreaChart` (height 150px); `net_worth_trend` → clickable, opens Sheet with expanded line chart + assets/liabilities breakdown; `spending_by_category` → horizontal `BarChart` with `Cell` per-bar colors, each bar clickable, opens Sheet with full category list + `Progress` bars; `goals_progress` → clickable rows open Sheet with goal details.
+- Hero card redesigned: two-column top (Total Debt + Monthly Interest Cost), three-column stat strip (Minimums / Surplus / Net Worth). Removed the always-full red `Progress` bar (conveyed nothing). Subtle violet gradient background via `bg-gradient-to-br`.
+- Default widget order rebalanced for better 2-column pairing: (Projection, Spending) → (Net Worth, Priority Attack) → (Goals, AI Insights) → Alerts.
+
+**Plan.tsx — complete rewrite:**
+Strategy selector: 2×2 grid of visual cards with emoji icons (🔥❄️⚖️💸), strategy name, sub-description, "best for" `Badge`. Active strategy: violet ring (`ring-1 ring-[var(--primary)]`). All other plan UI migrated to shadcn `Card`, `Input`, `Button`, `Select`, `Label`, `Progress`.
+
+**Accounts.tsx — complete rewrite:**
+Net worth strip: 3-column `Card` grid. Accounts by institution: `Card` per bank with accounts inside, `Badge` for APR/min/limit/due date. Inline edit: shadcn `Input`/`Label`/`Button`. Budget: `Progress` with `[&>div]:bg-red/green/amber` modifier. Rewards: 4-column category grid + shadcn `Card` per recommendation.
+
+**Spending.tsx — complete rewrite:**
+Transactions: `Card` list with colored icon circles (green ✅ for payments, 🛍️ for purchases). Trends: shadcn `ChartContainer` + recharts stacked `BarChart`. Recurring: annual total hero `Card` + per-item rows with `Badge` for category.
+
+**Settings.tsx — complete rewrite:**
+All shadcn `Card`/`Input`/`Label`/`Select`/`Button`. Income save: flash feedback (button turns green for 2s → "✓ Saved"). Plaid items: error banner, Reconnect/Disconnect buttons with `border-red/30 text-red hover:bg-red/10` styling.
+
+**Login.tsx + Signup.tsx — rewrite:**
+shadcn `Input`/`Label`/`Button`. Error state: inline red banner (`bg-red/10 border-red/25`) replacing `.auth-error`. Auth page layout CSS classes (`auth-logo`, `auth-card`, `auth-title`, `auth-divider`, `auth-footer`) restored to `index.css` — they were in the old CSS but omitted from the first shadcn pass.
+
+**TypeScript fixes:**
+- `Dashboard.tsx`: removed unused `ResponsiveContainer` import; typed `BarChart` `onClick` handler as `(d: any)` to avoid `activePayload` not-on-type error.
+- `Settings.tsx`: removed unused `Badge` import.
+- `Spending.tsx`: removed unused `Cell` and `ResponsiveContainer` imports.
+
+**Decisions:**
+- **shadcn/ui over Tremor** — Tremor would have locked chart aesthetics and constrained customization. shadcn wraps recharts directly and lets us control everything.
+- **Always-dark, no toggle** — Zeroed's brand is dark. Adding a light mode now would require auditing every color decision twice with no user demand.
+- **oklch everywhere** — Tailwind v4 is designed around oklch; using it throughout gives better color mixing (e.g. `primary/10` alpha modifiers work predictably in the perceptual color space).
+- **`@theme inline` bridge** — Maps shadcn's CSS var names (`--background`, `--primary`, etc.) to Tailwind utility names (`bg-background`, `text-primary`). One block in `index.css` makes the whole system work without any `tailwind.config.js`.
+- **Drill-down as Sheet, not modal** — Sheet slides in from the right without blocking the chart that triggered it; the user can see the chart and the detail simultaneously at wider viewports.
+
+---
+
 ### v5.1 — Drag-and-Drop Dashboard + Demo Seed Data
 
 **What changed:**

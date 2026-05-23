@@ -12,7 +12,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v5.1 — Drag-and-drop dashboard + comprehensive demo seed data.** *(2026-05-23)*
+**v5.2 — shadcn/ui + Tailwind v4 migration, polished charts, drill-down panels.** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
@@ -22,14 +22,14 @@ Full Firebase stack live with a dark premium UI:
 - **Database:** Firestore — subcollections under `users/{uid}/`
 - **API:** Express wrapped as Firebase Cloud Functions (`exports.api`)
 - **Hosting:** Firebase Hosting (React SPA) + Rewrites to Cloud Functions
-- **Frontend:** React 18 + Vite + TypeScript — 5-tab nav with subtabs, dark design system, drag-and-drop dashboard
+- **Frontend:** React 18 + Vite + TypeScript — shadcn/ui component library, Tailwind CSS v4, lucide-react icons, 5-tab nav with subtabs, drag-and-drop dashboard
 
 All screens working (5-tab structure):
-- **Home (Dashboard)** — customizable 9-widget drag-and-drop grid: debt payoff projection, net worth history sparkline, spending by category bars, goals preview, interest/surplus stats, priority attack, AI analysis, alerts. Widget order + visibility saved to Firestore per user. Edit mode via top-bar "Edit" button — drag handle `⠿` on each widget, `×` to remove. Touch-friendly (dnd-kit).
-- **Plan** — 3 subtabs: Strategy (4 payoff strategies, freed-minimum rollover, lump-sum simulator, extra payment calculator), Goals (debt-free date targets, per-card payoff goals, balance targets, required-payment calculator), AI Insights (Claude-powered spending analysis)
-- **Accounts** — 3 subtabs: Accounts (all types grouped by institution, net worth strip, inline APR/min edit), Budget (per-category monthly budgets with progress bars), Rewards (category-based card recommendations ranked by reward multipliers and TPG valuations)
-- **Spending** — 3 subtabs: Transactions (filterable by expenses/payments, "Explore cards →" teaser linking to Accounts › Rewards), Trends (6-month stacked bar chart by category), Recurring (auto-detected subscriptions with annual cost estimate)
-- **Settings** — bank connect/disconnect, income profile, sinking funds manager
+- **Home (Dashboard)** — hero card (total debt + monthly interest cost + 3-stat strip), customizable 7-widget drag-and-drop grid: payoff projection area chart, spending by category horizontal bars (click → drill-down Sheet), net worth sparkline (click → assets/liabilities detail), priority attack card, goals progress, AI insights, alerts. Widget order + visibility saved to Firestore. Touch-friendly (dnd-kit).
+- **Plan** — 3 subtabs: Strategy (4 strategy cards with emoji icons + visual selector, freed-minimum rollover, lump-sum simulator, extra payment calculator), Goals (debt-free date targets, per-card payoff goals, balance targets, required-payment calculator with Progress bars), AI Insights (Claude-powered spending analysis)
+- **Accounts** — 3 subtabs: Accounts (all types grouped by institution, net worth strip, inline APR/min edit with shadcn Input/Label), Budget (per-category monthly budgets with Progress bars, shadcn Select), Rewards (category-based card recommendations ranked by reward multipliers and TPG valuations)
+- **Spending** — 3 subtabs: Transactions (filterable by expenses/payments, "Explore cards →" teaser), Trends (6-month stacked bar chart via shadcn ChartContainer + recharts), Recurring (auto-detected subscriptions with annual cost hero card + category Badge)
+- **Settings** — bank connect/disconnect, income profile (Save flash feedback), sinking funds manager
 
 **Next (Phase 2):** Credit score monitoring, manual account entry, cash flow forecast, investment tracking display → budget AI recommendations, couples mode. Plaid production + Stripe are pre-go-live gates, not pre-test-user gates.
 
@@ -39,6 +39,7 @@ All screens working (5-tab structure):
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v5.2 | 2026-05-23 | shadcn/ui + Tailwind v4 migration: replaced hand-rolled CSS with shadcn/ui component library (Card, Button, Badge, Input, Select, Progress, Sheet, ChartContainer, Tooltip — 15 components); Tailwind CSS v4 via `@tailwindcss/vite`, CSS-first `@theme inline` config with oklch color palette; lucide-react icons; all pages rewritten (Dashboard, Plan, Accounts, Spending, Settings, Login, Signup); drill-down `Sheet` panels on dashboard (spending category → full list, net worth → assets/liabilities, goals → details); fixed sidebar layout bug (flex + fixed = content overlap; switched to margin-left approach); improved hero card (two-column debt+interest layout, 3-stat strip); taller charts; collapsed sidebar shows icon-only at md breakpoint |
 | v5.1 | 2026-05-23 | Drag-and-drop dashboard: replaced ↑/↓ reorder buttons with dnd-kit (`@dnd-kit/core`, `@dnd-kit/sortable`) — `PointerSensor` (8px) + `TouchSensor` (200ms/8px) for desktop+mobile, `DragOverlay` ghost card, debounced 600ms auto-save to Firestore; `SortableWidgetShell` with dedicated `⠿` drag handle + `×` remove; uniform `.widget-grid` (2-col tablet/desktop); comprehensive demo seed (`scripts/seed-demo.js`) — 10 accounts, 201 transactions, 6 months Dec 2025–May 2026, 6 net worth snapshots, 3 goals, 7 budgets, 3 sinking funds |
 | v5.0 | 2026-05-23 | Phase 1 complete: design system lock-in (`--font-mono`, `.widget-card`, compat alias sweep); net worth monthly snapshots on every sync stored to `net_worth_history/{YYYY-MM}`; Dashboard manager — 9 configurable widgets with Firestore-backed layout (`dashboard_config/default`), edit mode with toggle + reorder |
 | v4.5 | 2026-05-23 | Plaid production readiness: update mode (reconnect broken connections), item-level disconnect with Plaid token revocation, cursor-based `transactionsSync` replacing legacy `transactionsGet`, `error_status` on plaid items, Settings UI with Connect/Reconnect/Disconnect/Sync Now |
@@ -352,20 +353,22 @@ Zeroed's freemium model is a user acquisition advantage — lower friction to si
 
 ---
 
-## UI Design Plan
+## UI Design System
 
-> **See [`DESIGN.md`](DESIGN.md) for the full token reference, component class catalog, rules, and anti-patterns. Read it before any UI change.**
+> **See [`DESIGN.md`](DESIGN.md) for legacy token reference. The canonical component system is now shadcn/ui + Tailwind v4 — read `apps/web/src/index.css` for the current token set.**
 
 ### Philosophy
 
 Consumer fintech lives on trust and first impressions. A test user decides in 10 seconds whether this feels like a real product or a side project. The goal is a UI that feels *premium and purposeful* — not generic SaaS. Every screen should communicate that this app understands debt better than any other.
 
 **Design language:**
-- **Dark-first** — `#07090f` base, `#0d1424` card surfaces. Dark signals premium in fintech.
-- **Violet accent** — `#7c3aed` primary, `#a78bfa` light. Intentional differentiation from blue (every other finance app).
-- **Glassmorphism nav** — frosted sticky top-bar and bottom nav via `backdrop-filter: blur`
-- **Tabular numerals** — all currency and percentage values use `font-variant-numeric: tabular-nums`
-- **Recharts** — all data visualizations; consistent palette across all charts
+- **Dark-first** — `oklch(0.065 0.015 264)` (`#07090f`) background, `oklch(0.105 0.024 258)` (`#0d1424`) card surfaces. Dark signals premium in fintech.
+- **Violet accent** — `oklch(0.49 0.21 290)` (`#7c3aed`) primary, `oklch(0.72 0.14 290)` (`#a78bfa`) light. Intentional differentiation from blue (every other finance app).
+- **Always-dark** — all CSS vars in `:root` (no `.dark` class toggle); no light mode.
+- **shadcn/ui** — copy-paste component model; `@/components/ui/` for Card, Button, Badge, Input, Select, Progress, Sheet, Tooltip, ChartContainer. `cn()` utility (`clsx` + `tailwind-merge`) for conditional classes.
+- **Tabular numerals** — all currency and percentage values use `tabular` utility class (`font-variant-numeric: tabular-nums`).
+- **recharts via ChartContainer** — all data visualizations; `ChartConfig` for label/color mapping; `ChartTooltipContent` for consistent tooltips.
+- **Drill-down via Sheet** — clicking a chart element opens a shadcn `Sheet` slide-out panel with full detail view; implemented on spending category bars, net worth trend, and goals rows.
 
 ### Dashboard Manager
 
@@ -508,7 +511,7 @@ The Dashboard is the first screen every user sees. Nail this before adding featu
 
 - [x] **Dashboard manager** — 9 configurable widgets with drag-and-drop reorder (dnd-kit), add/remove, Firestore-backed layout, touch-friendly *(v5.0–5.1, 2026-05-23)*
 - [x] **Net worth history chart** — month-over-month line chart; monthly snapshots written to `net_worth_history/{YYYY-MM}` on every Plaid sync *(v5.0, 2026-05-23)*
-- [x] **Design system lock-in** — `--font-mono` token, `.widget-card` / `.widget-grid` classes, compat alias sweep *(v5.0, 2026-05-23)*
+- [x] **shadcn/ui + Tailwind v4 migration** — complete rewrite of all pages and components; 15 shadcn components, oklch color system, lucide-react icons, drill-down Sheet panels, fixed sidebar layout, improved hero card *(v5.2, 2026-05-23)*
 - [x] **`index.html` title** — changed from "Vite + React + TS" to "Zeroed"
 - [ ] **Promo APR expiry date** — wire up the field Plaid already returns (currently hardcoded `null`); expose in Accounts inline edit
 
@@ -547,6 +550,11 @@ These are not needed for test users — only before public launch.
 | Layer | Technology |
 |---|---|
 | Frontend | React 18 + Vite + TypeScript |
+| UI library | shadcn/ui (New York style) — 15 components |
+| Styling | Tailwind CSS v4 (`@tailwindcss/vite`), CSS-first `@theme inline` with oklch color tokens |
+| Icons | lucide-react |
+| Charts | recharts wrapped by shadcn `ChartContainer` |
+| Drag-and-drop | dnd-kit (`@dnd-kit/core`, `@dnd-kit/sortable`) |
 | Auth | Firebase Authentication (email/password + Google) |
 | Database | Firestore (Firebase Admin SDK, server-side) |
 | API | Express.js → Firebase Cloud Functions |
