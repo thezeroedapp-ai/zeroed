@@ -1,16 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  AreaChart, Area, LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, ReferenceLine, CartesianGrid, Cell,
+} from 'recharts';
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor,
   useSensor, useSensors, DragEndEvent, DragOverlay, DragStartEvent,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { GripVertical, X, Plus, Pencil, Check, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig,
+} from '@/components/ui/chart';
+import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DashboardData {
   user?: { name: string };
@@ -48,6 +61,8 @@ interface GoalRow {
 interface NetWorthPoint {
   month: string;
   net_worth: number;
+  total_assets?: number;
+  total_liabilities?: number;
 }
 
 interface SpendingCategory {
@@ -58,9 +73,10 @@ interface SpendingCategory {
 // ─── Widget catalog ───────────────────────────────────────────────────────────
 
 const DEFAULT_WIDGETS = [
-  'debt_projection', 'net_worth_trend', 'spending_by_category',
-  'goals_progress', 'interest_cost', 'savings_rate',
-  'priority_attack', 'ai_insights', 'alerts',
+  'debt_projection', 'spending_by_category',
+  'net_worth_trend', 'priority_attack',
+  'goals_progress', 'ai_insights',
+  'alerts',
 ];
 
 const WIDGET_CATALOG = [
@@ -71,16 +87,28 @@ const WIDGET_CATALOG = [
   { id: 'interest_cost',        label: 'Monthly Interest'     },
   { id: 'savings_rate',         label: 'Monthly Surplus'      },
   { id: 'priority_attack',      label: 'Priority Attack'      },
-  { id: 'ai_insights',          label: 'AI Analysis'          },
+  { id: 'ai_insights',          label: 'AI Insights'          },
   { id: 'alerts',               label: 'Alerts'               },
 ];
+
+// ─── Chart configs ────────────────────────────────────────────────────────────
+
+const debtChartConfig: ChartConfig = {
+  balance: { label: 'Balance', color: 'var(--primary)' },
+};
+const netWorthChartConfig: ChartConfig = {
+  net_worth: { label: 'Net Worth', color: 'var(--violet-light)' },
+};
+const spendingChartConfig: ChartConfig = {
+  total: { label: 'Spent', color: 'var(--primary)' },
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function greeting(name: string) {
   const h = new Date().getHours();
   const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-  return `${g}, ${name}`;
+  return `${g}, ${name.split(' ')[0]}`;
 }
 
 function buildChartData(totalDebt: number, months: number) {
@@ -121,38 +149,28 @@ function SortableWidgetShell({ id, editMode, onRemove, children }: {
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.35 : 1,
+        opacity: isDragging ? 0.3 : 1,
         position: 'relative',
         zIndex: isDragging ? 50 : undefined,
       }}
     >
       {editMode && (
         <>
-          <div
+          <button
             ref={setActivatorNodeRef}
             {...listeners}
             {...attributes}
-            style={{
-              position: 'absolute', top: 10, left: 10, zIndex: 20,
-              cursor: 'grab', color: 'var(--text-2)',
-              background: 'var(--bg-elevated)', borderRadius: 6,
-              width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 14, lineHeight: 1, border: '1px solid var(--border)',
-              touchAction: 'none',
-            }}
+            className="absolute top-2 left-2 z-20 w-7 h-7 flex items-center justify-center rounded-md bg-surface-2 border border-border text-muted-foreground cursor-grab hover:text-foreground touch-none"
             title="Drag to reorder"
-          >⠿</div>
+          >
+            <GripVertical size={14} />
+          </button>
           <button
             onClick={onRemove}
-            style={{
-              position: 'absolute', top: 10, right: 10, zIndex: 20,
-              background: 'var(--red-dim)', border: '1px solid rgba(244,63,94,0.25)',
-              borderRadius: '50%', width: 26, height: 26, cursor: 'pointer',
-              color: 'var(--red)', fontSize: 16, lineHeight: 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-              fontFamily: 'inherit',
-            }}
-          >×</button>
+            className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center rounded-full bg-red-dim border border-red/25 text-red hover:bg-red/20 cursor-pointer"
+          >
+            <X size={13} />
+          </button>
         </>
       )}
       {children}
@@ -163,18 +181,25 @@ function SortableWidgetShell({ id, editMode, onRemove, children }: {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [state, setState] = useState<'loading' | 'error' | 'content'>('loading');
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [goals, setGoals] = useState<GoalRow[]>([]);
+  const [state, setState]                   = useState<'loading' | 'error' | 'content'>('loading');
+  const [data, setData]                     = useState<DashboardData | null>(null);
+  const [goals, setGoals]                   = useState<GoalRow[]>([]);
   const [netWorthHistory, setNetWorthHistory] = useState<NetWorthPoint[]>([]);
-  const [spendingData, setSpendingData] = useState<SpendingCategory[]>([]);
-  const [activeWidgets, setActiveWidgets] = useState<string[]>(DEFAULT_WIDGETS);
-  const [editMode, setEditMode] = useState(false);
-  const [dragActiveId, setDragActiveId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [aiState, setAiState] = useState<'loading' | 'empty' | 'content' | 'limit' | 'error'>('loading');
-  const [insight, setInsight] = useState<InsightData | null>(null);
-  const [aiError, setAiError] = useState('');
+  const [spendingData, setSpendingData]     = useState<SpendingCategory[]>([]);
+  const [activeWidgets, setActiveWidgets]   = useState<string[]>(DEFAULT_WIDGETS);
+  const [editMode, setEditMode]             = useState(false);
+  const [dragActiveId, setDragActiveId]     = useState<string | null>(null);
+  const [error, setError]                   = useState('');
+  const [aiState, setAiState]               = useState<'loading' | 'empty' | 'content' | 'limit' | 'error'>('loading');
+  const [insight, setInsight]               = useState<InsightData | null>(null);
+  const [aiError, setAiError]               = useState('');
+
+  // Drill-down sheet state
+  const [sheet, setSheet] = useState<{
+    open: boolean;
+    type: 'spending' | 'networth' | 'goal' | null;
+    payload?: SpendingCategory | NetWorthPoint | GoalRow;
+  }>({ open: false, type: null });
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -246,13 +271,10 @@ export default function Dashboard() {
     }, 600);
   }
 
-  function handleDragStart(event: DragStartEvent) {
-    setDragActiveId(event.active.id as string);
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
+  function handleDragStart(e: DragStartEvent) { setDragActiveId(e.active.id as string); }
+  function handleDragEnd(e: DragEndEvent) {
     setDragActiveId(null);
-    const { active, over } = event;
+    const { active, over } = e;
     if (over && active.id !== over.id) {
       setActiveWidgets(prev => {
         const next = arrayMove(prev, prev.indexOf(active.id as string), prev.indexOf(over.id as string));
@@ -261,21 +283,13 @@ export default function Dashboard() {
       });
     }
   }
-
   function removeWidget(id: string) {
-    setActiveWidgets(prev => {
-      const next = prev.filter(w => w !== id);
-      persistConfig(next);
-      return next;
-    });
+    setActiveWidgets(prev => { const next = prev.filter(w => w !== id); persistConfig(next); return next; });
   }
-
   function addWidget(id: string) {
     setActiveWidgets(prev => {
       if (prev.includes(id)) return prev;
-      const next = [...prev, id];
-      persistConfig(next);
-      return next;
+      const next = [...prev, id]; persistConfig(next); return next;
     });
   }
 
@@ -293,219 +307,264 @@ export default function Dashboard() {
     switch (id) {
       case 'interest_cost':
         return (
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card-label">Monthly Interest</div>
-            <div className="stat-value red" style={{ marginTop: 8 }}>{fmtD(data.monthlyInterest)}</div>
-            <div className="stat-sub">cost of carrying debt</div>
-          </div>
+          <Card className="h-full bg-card border-border">
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Monthly Interest</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className="text-3xl font-extrabold tabular text-red mt-1">{fmtD(data.monthlyInterest)}</div>
+              <p className="text-xs text-muted-foreground mt-1">cost of carrying debt</p>
+            </CardContent>
+          </Card>
         );
 
       case 'savings_rate':
         return (
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card-label">Monthly Surplus</div>
-            <div className={`stat-value ${data.surplus >= 0 ? 'green' : 'red'}`} style={{ marginTop: 8 }}>{fmt(data.surplus)}</div>
-            <div className="stat-sub">for extra payments</div>
-          </div>
+          <Card className="h-full bg-card border-border">
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Monthly Surplus</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className={cn('text-3xl font-extrabold tabular mt-1', data.surplus >= 0 ? 'text-green' : 'text-red')}>
+                {fmt(data.surplus)}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">available for extra payments</p>
+            </CardContent>
+          </Card>
         );
 
       case 'debt_projection':
         if (chartData.length <= 2) return null;
         return (
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card-label" style={{ marginBottom: 12 }}>Payoff Projection</div>
-            <ResponsiveContainer width="100%" height={112}>
-              <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#7c3aed" stopOpacity={0.28} />
-                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} interval={Math.max(1, Math.floor(chartData.length / 5))} />
-                <Tooltip
-                  contentStyle={{ background: '#0d1424', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, color: '#e2e8f0' }}
-                  formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Balance']}
-                  labelStyle={{ color: '#64748b', marginBottom: 4, fontSize: 11 }}
-                  cursor={{ stroke: 'rgba(167,139,250,0.2)', strokeWidth: 1 }}
-                />
-                <Area type="monotone" dataKey="balance" stroke="#7c3aed" strokeWidth={2} fill="url(#debtGrad)" dot={false} activeDot={{ r: 4, fill: '#a78bfa', strokeWidth: 0 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <Card className="h-full bg-card border-border">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Payoff Projection</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 pb-3">
+              <ChartContainer config={debtChartConfig} className="h-[150px] w-full">
+                <AreaChart data={chartData} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
+                  <defs>
+                    <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={Math.max(1, Math.floor(chartData.length / 5))} />
+                  <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Balance']} />} />
+                  <Area type="monotone" dataKey="balance" stroke="var(--primary)" strokeWidth={2} fill="url(#debtGrad)" dot={false} activeDot={{ r: 4, fill: 'var(--violet-light)', strokeWidth: 0 }} />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
         );
 
       case 'priority_attack':
         return (
-          <div className="card focus-card" style={{ height: '100%' }}>
-            <div className="focus-label">⚡ Priority Attack</div>
-            {data.priorityCard ? (
-              <>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>{data.priorityCard.name}</div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--red)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{fmtD(data.priorityCard.balance_current)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6 }}>
-                  {data.priorityCard.apr}% APR
-                  {data.priorityCard.payment_due_date && (
-                    <> · Due {new Date(data.priorityCard.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
-                  )}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--accent-2)', marginTop: 8, lineHeight: 1.5 }}>Highest APR — extra dollars here save the most.</div>
-              </>
-            ) : (
-              <div style={{ fontSize: 13, color: 'var(--text-2)' }}>No debt cards found.</div>
-            )}
-          </div>
+          <Card className="h-full border-[var(--primary)]/30 bg-violet-dim/5">
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-violet-light flex items-center gap-1.5">
+                ⚡ Priority Attack
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              {data.priorityCard ? (
+                <>
+                  <div className="text-sm font-bold text-foreground mb-1">{data.priorityCard.name}</div>
+                  <div className="text-2xl font-extrabold tabular text-red leading-none">{fmtD(data.priorityCard.balance_current)}</div>
+                  <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{data.priorityCard.apr}% APR</Badge>
+                    {data.priorityCard.payment_due_date && (
+                      <span>Due {new Date(data.priorityCard.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-violet-light mt-3 leading-relaxed">Extra dollars here save the most interest.</p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">No debt cards found.</p>
+              )}
+            </CardContent>
+          </Card>
         );
 
       case 'alerts':
         if (!data.alerts || data.alerts.length === 0) return null;
         return (
-          <div style={{ height: '100%' }}>
-            {data.alerts.map((a, i) => (
-              <div key={i} className="warning">
-                <div className="warn-icon">{a.severity === 'danger' ? '🔴' : '⚠️'}</div>
-                <div>
-                  <div className="warn-title">{a.title}</div>
-                  <div className="warn-desc">{a.description}</div>
+          <Card className="h-full bg-card border-border">
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Alerts</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2">
+              {data.alerts.map((a, i) => (
+                <div key={i} className="flex gap-3 p-3 rounded-lg bg-amber-dim border border-amber/20">
+                  <span className="text-base shrink-0 mt-0.5">{a.severity === 'danger' ? '🔴' : '⚠️'}</span>
+                  <div>
+                    <div className="text-sm font-semibold text-amber">{a.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{a.description}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </CardContent>
+          </Card>
         );
 
       case 'net_worth_trend': {
         if (netWorthHistory.length < 2) return null;
         const latest = netWorthHistory[netWorthHistory.length - 1];
         const delta  = latest.net_worth - netWorthHistory[0].net_worth;
+        const DeltaIcon = delta >= 0 ? TrendingUp : TrendingDown;
         return (
-          <div className="card" style={{ height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <div>
-                <div className="card-label">Net Worth</div>
-                <div style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: latest.net_worth >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 4 }}>
-                  {latest.net_worth < 0 ? '-' : ''}{fmt(Math.abs(latest.net_worth))}
-                </div>
+          <Card className="h-full bg-card border-border cursor-pointer group" onClick={() => setSheet({ open: true, type: 'networth', payload: latest })}>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Net Worth</CardTitle>
+                <ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-2)' }}>{netWorthHistory.length}mo change</div>
-                <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: delta >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 2 }}>
+              <div className="flex items-end gap-3 mt-1">
+                <span className={cn('text-xl font-extrabold tabular', latest.net_worth >= 0 ? 'text-green' : 'text-red')}>
+                  {latest.net_worth < 0 ? '−' : ''}{fmt(Math.abs(latest.net_worth))}
+                </span>
+                <span className={cn('text-xs font-semibold flex items-center gap-0.5 mb-0.5', delta >= 0 ? 'text-green' : 'text-red')}>
+                  <DeltaIcon size={11} />
                   {delta >= 0 ? '+' : ''}{fmt(delta)}
-                </div>
+                </span>
               </div>
-            </div>
-            <ResponsiveContainer width="100%" height={96}>
-              <LineChart data={netWorthHistory} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 5))} />
-                <YAxis hide domain={['auto', 'auto']} />
-                <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
-                <Tooltip
-                  contentStyle={{ background: '#0d1424', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, color: '#e2e8f0' }}
-                  formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']}
-                  labelStyle={{ color: '#64748b', marginBottom: 4, fontSize: 11 }}
-                  cursor={{ stroke: 'rgba(167,139,250,0.2)', strokeWidth: 1 }}
-                />
-                <Line type="monotone" dataKey="net_worth" stroke="#a78bfa" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#a78bfa', strokeWidth: 0 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+            </CardHeader>
+            <CardContent className="px-2 pb-3">
+              <ChartContainer config={netWorthChartConfig} className="h-[120px] w-full">
+                <LineChart data={netWorthHistory} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 5))} />
+                  <YAxis hide domain={['auto', 'auto']} />
+                  <ReferenceLine y={0} stroke="oklch(1 0 0 / 10%)" strokeDasharray="3 3" />
+                  <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']} />} />
+                  <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: 'var(--violet-light)', strokeWidth: 0 }} />
+                </LineChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
         );
       }
 
       case 'spending_by_category': {
         if (!spendingData.length) return null;
         const top5 = spendingData.slice(0, 5);
-        const maxTotal = top5[0].total;
+        const COLORS = ['var(--primary)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
         return (
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card-label" style={{ marginBottom: 10 }}>Spending by Category</div>
-            {top5.map(c => (
-              <div key={c.category} style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
-                  <span style={{ color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{c.category}</span>
-                  <span style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{fmtD(c.total)}</span>
-                </div>
-                <div className="progress-bar">
-                  <div className="progress-fill blue" style={{ width: `${(c.total / maxTotal) * 100}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
+          <Card className="h-full bg-card border-border">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Spending by Category</CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 pb-3">
+              <ChartContainer config={spendingChartConfig} className="h-[160px] w-full">
+                <BarChart
+                  data={top5}
+                  layout="vertical"
+                  margin={{ top: 0, right: 8, bottom: 0, left: -4 }}
+                  barSize={10}
+                  onClick={(d: any) => { if (d?.activePayload?.[0]) setSheet({ open: true, type: 'spending', payload: d.activePayload[0].payload as SpendingCategory }); }}
+                >
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="category"
+                    tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} width={76}
+                    tickFormatter={(v: string) => v.replace(/_/g, ' ').replace(/AND /g, '& ').slice(0, 14)}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Spent']} />} />
+                  <Bar dataKey="total" radius={[0, 4, 4, 0]} cursor="pointer">
+                    {top5.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
         );
       }
 
       case 'goals_progress':
         if (!goals.length) return null;
         return (
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card-label">Goals</div>
-            {goals.slice(0, 3).map(g => {
-              const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
-              return (
-                <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{label}</div>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: g.onTrack ? 'var(--green-dim)' : 'var(--amber-dim)', color: g.onTrack ? 'var(--green)' : 'var(--amber)', flexShrink: 0 }}>
-                    {g.onTrack ? 'On track' : g.requiredExtra ? `+${fmt(g.requiredExtra)}/mo` : 'Off track'}
-                  </span>
-                </div>
-              );
-            })}
-            <Link to="/plan?tab=goals" style={{ display: 'block', textAlign: 'center', marginTop: 10, fontSize: 13, color: 'var(--accent-2)', textDecoration: 'none', fontWeight: 600 }}>
-              View All →
-            </Link>
-          </div>
+          <Card className="h-full bg-card border-border">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Goals</CardTitle>
+                <Link to="/plan?tab=goals" className="text-xs text-violet-light font-semibold no-underline flex items-center gap-0.5 hover:opacity-80">
+                  All <ArrowRight size={11} />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              {goals.slice(0, 3).map(g => {
+                const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => setSheet({ open: true, type: 'goal', payload: g })}
+                    className="w-full flex items-center justify-between gap-2 cursor-pointer text-left hover:opacity-80 transition-opacity"
+                  >
+                    <span className="text-sm font-medium text-foreground truncate flex-1">{label}</span>
+                    <Badge className={cn('text-[10px] shrink-0', g.onTrack ? 'bg-green-dim text-green border-green/20' : 'bg-amber-dim text-amber border-amber/20')} variant="outline">
+                      {g.onTrack ? 'On track' : g.requiredExtra ? `+${fmt(g.requiredExtra)}/mo` : 'Off track'}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </CardContent>
+          </Card>
         );
 
       case 'ai_insights':
         return (
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card-label">AI Analysis</div>
-            {aiState === 'loading' && (
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div className="spinner" style={{ margin: '0 auto 10px' }} />
-                <div style={{ fontSize: 13, color: 'var(--text-2)' }}>Analyzing…</div>
-              </div>
-            )}
-            {aiState === 'empty' && (
-              <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>🧠</div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Get AI insights</div>
-                <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 14, lineHeight: 1.6 }}>3 actions to get debt-free faster.</div>
-                <button className="btn btn-primary btn-block" onClick={generateInsight}>Generate</button>
-              </div>
-            )}
-            {aiState === 'content' && insight?.insight && (
-              <>
-                <div style={{ flex: 1, overflow: 'hidden' }}>
-                  {insight.insight.insight.split('\n').filter(l => l.trim()).slice(0, 3).map((line, i) => {
-                    const m = line.trim().match(/^(\d+)\.\s*(.*)/s);
-                    if (m) return (
-                      <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                        <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid var(--accent-border)', color: 'var(--accent-2)', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{m[1]}</div>
-                        <div style={{ fontSize: 12, lineHeight: 1.5, paddingTop: 2, color: 'var(--text)' }}>{m[2]}</div>
-                      </div>
-                    );
-                    return <div key={i} style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 6 }}>{line}</div>;
-                  })}
+          <Card className="h-full bg-card border-border">
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Insights</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              {aiState === 'loading' && (
+                <div className="flex flex-col items-center py-4 gap-2">
+                  <div className="spinner" />
+                  <p className="text-xs text-muted-foreground">Analyzing…</p>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{insight.isPro ? 'Unlimited' : `${insight.used}/${insight.limit}`}</div>
-                  {(insight.isPro || (insight.remaining ?? 0) > 0) && (
-                    <button className="btn btn-ghost btn-sm" onClick={generateInsight}>Refresh</button>
-                  )}
+              )}
+              {aiState === 'empty' && (
+                <div className="flex flex-col items-center text-center py-3 gap-2">
+                  <span className="text-3xl">🧠</span>
+                  <p className="text-sm font-semibold">Get AI insights</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">3 actions to get debt-free faster.</p>
+                  <Button size="sm" className="w-full mt-1 bg-primary hover:bg-primary/90" onClick={generateInsight}>Generate</Button>
                 </div>
-              </>
-            )}
-            {aiState === 'limit' && (
-              <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                <div style={{ fontSize: 26, marginBottom: 8 }}>🔒</div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Limit reached</div>
-                <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>10 free uses/month. Resets on the 1st.</div>
-              </div>
-            )}
-            {aiState === 'error' && (
-              <div style={{ fontSize: 13, color: 'var(--red)', textAlign: 'center', padding: '12px 0' }}>{aiError}</div>
-            )}
-          </div>
+              )}
+              {aiState === 'content' && insight?.insight && (
+                <>
+                  <div className="space-y-2 flex-1">
+                    {insight.insight.insight.split('\n').filter(l => l.trim()).slice(0, 3).map((line, i) => {
+                      const m = line.trim().match(/^(\d+)\.\s*(.*)/s);
+                      if (m) return (
+                        <div key={i} className="flex gap-2">
+                          <div className="shrink-0 w-5 h-5 rounded-full bg-violet-dim border border-[var(--primary)]/30 text-violet-light text-[10px] font-bold flex items-center justify-center mt-0.5">{m[1]}</div>
+                          <p className="text-xs leading-relaxed text-foreground pt-0.5">{m[2]}</p>
+                        </div>
+                      );
+                      return <p key={i} className="text-xs text-muted-foreground leading-relaxed">{line}</p>;
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between pt-3 mt-2 border-t border-border">
+                    <span className="text-[11px] text-muted-foreground">{insight.isPro ? 'Unlimited' : `${insight.used}/${insight.limit}`}</span>
+                    {(insight.isPro || (insight.remaining ?? 0) > 0) && (
+                      <Button variant="outline" size="sm" onClick={generateInsight} className="text-xs h-7 border-border text-muted-foreground hover:text-foreground">Refresh</Button>
+                    )}
+                  </div>
+                </>
+              )}
+              {aiState === 'limit' && (
+                <div className="flex flex-col items-center text-center py-3 gap-2">
+                  <span className="text-2xl">🔒</span>
+                  <p className="text-sm font-semibold">Limit reached</p>
+                  <p className="text-xs text-muted-foreground">10 free uses/month. Resets on the 1st.</p>
+                </div>
+              )}
+              {aiState === 'error' && (
+                <p className="text-xs text-red text-center py-3">{aiError}</p>
+              )}
+            </CardContent>
+          </Card>
         );
 
       default:
@@ -513,104 +572,232 @@ export default function Dashboard() {
     }
   }
 
+  // ── Drill-down sheet content ──────────────────────────────────────────────────
+
+  function SheetBody() {
+    if (!sheet.open || !sheet.type) return null;
+
+    if (sheet.type === 'spending' && sheet.payload) {
+      const cat = sheet.payload as SpendingCategory;
+      return (
+        <>
+          <SheetHeader>
+            <SheetTitle className="text-foreground">{cat.category}</SheetTitle>
+            <p className="text-2xl font-extrabold tabular text-foreground">{fmtD(cat.total)}<span className="text-sm font-normal text-muted-foreground ml-2">last 30 days</span></p>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              See the full transaction list in <Link to="/spending" onClick={() => setSheet({ open: false, type: null })} className="text-violet-light no-underline font-semibold hover:opacity-80">Spending → Transactions</Link>
+            </p>
+            {spendingData.length > 0 && (
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">All Categories</p>
+                <div className="space-y-2">
+                  {spendingData.map((c, i) => {
+                    const pct = Math.round((c.total / spendingData[0].total) * 100);
+                    return (
+                      <div key={i} className={cn('p-3 rounded-lg border cursor-pointer transition-colors', c.category === cat.category ? 'border-[var(--primary)]/50 bg-violet-dim/20' : 'border-border bg-surface-2 hover:border-border/60')}>
+                        <div className="flex justify-between text-sm mb-1.5">
+                          <span className="font-medium text-foreground">{c.category}</span>
+                          <span className="tabular text-muted-foreground">{fmtD(c.total)}</span>
+                        </div>
+                        <Progress value={pct} className="h-1.5" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      );
+    }
+
+    if (sheet.type === 'networth') {
+      const latest = netWorthHistory[netWorthHistory.length - 1];
+      return (
+        <>
+          <SheetHeader>
+            <SheetTitle className="text-foreground">Net Worth Breakdown</SheetTitle>
+            <p className={cn('text-2xl font-extrabold tabular', latest.net_worth >= 0 ? 'text-green' : 'text-red')}>
+              {latest.net_worth < 0 ? '−' : ''}{fmt(Math.abs(latest.net_worth))}
+            </p>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            {data && (
+              <>
+                <div className="p-4 rounded-xl bg-green-dim border border-green/20">
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Assets</p>
+                  <p className="text-xl font-extrabold tabular text-green">{fmt(data.totalAssets ?? 0)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Checking, savings, investments, 401k</p>
+                </div>
+                <div className="p-4 rounded-xl bg-red-dim border border-red/20">
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Liabilities</p>
+                  <p className="text-xl font-extrabold tabular text-red">{fmt(data.totalLiabilities ?? 0)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Credit cards, mortgages, auto loans</p>
+                </div>
+              </>
+            )}
+            <div className="mt-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">6-Month Trend</p>
+              <ChartContainer config={netWorthChartConfig} className="h-[160px] w-full">
+                <LineChart data={netWorthHistory} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 6%)" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <ReferenceLine y={0} stroke="oklch(1 0 0 / 15%)" strokeDasharray="3 3" />
+                  <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']} />} />
+                  <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--violet-light)', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ChartContainer>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    if (sheet.type === 'goal' && sheet.payload) {
+      const g = sheet.payload as GoalRow;
+      const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
+      return (
+        <>
+          <SheetHeader>
+            <SheetTitle className="text-foreground">{label}</SheetTitle>
+            <Badge className={cn('w-fit text-xs', g.onTrack ? 'bg-green-dim text-green border-green/20' : 'bg-amber-dim text-amber border-amber/20')} variant="outline">
+              {g.onTrack ? '✓ On track' : 'Off track'}
+            </Badge>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            {!g.onTrack && g.requiredExtra && (
+              <div className="p-4 rounded-xl bg-amber-dim border border-amber/20">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">To get on track</p>
+                <p className="text-xl font-extrabold tabular text-amber">+{fmt(g.requiredExtra)}/mo</p>
+                <p className="text-xs text-muted-foreground mt-1">extra payment needed</p>
+              </div>
+            )}
+            <Button variant="outline" size="sm" asChild className="w-full border-border text-muted-foreground hover:text-foreground">
+              <Link to="/plan?tab=goals" onClick={() => setSheet({ open: false, type: null })}>
+                Manage Goals <ArrowRight size={13} className="ml-1" />
+              </Link>
+            </Button>
+          </div>
+        </>
+      );
+    }
+    return null;
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="page">
-      <div className="top-bar">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div className="min-h-dvh bg-background">
+      {/* Top bar */}
+      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+        <div className="max-w-5xl mx-auto flex items-start justify-between">
           <div>
-            <h1>{data ? greeting(data.user?.name || 'there') : 'Welcome back'}</h1>
-            <div className="sub">{dateStr}</div>
+            <h1 className="text-[17px] font-bold text-foreground">
+              {data ? greeting(data.user?.name || 'there') : 'Welcome back'}
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">{dateStr}</p>
           </div>
           {state === 'content' && (
-            <button
-              className={`btn btn-sm ${editMode ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ marginTop: 2 }}
+            <Button
+              size="sm"
+              variant={editMode ? 'default' : 'outline'}
+              className={cn('mt-0.5', editMode ? 'bg-primary hover:bg-primary/90 text-white' : 'border-border text-muted-foreground hover:text-foreground')}
               onClick={() => setEditMode(e => !e)}
             >
-              {editMode ? 'Done' : 'Edit'}
-            </button>
+              {editMode ? <><Check size={13} className="mr-1" />Done</> : <><Pencil size={13} className="mr-1" />Edit</>}
+            </Button>
           )}
         </div>
       </div>
 
-      <div className="content">
+      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-5xl mx-auto">
+        {/* Loading */}
         {state === 'loading' && (
-          <div className="loading-state"><div className="spinner" /><p>Loading your dashboard…</p></div>
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <div className="spinner" />
+            <p className="text-sm text-muted-foreground">Loading your dashboard…</p>
+          </div>
         )}
+
+        {/* Error */}
         {state === 'error' && (
-          <div className="error-state">
-            <div className="error-icon">⚠</div>
-            <p>Could not load dashboard</p>
-            <small>{error}</small>
-            <button className="btn btn-primary" onClick={load}>Try Again</button>
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+            <span className="text-4xl">⚠️</span>
+            <p className="text-base font-semibold">Could not load dashboard</p>
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <Button onClick={load} className="bg-primary hover:bg-primary/90">Try Again</Button>
           </div>
         )}
 
         {state === 'content' && data && (
           <>
-            {/* Hero — always shown, not draggable */}
-            <div className="card" style={{ marginBottom: 10 }}>
-              <div className="card-label">Total Debt</div>
-              <div className="hero-value" style={{ color: 'var(--red)' }}>{fmt(data.totalDebt)}</div>
-              <div className="progress-wrap">
-                <div className="progress-bar">
-                  <div className="progress-fill red" style={{ width: '100%' }} />
-                </div>
-              </div>
-              <div className="hero-meta">
-                <span>
-                  {data.accountCount} card{data.accountCount !== 1 ? 's' : ''} ·{' '}
-                  {fmtD(data.totalMinimums)}/mo mins ·{' '}
-                  <span style={{ color: data.surplus >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
-                    {data.surplus >= 0 ? '+' : ''}{fmt(data.surplus)} surplus
-                  </span>
-                </span>
-                {data.debtFreeDate && <span className="hero-date">{data.debtFreeDate}</span>}
-              </div>
-              {data.netWorth != null && (
-                <div style={{ display: 'flex', gap: 16, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 2 }}>Total Assets</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{fmt(data.totalAssets ?? 0)}</div>
+            {/* ── Hero card ── */}
+            <Card className="mb-4 bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-border overflow-hidden">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Debt</p>
+                    <div className="text-[40px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
+                    {data.debtFreeDate && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Debt-free by <span className="font-bold text-violet-light">{data.debtFreeDate}</span>
+                      </p>
+                    )}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 2 }}>Net Worth</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: data.netWorth >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                      {data.netWorth < 0 ? '-' : ''}{fmt(Math.abs(data.netWorth))}
-                    </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Monthly Interest</p>
+                    <div className="text-xl font-extrabold tabular text-red leading-none">{fmtD(data.monthlyInterest)}</div>
+                    <p className="text-xs text-muted-foreground mt-1">cost of debt</p>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* Draggable widget grid */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
+                <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Minimums</p>
+                    <p className="text-sm font-bold tabular text-foreground">{fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Surplus</p>
+                    <p className={cn('text-sm font-bold tabular', data.surplus >= 0 ? 'text-green' : 'text-red')}>
+                      {data.surplus >= 0 ? '+' : ''}{fmt(data.surplus)}
+                    </p>
+                  </div>
+                  {data.netWorth != null ? (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Net Worth</p>
+                      <p className={cn('text-sm font-bold tabular', data.netWorth >= 0 ? 'text-green' : 'text-red')}>
+                        {data.netWorth < 0 ? '−' : ''}{fmt(Math.abs(data.netWorth))}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Cards</p>
+                      <p className="text-sm font-bold tabular text-foreground">{data.accountCount}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Drag-and-drop widget grid ── */}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
               <SortableContext items={activeWidgets} strategy={rectSortingStrategy}>
                 <div className="widget-grid">
                   {activeWidgets.map(id => {
                     const content = renderWidgetContent(id);
                     if (!content && !editMode) return null;
                     return (
-                      <SortableWidgetShell
-                        key={id}
-                        id={id}
-                        editMode={editMode}
-                        onRemove={() => removeWidget(id)}
-                      >
+                      <SortableWidgetShell key={id} id={id} editMode={editMode} onRemove={() => removeWidget(id)}>
                         {content ?? (
-                          <div className="card" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'center' }}>
-                              {WIDGET_CATALOG.find(w => w.id === id)?.label}<br />
-                              <span style={{ fontSize: 11 }}>No data yet</span>
+                          <Card className="h-full min-h-[160px] flex items-center justify-center bg-card border-border border-dashed">
+                            <div className="text-center">
+                              <p className="text-sm font-medium text-muted-foreground">{WIDGET_CATALOG.find(w => w.id === id)?.label}</p>
+                              <p className="text-xs text-muted-foreground/60 mt-1">No data yet</p>
                             </div>
-                          </div>
+                          </Card>
                         )}
                       </SortableWidgetShell>
                     );
@@ -620,26 +807,28 @@ export default function Dashboard() {
 
               <DragOverlay>
                 {dragActiveId ? (
-                  <div style={{ opacity: 0.85, transform: 'scale(1.02)', filter: 'drop-shadow(0 8px 24px rgba(124,58,237,0.35))' }}>
+                  <div className="opacity-90 scale-[1.02] drop-shadow-[0_8px_24px_rgba(124,58,237,0.4)]">
                     {renderWidgetContent(dragActiveId) ?? (
-                      <div className="card">
-                        <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{WIDGET_CATALOG.find(w => w.id === dragActiveId)?.label}</div>
-                      </div>
+                      <Card className="bg-card border-border">
+                        <CardContent className="p-4">
+                          <p className="text-sm text-muted-foreground">{WIDGET_CATALOG.find(w => w.id === dragActiveId)?.label}</p>
+                        </CardContent>
+                      </Card>
                     )}
                   </div>
                 ) : null}
               </DragOverlay>
             </DndContext>
 
-            {/* Add widgets row (edit mode only) */}
+            {/* ── Add widgets panel (edit mode only) ── */}
             {editMode && hiddenWidgets.length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                <div className="section-title">Add Widgets</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Add Widgets</p>
+                <div className="flex flex-wrap gap-2">
                   {hiddenWidgets.map(w => (
-                    <button key={w.id} className="btn btn-outline btn-sm" onClick={() => addWidget(w.id)}>
-                      + {w.label}
-                    </button>
+                    <Button key={w.id} variant="outline" size="sm" onClick={() => addWidget(w.id)} className="border-border text-muted-foreground hover:text-foreground hover:border-[var(--primary)]/50 text-xs">
+                      <Plus size={12} className="mr-1" />{w.label}
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -647,6 +836,13 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* ── Drill-down Sheet ── */}
+      <Sheet open={sheet.open} onOpenChange={(open) => setSheet(s => ({ ...s, open }))}>
+        <SheetContent className="bg-card border-l border-border text-foreground overflow-y-auto">
+          <SheetBody />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

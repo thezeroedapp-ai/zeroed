@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { apiFetch, fmtD } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
 const SINKING_CATEGORIES = ['car', 'home', 'medical', 'travel', 'education', 'holiday', 'tax', 'other'];
 
@@ -12,15 +18,15 @@ interface PlaidItem { item_id: string; institution_name: string; last_synced?: s
 export default function Settings() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
-  const [income, setIncome] = useState('');
+  const [income, setIncome]           = useState('');
   const [incomeLoading, setIncomeLoading] = useState(false);
-  const [sinkingFunds, setSinkingFunds] = useState<SinkingFund[]>([]);
-  const [plaidItems, setPlaidItems] = useState<PlaidItem[]>([]);
-  const [sfForm, setSfForm] = useState({ category: 'car', amount: '', label: '' });
+  const [incomeSaved, setIncomeSaved] = useState(false);
+  const [sinkingFunds, setSinkingFunds]   = useState<SinkingFund[]>([]);
+  const [plaidItems, setPlaidItems]       = useState<PlaidItem[]>([]);
+  const [sfForm, setSfForm]   = useState({ category: 'car', amount: '', label: '' });
   const [sfSaving, setSfSaving] = useState(false);
-  const [appVersion] = useState('4.4');
   const [plaidLoading, setPlaidLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing]           = useState(false);
 
   function loadPlaidScript(): Promise<void> {
     return new Promise(resolve => {
@@ -50,9 +56,7 @@ export default function Settings() {
         },
         onExit: () => {},
       }).open();
-    } finally {
-      setPlaidLoading(false);
-    }
+    } finally { setPlaidLoading(false); }
   }
 
   async function reconnectItem(itemId: string) {
@@ -60,21 +64,15 @@ export default function Settings() {
     try {
       await loadPlaidScript();
       const r = await apiFetch('/api/plaid/create-link-token/update', {
-        method: 'POST',
-        body: JSON.stringify({ item_id: itemId }),
+        method: 'POST', body: JSON.stringify({ item_id: itemId }),
       });
       const { link_token } = await r.json();
       (window as any).Plaid.create({
         token: link_token,
-        onSuccess: async () => {
-          await apiFetch('/api/plaid/sync', { method: 'POST' });
-          loadSettings();
-        },
+        onSuccess: async () => { await apiFetch('/api/plaid/sync', { method: 'POST' }); loadSettings(); },
         onExit: () => {},
       }).open();
-    } finally {
-      setPlaidLoading(false);
-    }
+    } finally { setPlaidLoading(false); }
   }
 
   async function disconnectItem(itemId: string) {
@@ -85,12 +83,8 @@ export default function Settings() {
 
   async function syncNow() {
     setSyncing(true);
-    try {
-      await apiFetch('/api/plaid/sync', { method: 'POST' });
-      loadSettings();
-    } finally {
-      setSyncing(false);
-    }
+    try { await apiFetch('/api/plaid/sync', { method: 'POST' }); loadSettings(); }
+    finally { setSyncing(false); }
   }
 
   async function loadSettings() {
@@ -115,6 +109,8 @@ export default function Settings() {
         method: 'PUT',
         body: JSON.stringify({ monthly_income: parseFloat(income) }),
       });
+      setIncomeSaved(true);
+      setTimeout(() => setIncomeSaved(false), 2000);
     } finally { setIncomeLoading(false); }
   }
 
@@ -142,137 +138,183 @@ export default function Settings() {
     navigate('/login');
   }
 
+  const totalSinking = sinkingFunds.reduce((s, f) => s + f.monthly_amount, 0);
+
   return (
-    <div className="page">
-      <div className="top-bar">
-        <h1>Settings</h1>
-        <div className="sub">App version {appVersion}</div>
+    <div className="min-h-dvh bg-background">
+      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-[17px] font-bold text-foreground">Settings</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Preferences, banks, and account</p>
+        </div>
       </div>
 
-      <div className="content">
+      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-3xl mx-auto space-y-6">
 
         {/* Monthly Income */}
-        <div className="section-title">Monthly Income</div>
-        <div className="card">
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input
-              style={{ flex: 1, padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 15, fontFamily: 'inherit' }}
-              type="number" min="0" step="100" placeholder="$ after tax"
-              value={income} onChange={e => setIncome(e.target.value)}
-            />
-            <button className="btn btn-primary btn-sm" onClick={saveIncome} disabled={incomeLoading}>
-              {incomeLoading ? '…' : 'Save'}
-            </button>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-sm)', marginTop: 8 }}>
-            Monthly take-home pay. Used to calculate surplus for your payoff plan.
-          </div>
-        </div>
+        <section>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Monthly Income</p>
+          <Card className="bg-card border-border">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Take-home pay (after tax)</Label>
+                  <Input
+                    type="number" min="0" step="100" placeholder="e.g. 5000"
+                    value={income} onChange={e => setIncome(e.target.value)}
+                    className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50"
+                  />
+                </div>
+                <Button onClick={saveIncome} disabled={incomeLoading || !income}
+                  className={cn('shrink-0 bg-primary hover:bg-primary/90', incomeSaved && 'bg-green hover:bg-green/90')}>
+                  {incomeLoading ? '…' : incomeSaved ? '✓ Saved' : 'Save'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Used to calculate monthly surplus for your payoff plan.</p>
+            </CardContent>
+          </Card>
+        </section>
 
         {/* Sinking Funds */}
-        <div className="section-title">Sinking Funds</div>
-        <div style={{ fontSize: 12, color: 'var(--text-sm)', marginBottom: 10, lineHeight: 1.5 }}>
-          Reserve amounts for known future expenses so they don't derail your payoff plan.
-        </div>
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Sinking Funds</p>
+            {totalSinking > 0 && (
+              <span className="text-xs text-muted-foreground">{fmtD(totalSinking)}/mo reserved</span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+            Reserve amounts for known future expenses so they don't derail your payoff plan.
+          </p>
 
-        {sinkingFunds.length > 0 && (
-          <div className="card" style={{ marginBottom: 10, padding: '0 var(--pad)' }}>
-            {sinkingFunds.map(f => (
-              <div key={f.id} className="toggle-row">
-                <div>
-                  <div className="toggle-label">{f.label || f.category.charAt(0).toUpperCase() + f.category.slice(1)}</div>
-                  <div className="toggle-sub">{fmtD(f.monthly_amount)}/mo</div>
-                </div>
-                <button className="btn btn-danger" onClick={() => deleteFund(f.id)}>Delete</button>
+          {sinkingFunds.length > 0 && (
+            <Card className="bg-card border-border mb-3">
+              <CardContent className="p-0">
+                {sinkingFunds.map((f, i) => (
+                  <div key={f.id} className={cn(
+                    'flex items-center justify-between px-4 py-3',
+                    i < sinkingFunds.length - 1 && 'border-b border-border',
+                  )}>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground capitalize">
+                        {f.label || f.category.charAt(0).toUpperCase() + f.category.slice(1)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{fmtD(f.monthly_amount)}/mo</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => deleteFund(f.id)}
+                      className="h-7 text-xs border-red/30 text-red hover:bg-red/10">Delete</Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="bg-card border-border">
+            <CardHeader className="pt-4 pb-2 px-4">
+              <CardTitle className="text-sm font-semibold">{sinkingFunds.length === 0 ? 'Add Your First Fund' : 'Add Fund'}</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Category</Label>
+                <Select value={sfForm.category} onValueChange={v => setSfForm(p => ({ ...p, category: v }))}>
+                  <SelectTrigger className="bg-input border-border text-foreground"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border text-foreground">
+                    {SINKING_CATEGORIES.map(c => (
+                      <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ))}
-          </div>
-        )}
-
-        <div className="card">
-          <div className="form-group">
-            <label>Category</label>
-            <select value={sfForm.category} onChange={e => setSfForm(p => ({ ...p, category: e.target.value }))}>
-              {SINKING_CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Label (optional)</label>
-            <input type="text" placeholder="e.g. Car registration" value={sfForm.label}
-              onChange={e => setSfForm(p => ({ ...p, label: e.target.value }))} />
-          </div>
-          <div className="form-group">
-            <label>Monthly Amount ($)</label>
-            <input type="number" min="1" step="1" placeholder="0"
-              value={sfForm.amount} onChange={e => setSfForm(p => ({ ...p, amount: e.target.value }))} />
-          </div>
-          <button className="btn btn-primary btn-block" onClick={addFund} disabled={sfSaving || !sfForm.amount}>
-            {sfSaving ? '…' : 'Add Sinking Fund'}
-          </button>
-        </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Label (optional)</Label>
+                <Input placeholder="e.g. Car registration" value={sfForm.label}
+                  onChange={e => setSfForm(p => ({ ...p, label: e.target.value }))}
+                  className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Monthly Amount ($)</Label>
+                <Input type="number" min="1" step="1" placeholder="0" value={sfForm.amount}
+                  onChange={e => setSfForm(p => ({ ...p, amount: e.target.value }))}
+                  className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+              </div>
+              <Button onClick={addFund} disabled={sfSaving || !sfForm.amount} className="w-full bg-primary hover:bg-primary/90">
+                {sfSaving ? '…' : 'Add Sinking Fund'}
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
 
         {/* Connected Banks */}
-        <div className="section-title">Connected Banks</div>
+        <section>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Connected Banks</p>
 
-        {plaidItems.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--text-sm)', fontSize: 14, marginBottom: 10 }}>
-            No banks connected yet.
-          </div>
-        ) : (
-          plaidItems.map(item => (
-            <div key={item.item_id} className="card" style={{ marginBottom: 10 }}>
-              {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
-                <div style={{
-                  background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
-                  borderRadius: 8, padding: '8px 12px', marginBottom: 10,
-                  fontSize: 13, color: '#f87171',
-                }}>
-                  Bank connection expired — please reconnect to resume syncing.
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 15 }}>{item.institution_name}</div>
-                  {item.last_synced && (
-                    <div style={{ fontSize: 12, color: 'var(--text-sm)', marginTop: 2 }}>
-                      Synced {new Date(item.last_synced).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {plaidItems.length === 0 ? (
+            <Card className="bg-card border-border mb-3">
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">No banks connected yet.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2 mb-3">
+              {plaidItems.map(item => (
+                <Card key={item.item_id} className="bg-card border-border">
+                  <CardContent className="p-4">
+                    {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
+                      <div className="flex items-center gap-2 bg-red/10 border border-red/25 rounded-lg px-3 py-2 mb-3">
+                        <span className="text-sm">⚠️</span>
+                        <p className="text-xs text-red">Bank connection expired — please reconnect to resume syncing.</p>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{item.institution_name}</p>
+                        {item.last_synced && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Synced {new Date(item.last_synced).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
+                          <Button size="sm" onClick={() => reconnectItem(item.item_id)} disabled={plaidLoading}
+                            className="h-8 bg-primary hover:bg-primary/90">Reconnect</Button>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => disconnectItem(item.item_id)}
+                          className="h-8 border-red/30 text-red hover:bg-red/10">Disconnect</Button>
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {item.error_status === 'ITEM_LOGIN_REQUIRED' ? (
-                    <button className="btn btn-primary btn-sm" onClick={() => reconnectItem(item.item_id)} disabled={plaidLoading}>
-                      Reconnect
-                    </button>
-                  ) : null}
-                  <button className="btn btn-danger btn-sm" onClick={() => disconnectItem(item.item_id)}>
-                    Disconnect
-                  </button>
-                </div>
-              </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          ))
-        )}
-
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary btn-block" onClick={connectBank} disabled={plaidLoading} style={{ flex: 1 }}>
-            {plaidLoading ? '…' : '+ Connect Bank'}
-          </button>
-          {plaidItems.length > 0 && (
-            <button className="btn btn-sm" onClick={syncNow} disabled={syncing} style={{ whiteSpace: 'nowrap' }}>
-              {syncing ? 'Syncing…' : 'Sync Now'}
-            </button>
           )}
-        </div>
+
+          <div className="flex gap-2">
+            <Button onClick={connectBank} disabled={plaidLoading} className="flex-1 bg-primary hover:bg-primary/90">
+              {plaidLoading ? '…' : '+ Connect Bank'}
+            </Button>
+            {plaidItems.length > 0 && (
+              <Button variant="outline" onClick={syncNow} disabled={syncing}
+                className="border-border text-muted-foreground hover:text-foreground whitespace-nowrap">
+                {syncing ? 'Syncing…' : 'Sync Now'}
+              </Button>
+            )}
+          </div>
+        </section>
 
         {/* Account */}
-        <div className="section-title">Account</div>
-        <div className="card">
-          <button className="btn btn-danger btn-block" onClick={handleSignOut}>Sign Out</button>
-        </div>
+        <section>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Account</p>
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <Button variant="outline" onClick={handleSignOut}
+                className="w-full border-red/30 text-red hover:bg-red/10">Sign Out</Button>
+            </CardContent>
+          </Card>
+        </section>
 
+        <p className="text-center text-xs text-muted-foreground pb-2">Zeroed v4.4</p>
       </div>
-
     </div>
   );
 }

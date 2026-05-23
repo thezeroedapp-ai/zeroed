@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis,
 } from 'recharts';
 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { cn } from '@/lib/utils';
 import { apiFetch, fmtD } from '../lib/api';
+import SubNav from '../components/SubNav';
 
 type Tab = 'transactions' | 'trends' | 'recurring';
 
@@ -41,23 +47,30 @@ function monthKey(date: string) {
   return new Date(date + 'T12:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
-const CHART_COLORS = ['#7c3aed', '#a78bfa', '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4'];
+const CHART_PALETTE = [
+  'var(--primary)', 'var(--violet-light)', 'var(--blue)',
+  'var(--green)', 'var(--amber)', 'var(--red)',
+  'oklch(0.62 0.18 200)',
+];
+
+const SPENDING_TABS = [
+  { id: 'transactions', label: 'Transactions' },
+  { id: 'trends',       label: 'Trends'       },
+  { id: 'recurring',    label: 'Recurring'     },
+];
 
 export default function Spending() {
   const [tab, setTab] = useState<Tab>('transactions');
 
-  // Transactions tab
-  const [txState, setTxState]       = useState<'loading' | 'error' | 'content'>('loading');
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [accountMap, setAccountMap] = useState<Record<string, string>>({});
-  const [filter, setFilter]         = useState<'all' | 'expenses' | 'payments'>('all');
-  const [txError, setTxError]       = useState('');
+  const [txState, setTxState]             = useState<'loading' | 'error' | 'content'>('loading');
+  const [transactions, setTransactions]   = useState<Transaction[]>([]);
+  const [accountMap, setAccountMap]       = useState<Record<string, string>>({});
+  const [filter, setFilter]               = useState<'all' | 'expenses' | 'payments'>('all');
+  const [txError, setTxError]             = useState('');
 
-  // Trends tab
   const [trendsState, setTrendsState] = useState<'idle' | 'loading' | 'content' | 'error'>('idle');
   const [trends, setTrends]           = useState<TrendsData | null>(null);
 
-  // Recurring tab
   const [recurringState, setRecurringState] = useState<'idle' | 'loading' | 'content' | 'error'>('idle');
   const [recurring, setRecurring]           = useState<RecurringItem[]>([]);
 
@@ -104,10 +117,10 @@ export default function Spending() {
   }
 
   useEffect(() => { loadTransactions(); }, []);
-
   useEffect(() => {
     if (tab === 'trends'    && trendsState    === 'idle') loadTrends();
     if (tab === 'recurring' && recurringState === 'idle') loadRecurring();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   const filtered = transactions.filter(t => {
@@ -124,86 +137,112 @@ export default function Spending() {
 
   const annualRecurring = recurring.reduce((s, r) => s + r.annualEstimate, 0);
 
+  function buildChartConfig(categories: string[]): ChartConfig {
+    return Object.fromEntries(
+      categories.map((cat, i) => [cat, { label: cat, color: CHART_PALETTE[i % CHART_PALETTE.length] }])
+    );
+  }
+
   return (
-    <div className="page">
-      <div className="top-bar">
-        <h1>Spending</h1>
-        <div className="sub">Transactions, trends, and subscriptions</div>
+    <div className="min-h-dvh bg-background">
+      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-[17px] font-bold text-foreground">Spending</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Transactions, trends, and subscriptions</p>
+        </div>
       </div>
 
-      <div className="content">
-        {/* Tab switcher */}
-        <div className="pills" style={{ marginBottom: 16 }}>
-          {(['transactions', 'trends', 'recurring'] as Tab[]).map(t => (
-            <button key={t} className={`pill ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'transactions' ? 'Transactions' : t === 'trends' ? 'Trends' : 'Recurring'}
-            </button>
-          ))}
-        </div>
+      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-3xl mx-auto">
+        <SubNav tabs={SPENDING_TABS} active={tab} onChange={t => setTab(t as Tab)} />
 
         {/* ── TRANSACTIONS TAB ── */}
         {tab === 'transactions' && (
           <>
-            {txState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Loading transactions…</p></div>}
+            {txState === 'loading' && (
+              <div className="flex flex-col items-center py-16 gap-3">
+                <div className="spinner" /><p className="text-sm text-muted-foreground">Loading transactions…</p>
+              </div>
+            )}
             {txState === 'error' && (
-              <div className="error-state">
-                <div className="error-icon">⚠️</div>
-                <p>{txError}</p>
-                <button className="btn btn-primary" onClick={loadTransactions}>Try Again</button>
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span>
+                <p className="font-semibold">Could not load transactions</p>
+                <p className="text-sm text-muted-foreground">{txError}</p>
+                <Button onClick={loadTransactions} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
             {txState === 'content' && (
               <>
-                <div className="pills" style={{ marginBottom: 12 }}>
+                {/* Filter pills */}
+                <div className="pills py-0 -mx-4 px-4 mb-4">
                   {(['all', 'expenses', 'payments'] as const).map(f => (
-                    <button key={f} className={`pill ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
+                    <button key={f} onClick={() => setFilter(f)}
+                      className={cn(
+                        'shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all border cursor-pointer font-[inherit]',
+                        f === filter
+                          ? 'bg-violet-dim border-[var(--primary)] text-violet-light'
+                          : 'bg-card border-border text-muted-foreground hover:text-foreground',
+                      )}>
                       {f.charAt(0).toUpperCase() + f.slice(1)}
                     </button>
                   ))}
                 </div>
 
                 {filtered.length > 0 && (
-                  <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '12px 16px', background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(59,130,246,0.08))', border: '1px solid rgba(124,58,237,0.25)' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>💳 Using the right card?</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>See which cards earn the most on your top categories.</div>
-                    </div>
-                    <Link to="/accounts?tab=rewards" style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-2)', whiteSpace: 'nowrap', marginLeft: 12, textDecoration: 'none' }}>
-                      Explore cards →
-                    </Link>
-                  </div>
+                  <Card className="mb-4 border-[var(--primary)]/25 bg-gradient-to-r from-[var(--primary)]/10 to-blue/8">
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">💳 Using the right card?</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">See which cards earn the most on your top categories.</p>
+                      </div>
+                      <Link to="/accounts?tab=rewards"
+                        className="text-xs font-semibold text-violet-light whitespace-nowrap ml-3 no-underline hover:text-foreground transition-colors">
+                        Explore cards →
+                      </Link>
+                    </CardContent>
+                  </Card>
                 )}
 
                 {filtered.length === 0 ? (
-                  <div className="empty">
-                    <div className="empty-icon">📋</div>
-                    <p>No transactions</p>
-                    <small>Transactions appear here after syncing in Settings.</small>
+                  <div className="flex flex-col items-center py-16 gap-3 text-center">
+                    <span className="text-4xl">📋</span>
+                    <p className="font-semibold">No transactions</p>
+                    <p className="text-sm text-muted-foreground">Transactions appear here after syncing in Settings.</p>
                   </div>
                 ) : (
-                  Object.entries(grouped).map(([month, txs]) => (
-                    <div key={month}>
-                      <div className="tx-month">{month}</div>
-                      <div className="card" style={{ padding: '0 var(--pad)' }}>
-                        {txs.map(tx => (
-                          <div key={tx.id} className="tx-row">
-                            <div className="tx-icon purchase">
-                              {tx.amount < 0 ? '✅' : '🛍️'}
-                            </div>
-                            <div className="tx-body">
-                              <div className="tx-desc">{tx.description}</div>
-                              <div className="tx-card">
-                                {accountMap[tx.account_id] || tx.category || ''}
+                  <div className="space-y-4">
+                    {Object.entries(grouped).map(([month, txs]) => (
+                      <div key={month}>
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{month}</p>
+                        <Card className="bg-card border-border">
+                          <CardContent className="p-0">
+                            {txs.map((tx, idx) => (
+                              <div key={tx.id} className={cn(
+                                'flex items-center gap-3 px-4 py-3',
+                                idx < txs.length - 1 && 'border-b border-border',
+                              )}>
+                                <div className={cn(
+                                  'w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0',
+                                  tx.amount < 0 ? 'bg-green/15' : 'bg-red/10',
+                                )}>
+                                  {tx.amount < 0 ? '✅' : '🛍️'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                                    {accountMap[tx.account_id] || tx.category || ''}
+                                  </p>
+                                </div>
+                                <p className={cn('text-sm font-bold tabular shrink-0', tx.amount < 0 ? 'text-green' : 'text-red')}>
+                                  {tx.amount < 0 ? '+' : ''}{fmtD(Math.abs(tx.amount))}
+                                </p>
                               </div>
-                            </div>
-                            <div className={`tx-amount ${tx.amount < 0 ? 'green' : 'red'}`}>
-                              {tx.amount < 0 ? '+' : ''}{fmtD(Math.abs(tx.amount))}
-                            </div>
-                          </div>
-                        ))}
+                            ))}
+                          </CardContent>
+                        </Card>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </>
             )}
@@ -213,60 +252,77 @@ export default function Spending() {
         {/* ── TRENDS TAB ── */}
         {tab === 'trends' && (
           <>
-            {trendsState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Loading trends…</p></div>}
-            {trendsState === 'error'   && <div className="error-state"><div className="error-icon">⚠️</div><p>Could not load trends</p><button className="btn btn-primary" onClick={loadTrends}>Try Again</button></div>}
+            {trendsState === 'loading' && (
+              <div className="flex flex-col items-center py-16 gap-3">
+                <div className="spinner" /><p className="text-sm text-muted-foreground">Loading trends…</p>
+              </div>
+            )}
+            {trendsState === 'error' && (
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span>
+                <p className="font-semibold">Could not load trends</p>
+                <Button onClick={loadTrends} className="bg-primary hover:bg-primary/90">Try Again</Button>
+              </div>
+            )}
             {trendsState === 'content' && trends && (
               trends.data.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-icon">📊</div>
-                  <p>Not enough data yet</p>
-                  <small>Sync your accounts and come back after a few months of transactions.</small>
+                <div className="flex flex-col items-center py-16 gap-3 text-center">
+                  <span className="text-4xl">📊</span>
+                  <p className="font-semibold">Not enough data yet</p>
+                  <p className="text-sm text-muted-foreground">Sync your accounts and come back after a few months of transactions.</p>
                 </div>
               ) : (
-                <>
-                  <div className="card" style={{ marginBottom: 12 }}>
-                    <div className="card-label" style={{ marginBottom: 12 }}>Monthly Spending by Category</div>
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={trends.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                        <YAxis
-                          tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false}
-                          tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
-                          width={38}
-                        />
-                        <Tooltip
-                          contentStyle={{ background: '#0d1424', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, color: '#e2e8f0' }}
-                          formatter={(v, name) => [`$${Number(v).toFixed(0)}`, String(name ?? '')]}
-                          cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                        />
-                        {trends.categories.map((cat, i) => (
-                          <Bar
-                            key={cat} dataKey={cat} stackId="a"
-                            fill={CHART_COLORS[i % CHART_COLORS.length]}
-                            radius={i === trends.categories.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                <div className="space-y-4">
+                  <Card className="bg-card border-border">
+                    <CardHeader className="pt-4 pb-2 px-4">
+                      <CardTitle className="text-sm font-semibold">Monthly Spending by Category</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      <ChartContainer config={buildChartConfig(trends.categories)} className="h-[220px] w-full">
+                        <BarChart data={trends.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                          <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
+                          <YAxis
+                            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
+                            tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                            width={38}
                           />
-                        ))}
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                          <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                          {trends.categories.map((cat, i) => (
+                            <Bar
+                              key={cat} dataKey={cat} stackId="a"
+                              fill={CHART_PALETTE[i % CHART_PALETTE.length]}
+                              radius={i === trends.categories.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                            />
+                          ))}
+                        </BarChart>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
 
-                  {/* Category legend / breakdown */}
-                  <div className="section-title">Top Categories</div>
-                  <div className="card" style={{ padding: '0 var(--pad)' }}>
-                    {trends.categories.map((cat, i) => {
-                      const total = trends.data.reduce((s, d) => s + (Number(d[cat]) || 0), 0);
-                      return (
-                        <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                          <div style={{ width: 10, height: 10, borderRadius: 2, background: CHART_COLORS[i % CHART_COLORS.length], flexShrink: 0 }} />
-                          <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{cat}</div>
-                          <div style={{ fontSize: 13, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
-                            {fmtD(total / Math.max(1, trends.data.length))}/mo avg
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Top Categories</p>
+                    <Card className="bg-card border-border">
+                      <CardContent className="p-0">
+                        {trends.categories.map((cat, i) => {
+                          const total = trends.data.reduce((s, d) => s + (Number(d[cat]) || 0), 0);
+                          return (
+                            <div key={cat} className={cn(
+                              'flex items-center gap-3 px-4 py-3',
+                              i < trends.categories.length - 1 && 'border-b border-border',
+                            )}>
+                              <div className="w-2.5 h-2.5 rounded-sm shrink-0"
+                                style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                              <p className="flex-1 text-sm font-medium text-foreground">{cat}</p>
+                              <p className="text-sm text-muted-foreground tabular">
+                                {fmtD(total / Math.max(1, trends.data.length))}/mo avg
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </CardContent>
+                    </Card>
                   </div>
-                </>
+                </div>
               )
             )}
           </>
@@ -275,49 +331,63 @@ export default function Spending() {
         {/* ── RECURRING TAB ── */}
         {tab === 'recurring' && (
           <>
-            {recurringState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Detecting subscriptions…</p></div>}
-            {recurringState === 'error'   && <div className="error-state"><div className="error-icon">⚠️</div><p>Could not detect recurring charges</p><button className="btn btn-primary" onClick={loadRecurring}>Try Again</button></div>}
+            {recurringState === 'loading' && (
+              <div className="flex flex-col items-center py-16 gap-3">
+                <div className="spinner" /><p className="text-sm text-muted-foreground">Detecting subscriptions…</p>
+              </div>
+            )}
+            {recurringState === 'error' && (
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span>
+                <p className="font-semibold">Could not detect recurring charges</p>
+                <Button onClick={loadRecurring} className="bg-primary hover:bg-primary/90">Try Again</Button>
+              </div>
+            )}
             {recurringState === 'content' && (
               recurring.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-icon">🔄</div>
-                  <p>No recurring charges found</p>
-                  <small>Sync more transaction history to detect subscriptions and bills.</small>
+                <div className="flex flex-col items-center py-16 gap-3 text-center">
+                  <span className="text-4xl">🔄</span>
+                  <p className="font-semibold">No recurring charges found</p>
+                  <p className="text-sm text-muted-foreground">Sync more transaction history to detect subscriptions and bills.</p>
                 </div>
               ) : (
-                <>
-                  <div className="card bento-hero" style={{ marginBottom: 12 }}>
-                    <div className="card-label">Estimated Annual Subscriptions</div>
-                    <div className="hero-value" style={{ color: 'var(--red)' }}>{fmtD(annualRecurring)}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4 }}>
-                      {fmtD(annualRecurring / 12)}/mo across {recurring.length} recurring charge{recurring.length !== 1 ? 's' : ''}
-                    </div>
-                  </div>
+                <div className="space-y-4">
+                  <Card className="bg-card border-border">
+                    <CardContent className="p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Estimated Annual Subscriptions</p>
+                      <p className="text-3xl font-extrabold text-red mt-1 tabular">{fmtD(annualRecurring)}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {fmtD(annualRecurring / 12)}/mo across {recurring.length} recurring charge{recurring.length !== 1 ? 's' : ''}
+                      </p>
+                    </CardContent>
+                  </Card>
 
-                  <div className="section-title">Detected Recurring Charges</div>
-                  <div className="card" style={{ padding: '0 var(--pad)' }}>
-                    {recurring.map((r, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {r.description}
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Detected Recurring Charges</p>
+                    <Card className="bg-card border-border">
+                      <CardContent className="p-0">
+                        {recurring.map((r, i) => (
+                          <div key={i} className={cn(
+                            'flex items-center justify-between gap-3 px-4 py-3',
+                            i < recurring.length - 1 && 'border-b border-border',
+                          )}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-foreground truncate">{r.description}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{r.category}</Badge>
+                                <span className="text-xs text-muted-foreground">{r.months} month{r.months !== 1 ? 's' : ''}</span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-bold text-red tabular">{fmtD(r.avgAmount)}/mo</p>
+                              <p className="text-xs text-muted-foreground tabular mt-0.5">{fmtD(r.annualEstimate)}/yr</p>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>
-                            {r.category} · {r.months} month{r.months !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--red)', fontVariantNumeric: 'tabular-nums' }}>
-                            {fmtD(r.avgAmount)}/mo
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
-                            {fmtD(r.annualEstimate)}/yr
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                        ))}
+                      </CardContent>
+                    </Card>
                   </div>
-                </>
+                </div>
               )
             )}
           </>

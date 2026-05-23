@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
 
 type AccountTab = 'accounts' | 'budget' | 'rewards';
-
-// ─── Accounts tab types ───────────────────────────────────────────────────────
 
 interface Account {
   id: string; name: string; type: string; subtype?: string;
@@ -19,7 +25,6 @@ interface EditState { apr: string; minimum: string; saving: boolean; }
 const ASSET_TYPES     = ['depository', 'investment', 'brokerage'];
 const LIABILITY_TYPES = ['credit', 'loan', 'mortgage'];
 const GROUP_ORDER     = ['Credit Cards', 'Cash & Savings', 'Investments', 'Loans', 'Other'];
-
 function accountGroup(type: string): string {
   if (type === 'credit')                             return 'Credit Cards';
   if (type === 'depository')                         return 'Cash & Savings';
@@ -27,80 +32,54 @@ function accountGroup(type: string): string {
   if (type === 'loan' || type === 'mortgage')        return 'Loans';
   return 'Other';
 }
-
-// ─── Budget tab types ─────────────────────────────────────────────────────────
+const GROUP_ICONS: Record<string, string> = {
+  'Credit Cards': '💳', 'Cash & Savings': '🏦', 'Investments': '📈', 'Loans': '🏠', 'Other': '📋',
+};
 
 interface Budget { id: string; category: string; monthly_limit: number; spent: number; remaining: number; pct: number; }
-
-const PRESET_CATEGORIES = [
-  'Food and Drink', 'Groceries', 'Restaurants', 'Travel', 'Shops',
-  'Recreation', 'Entertainment', 'Healthcare', 'Gas Stations',
-  'Personal Care', 'Service', 'Bank Fees', 'Other',
-];
-
-function progressColor(pct: number): string {
-  if (pct >= 100) return 'linear-gradient(90deg, #f43f5e, #fb7185)';
-  if (pct >= 80)  return 'linear-gradient(90deg, #f59e0b, #fcd34d)';
-  return 'linear-gradient(90deg, #10b981, #34d399)';
-}
-
-// ─── Rewards tab types ────────────────────────────────────────────────────────
+const PRESET_CATEGORIES = ['Food and Drink', 'Groceries', 'Restaurants', 'Travel', 'Shops', 'Recreation', 'Entertainment', 'Healthcare', 'Gas Stations', 'Personal Care', 'Service', 'Bank Fees', 'Other'];
 
 interface Category { id: string; icon: string; label: string; }
-interface Recommendation {
-  rank: number; accountName: string; effectiveRate: number; multiplier: number;
-  programName: string; rewardType: string; notes: string; penalized: boolean; earnedDollars: number | null;
-}
+interface Recommendation { rank: number; accountName: string; effectiveRate: number; multiplier: number; programName: string; rewardType: string; notes: string; penalized: boolean; earnedDollars: number | null; }
 interface RewardResult { recommendations: Recommendation[]; unmatchedAccounts: string[]; profilesLastUpdated?: string; }
 
-function rankClass(rank: number) { return rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : ''; }
 function rankLabel(rank: number) { return rank === 1 ? '🥇 Best' : rank === 2 ? '🥈 2nd' : rank === 3 ? '🥉 3rd' : `#${rank}`; }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 const ACCOUNT_TABS = [
   { id: 'accounts', label: 'Accounts' },
-  { id: 'budget',   label: 'Budget' },
-  { id: 'rewards',  label: 'Rewards' },
+  { id: 'budget',   label: 'Budget'   },
+  { id: 'rewards',  label: 'Rewards'  },
 ];
 
 export default function Accounts() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = (searchParams.get('tab') || 'accounts') as AccountTab;
+  function setTab(t: AccountTab) { if (t === 'accounts') setSearchParams({}); else setSearchParams({ tab: t }); }
 
-  function setTab(t: AccountTab) {
-    t === 'accounts' ? setSearchParams({}) : setSearchParams({ tab: t });
-  }
+  const [acctState, setAcctState] = useState<'loading' | 'error' | 'content'>('loading');
+  const [accounts, setAccounts]   = useState<Account[]>([]);
+  const [acctError, setAcctError] = useState('');
+  const [editing, setEditing]     = useState<Record<string, EditState>>({});
 
-  // ── Accounts tab state ──
-  const [acctState, setAcctState]   = useState<'loading' | 'error' | 'content'>('loading');
-  const [accounts, setAccounts]     = useState<Account[]>([]);
-  const [acctError, setAcctError]   = useState('');
-  const [editing, setEditing]       = useState<Record<string, EditState>>({});
-
-  // ── Budget tab state ──
-  const [budgetState, setBudgetState] = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
-  const [budgets, setBudgets]         = useState<Budget[]>([]);
-  const [budgetError, setBudgetError] = useState('');
-  const [budgetForm, setBudgetForm]   = useState({ category: 'Food and Drink', limit: '' });
+  const [budgetState, setBudgetState]   = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
+  const [budgets, setBudgets]           = useState<Budget[]>([]);
+  const [budgetError, setBudgetError]   = useState('');
+  const [budgetForm, setBudgetForm]     = useState({ category: 'Food and Drink', limit: '' });
   const [budgetSaving, setBudgetSaving] = useState(false);
 
-  // ── Rewards tab state ──
-  const [rewardsState, setRewardsState] = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
-  const [categories, setCategories]     = useState<Category[]>([]);
+  const [rewardsState, setRewardsState]     = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
+  const [categories, setCategories]         = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [rewardAmount, setRewardAmount] = useState('');
-  const [rewardResults, setRewardResults] = useState<RewardResult | null>(null);
-  const [updatedNote, setUpdatedNote]   = useState('');
-  const debounceRef                     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [rewardAmount, setRewardAmount]     = useState('');
+  const [rewardResults, setRewardResults]   = useState<RewardResult | null>(null);
+  const [updatedNote, setUpdatedNote]       = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { loadAccounts(); }, []);
-
   useEffect(() => {
     if (tab === 'budget'  && budgetState  === 'idle') loadBudgets();
     if (tab === 'rewards' && rewardsState === 'idle') loadRewardsCategories();
   }, [tab]);
-
   useEffect(() => {
     if (tab !== 'rewards' || !activeCategory) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -108,8 +87,6 @@ export default function Accounts() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory, rewardAmount, tab]);
-
-  // ── Accounts tab ──
 
   async function loadAccounts() {
     setAcctState('loading');
@@ -119,228 +96,195 @@ export default function Accounts() {
       const d = await r.json();
       setAccounts(d.accounts || []);
       setAcctState('content');
-    } catch (e) {
-      setAcctError(e instanceof Error ? e.message : 'Could not load accounts');
-      setAcctState('error');
-    }
+    } catch (e) { setAcctError(e instanceof Error ? e.message : 'Could not load accounts'); setAcctState('error'); }
   }
 
-  function startEdit(acc: Account) {
-    setEditing(prev => ({ ...prev, [acc.id]: { apr: acc.apr?.toString() ?? '', minimum: acc.minimum_payment?.toString() ?? '', saving: false } }));
-  }
-  function cancelEdit(id: string) {
-    setEditing(prev => { const n = { ...prev }; delete n[id]; return n; });
-  }
+  function startEdit(acc: Account) { setEditing(p => ({ ...p, [acc.id]: { apr: acc.apr?.toString() ?? '', minimum: acc.minimum_payment?.toString() ?? '', saving: false } })); }
+  function cancelEdit(id: string)  { setEditing(p => { const n = { ...p }; delete n[id]; return n; }); }
   async function saveEdit(id: string) {
     const e = editing[id];
-    setEditing(prev => ({ ...prev, [id]: { ...prev[id], saving: true } }));
+    setEditing(p => ({ ...p, [id]: { ...p[id], saving: true } }));
     try {
-      const r = await apiFetch(`/api/plaid/accounts/${id}/credit-details`, {
-        method: 'PUT',
-        body: JSON.stringify({ apr: parseFloat(e.apr), minimum_payment: parseFloat(e.minimum) }),
-      });
+      const r = await apiFetch(`/api/plaid/accounts/${id}/credit-details`, { method: 'PUT', body: JSON.stringify({ apr: parseFloat(e.apr), minimum_payment: parseFloat(e.minimum) }) });
       if (!r.ok) throw new Error('Save failed');
-      cancelEdit(id);
-      loadAccounts();
-    } catch {
-      setEditing(prev => ({ ...prev, [id]: { ...prev[id], saving: false } }));
-    }
+      cancelEdit(id); loadAccounts();
+    } catch { setEditing(p => ({ ...p, [id]: { ...p[id], saving: false } })); }
   }
 
   const totalAssets = accounts.filter(a => ASSET_TYPES.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
   const totalDebt   = accounts.filter(a => LIABILITY_TYPES.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
   const netWorth    = totalAssets - totalDebt;
-
   const byInstitution = accounts.reduce<Record<string, Account[]>>((acc, a) => {
-    const key = a.institution_name || 'Unknown Bank';
-    (acc[key] = acc[key] || []).push(a);
-    return acc;
+    const key = a.institution_name || 'Unknown Bank'; (acc[key] = acc[key] || []).push(a); return acc;
   }, {});
-
-  // ── Budget tab ──
 
   async function loadBudgets() {
     setBudgetState('loading');
     try {
       const r = await apiFetch('/api/budgets');
-      if (!r.ok) throw new Error(`Server returned ${r.status}`);
+      if (!r.ok) throw new Error(`${r.status}`);
       const d = await r.json();
-      setBudgets(d.budgets || []);
-      setBudgetState('content');
-    } catch (e) {
-      setBudgetError(e instanceof Error ? e.message : 'Could not load budgets');
-      setBudgetState('error');
-    }
+      setBudgets(d.budgets || []); setBudgetState('content');
+    } catch (e) { setBudgetError(e instanceof Error ? e.message : 'Could not load'); setBudgetState('error'); }
   }
-
   async function addBudget() {
     if (!budgetForm.limit) return;
     setBudgetSaving(true);
-    try {
-      await apiFetch('/api/budgets', { method: 'POST', body: JSON.stringify({ category: budgetForm.category, monthly_limit: parseFloat(budgetForm.limit) }) });
-      setBudgetForm({ category: 'Food and Drink', limit: '' });
-      loadBudgets();
-    } finally { setBudgetSaving(false); }
+    try { await apiFetch('/api/budgets', { method: 'POST', body: JSON.stringify({ category: budgetForm.category, monthly_limit: parseFloat(budgetForm.limit) }) }); setBudgetForm({ category: 'Food and Drink', limit: '' }); loadBudgets(); }
+    finally { setBudgetSaving(false); }
   }
-
-  async function deleteBudget(id: string) {
-    if (!confirm('Remove this budget?')) return;
-    await apiFetch(`/api/budgets/${id}`, { method: 'DELETE' });
-    loadBudgets();
-  }
+  async function deleteBudget(id: string) { if (!confirm('Remove this budget?')) return; await apiFetch(`/api/budgets/${id}`, { method: 'DELETE' }); loadBudgets(); }
 
   const totalBudgeted = budgets.reduce((s, b) => s + b.monthly_limit, 0);
   const totalSpent    = budgets.reduce((s, b) => s + b.spent, 0);
   const overallPct    = totalBudgeted > 0 ? Math.round((totalSpent / totalBudgeted) * 100) : 0;
   const month         = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-  // ── Rewards tab ──
-
   async function loadRewardsCategories() {
     setRewardsState('loading');
     try {
       const r = await apiFetch('/api/rewards/categories');
-      if (!r.ok) throw new Error('Failed to load categories');
+      if (!r.ok) throw new Error('Failed');
       const d = await r.json();
-      setCategories(d.categories || []);
-      setUpdatedNote(`Profiles last updated: ${d.profilesLastUpdated} · Valuations via The Points Guy`);
-      setActiveCategory('dining');
-      setRewardsState('content');
+      setCategories(d.categories || []); setUpdatedNote(`Updated: ${d.profilesLastUpdated} · via The Points Guy`);
+      setActiveCategory('dining'); setRewardsState('content');
     } catch { setRewardsState('error'); }
   }
-
   async function fetchRewards() {
     if (!activeCategory) return;
     const url = `/api/rewards?category=${activeCategory}${rewardAmount ? '&amount=' + encodeURIComponent(rewardAmount) : ''}`;
-    try {
-      const r = await apiFetch(url);
-      if (!r.ok) throw new Error('Failed');
-      setRewardResults(await r.json());
-    } catch { setRewardResults(null); }
+    try { const r = await apiFetch(url); if (!r.ok) throw new Error('Failed'); setRewardResults(await r.json()); }
+    catch { setRewardResults(null); }
   }
 
   return (
-    <div className="page">
-      <div className="top-bar">
-        <h1>Accounts</h1>
-        <div className="sub">Balances, budgets, and rewards</div>
+    <div className="min-h-dvh bg-background">
+      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-[17px] font-bold text-foreground">Accounts</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Balances, budgets, and rewards</p>
+        </div>
       </div>
 
-      <div className="content">
+      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-3xl mx-auto">
         <SubNav tabs={ACCOUNT_TABS} active={tab} onChange={t => setTab(t as AccountTab)} />
 
         {/* ── ACCOUNTS TAB ── */}
         {tab === 'accounts' && (
           <>
-            {acctState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Loading accounts…</p></div>}
+            {acctState === 'loading' && <div className="flex flex-col items-center py-16 gap-3"><div className="spinner" /><p className="text-sm text-muted-foreground">Loading accounts…</p></div>}
             {acctState === 'error' && (
-              <div className="error-state">
-                <div className="error-icon">⚠️</div>
-                <p>Could not load accounts</p><small>{acctError}</small>
-                <button className="btn btn-primary" onClick={loadAccounts}>Try Again</button>
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span><p className="font-semibold">Could not load accounts</p>
+                <p className="text-sm text-muted-foreground">{acctError}</p>
+                <Button onClick={loadAccounts} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
             {acctState === 'content' && (
               accounts.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-icon">💳</div>
-                  <p>No accounts connected</p>
-                  <small>Connect your bank in Settings to get started.</small>
+                <div className="flex flex-col items-center py-16 gap-3 text-center">
+                  <span className="text-4xl">💳</span>
+                  <p className="font-semibold">No accounts connected</p>
+                  <p className="text-sm text-muted-foreground">Connect your bank in Settings to get started.</p>
                 </div>
               ) : (
-                <>
-                  <div className="bento" style={{ marginBottom: 16 }}>
-                    <div className="card bento-stat" style={{ textAlign: 'center' }}>
-                      <div className="card-label">Total Assets</div>
-                      <div className="stat-value green">{fmt(totalAssets)}</div>
-                    </div>
-                    <div className="card bento-stat" style={{ textAlign: 'center' }}>
-                      <div className="card-label">Total Liabilities</div>
-                      <div className="stat-value red">{fmt(totalDebt)}</div>
-                    </div>
-                    <div className="card" style={{ gridColumn: 'span 2', textAlign: 'center', padding: '14px 16px' }}>
-                      <div className="card-label">Net Worth</div>
-                      <div style={{ fontSize: 28, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: netWorth >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                        {netWorth < 0 ? '-' : ''}{fmt(Math.abs(netWorth))}
-                      </div>
-                    </div>
+                <div className="space-y-4">
+                  {/* Net worth strip */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: 'Assets',      value: fmt(totalAssets), color: 'text-green' },
+                      { label: 'Liabilities', value: fmt(totalDebt),   color: 'text-red'   },
+                      { label: 'Net Worth',   value: (netWorth < 0 ? '−' : '') + fmt(Math.abs(netWorth)), color: netWorth >= 0 ? 'text-green' : 'text-red' },
+                    ].map(({ label, value, color }) => (
+                      <Card key={label} className="bg-card border-border text-center">
+                        <CardContent className="p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+                          <p className={cn('text-base font-extrabold tabular mt-1', color)}>{value}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
 
+                  {/* Accounts by institution */}
                   {Object.entries(byInstitution).map(([bank, accs]) => {
-                    const sorted = [...accs].sort((a, b) =>
-                      GROUP_ORDER.indexOf(accountGroup(a.type)) - GROUP_ORDER.indexOf(accountGroup(b.type))
-                    );
+                    const sorted = [...accs].sort((a, b) => GROUP_ORDER.indexOf(accountGroup(a.type)) - GROUP_ORDER.indexOf(accountGroup(b.type)));
                     return (
-                      <div key={bank} className="bank-group">
-                        <div className="bank-header">
-                          <div className="bank-name">{bank}</div>
-                          <div className="bank-count">{accs.length} account{accs.length !== 1 ? 's' : ''}</div>
-                        </div>
-                        {sorted.map(acc => {
-                          const isCredit = acc.type === 'credit';
-                          const isAsset  = ASSET_TYPES.includes(acc.type);
-                          const group    = accountGroup(acc.type);
-                          return (
-                            <div key={acc.id}>
-                              <div className="account-card" style={{ marginBottom: 0, border: 'none', boxShadow: 'none', padding: '10px 0' }}>
-                                <div className="acct-header">
-                                  <div>
-                                    <div className="acct-name">{acc.name}</div>
-                                    <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
-                                      {group}{acc.subtype ? ` · ${acc.subtype}` : ''}
-                                    </div>
+                      <Card key={bank} className="bg-card border-border">
+                        <CardHeader className="pt-4 pb-2 px-4">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base font-bold text-foreground">{bank}</CardTitle>
+                            <span className="text-xs text-muted-foreground">{accs.length} account{accs.length !== 1 ? 's' : ''}</span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="px-4 pb-4 space-y-0">
+                          {sorted.map((acc, idx) => {
+                            const isCredit = acc.type === 'credit';
+                            const isAsset  = ASSET_TYPES.includes(acc.type);
+                            const group    = accountGroup(acc.type);
+                            return (
+                              <div key={acc.id} className={cn('py-3', idx < sorted.length - 1 && 'border-b border-border')}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-foreground truncate">{acc.name}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{GROUP_ICONS[group]} {group}{acc.subtype ? ` · ${acc.subtype}` : ''}</p>
                                   </div>
-                                  <div className="acct-balance" style={{ color: isCredit ? 'var(--red)' : 'var(--green)' }}>
+                                  <p className={cn('text-base font-bold tabular shrink-0', isCredit ? 'text-red' : 'text-green')}>
                                     {fmtD(acc.balance_current)}
-                                  </div>
+                                  </p>
                                 </div>
+
                                 {isCredit && (
-                                  <div className="acct-meta">
-                                    {acc.apr != null ? <span><strong>{acc.apr}%</strong> APR</span> : <span style={{ color: 'var(--yellow)' }}>⚠️ APR missing</span>}
-                                    {acc.minimum_payment != null ? <span><strong>{fmtD(acc.minimum_payment)}</strong> min</span> : <span style={{ color: 'var(--yellow)' }}>⚠️ Min missing</span>}
-                                    {acc.credit_limit && <span><strong>{fmtD(acc.credit_limit)}</strong> limit</span>}
-                                    {acc.payment_due_date && <span>Due <strong>{new Date(acc.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</strong></span>}
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {acc.apr != null
+                                      ? <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{acc.apr}% APR</Badge>
+                                      : <Badge variant="outline" className="text-[10px] border-amber/30 text-amber">⚠️ APR missing</Badge>}
+                                    {acc.minimum_payment != null
+                                      ? <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{fmtD(acc.minimum_payment)} min</Badge>
+                                      : <Badge variant="outline" className="text-[10px] border-amber/30 text-amber">⚠️ Min missing</Badge>}
+                                    {acc.credit_limit && <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{fmtD(acc.credit_limit)} limit</Badge>}
+                                    {acc.payment_due_date && <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">Due {new Date(acc.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Badge>}
                                   </div>
                                 )}
                                 {isAsset && acc.balance_available != null && (
-                                  <div className="acct-meta"><span><strong>{fmtD(acc.balance_available)}</strong> available</span></div>
+                                  <p className="text-xs text-muted-foreground mt-1">{fmtD(acc.balance_available)} available</p>
                                 )}
+
                                 {isCredit && (
                                   editing[acc.id] ? (
-                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 8 }}>
-                                      <div style={{ flex: 1 }}>
-                                        <label style={{ fontSize: 11, color: 'var(--text-sm)' }}>APR %</label>
-                                        <input style={{ padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 14, width: '100%' }}
-                                          type="number" step="0.01" value={editing[acc.id].apr} placeholder="e.g. 24.99"
-                                          onChange={e => setEditing(prev => ({ ...prev, [acc.id]: { ...prev[acc.id], apr: e.target.value } }))} />
+                                    <div className="mt-3 flex flex-wrap gap-2 items-end">
+                                      <div className="flex-1 min-w-[100px] space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground">APR %</Label>
+                                        <Input type="number" step="0.01" placeholder="e.g. 24.99" value={editing[acc.id].apr}
+                                          onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], apr: e.target.value } }))}
+                                          className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
                                       </div>
-                                      <div style={{ flex: 1 }}>
-                                        <label style={{ fontSize: 11, color: 'var(--text-sm)' }}>Min Payment $</label>
-                                        <input style={{ padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 14, width: '100%' }}
-                                          type="number" step="0.01" value={editing[acc.id].minimum} placeholder="e.g. 35.00"
-                                          onChange={e => setEditing(prev => ({ ...prev, [acc.id]: { ...prev[acc.id], minimum: e.target.value } }))} />
+                                      <div className="flex-1 min-w-[100px] space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground">Min Payment $</Label>
+                                        <Input type="number" step="0.01" placeholder="e.g. 35.00" value={editing[acc.id].minimum}
+                                          onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], minimum: e.target.value } }))}
+                                          className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
                                       </div>
-                                      <div style={{ display: 'flex', gap: 6 }}>
-                                        <button className="btn btn-primary btn-sm" onClick={() => saveEdit(acc.id)} disabled={editing[acc.id].saving}>
+                                      <div className="flex gap-2">
+                                        <Button size="sm" onClick={() => saveEdit(acc.id)} disabled={editing[acc.id].saving} className="h-8 bg-primary hover:bg-primary/90">
                                           {editing[acc.id].saving ? '…' : 'Save'}
-                                        </button>
-                                        <button className="btn btn-outline btn-sm" onClick={() => cancelEdit(acc.id)}>Cancel</button>
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={() => cancelEdit(acc.id)} className="h-8 border-border text-muted-foreground">Cancel</Button>
                                       </div>
                                     </div>
                                   ) : (
-                                    <button className="btn btn-outline btn-sm" style={{ marginTop: 6 }} onClick={() => startEdit(acc)}>
+                                    <Button variant="outline" size="sm" onClick={() => startEdit(acc)} className="mt-2 h-7 text-xs border-border text-muted-foreground hover:text-foreground">
                                       Edit APR / Min
-                                    </button>
+                                    </Button>
                                   )
                                 )}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
                     );
                   })}
-                </>
+                </div>
               )
             )}
           </>
@@ -349,77 +293,80 @@ export default function Accounts() {
         {/* ── BUDGET TAB ── */}
         {tab === 'budget' && (
           <>
-            {budgetState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Loading budgets…</p></div>}
+            {budgetState === 'loading' && <div className="flex flex-col items-center py-16 gap-3"><div className="spinner" /><p className="text-sm text-muted-foreground">Loading budgets…</p></div>}
             {budgetState === 'error' && (
-              <div className="error-state">
-                <div className="error-icon">⚠️</div>
-                <p>Could not load budgets</p><small>{budgetError}</small>
-                <button className="btn btn-primary" onClick={loadBudgets}>Try Again</button>
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span><p className="font-semibold">Could not load budgets</p>
+                <p className="text-sm text-muted-foreground">{budgetError}</p>
+                <Button onClick={loadBudgets} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
             {budgetState === 'content' && (
-              <>
+              <div className="space-y-4">
                 {budgets.length > 0 && (
                   <>
-                    <div className="bento" style={{ marginBottom: 16 }}>
-                      <div className="card bento-stat" style={{ textAlign: 'center' }}>
-                        <div className="card-label">Total Budgeted</div>
-                        <div className="stat-value">{fmtD(totalBudgeted)}</div>
-                        <div className="stat-sub">per month</div>
-                      </div>
-                      <div className="card bento-stat" style={{ textAlign: 'center' }}>
-                        <div className="card-label">Spent — {month}</div>
-                        <div className={`stat-value ${totalSpent > totalBudgeted ? 'red' : 'green'}`}>{fmtD(totalSpent)}</div>
-                        <div className="stat-sub">{overallPct}% used</div>
-                      </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: 'Total Budgeted', value: fmtD(totalBudgeted), sub: 'per month',         color: 'text-foreground' },
+                        { label: `Spent — ${month.split(' ')[0]}`, value: fmtD(totalSpent), sub: `${overallPct}% used`, color: totalSpent > totalBudgeted ? 'text-red' : 'text-green' },
+                      ].map(({ label, value, sub, color }) => (
+                        <Card key={label} className="bg-card border-border text-center">
+                          <CardContent className="p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+                            <p className={cn('text-xl font-extrabold tabular mt-1', color)}>{value}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
 
-                    <div className="section-title">Your Budgets</div>
-                    {budgets.map(b => (
-                      <div key={b.id} className="card" style={{ marginBottom: 10 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{b.category}</div>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => deleteBudget(b.id)}>Remove</button>
-                        </div>
-                        <div className="progress-bar" style={{ marginBottom: 8 }}>
-                          <div style={{ height: '100%', borderRadius: 99, width: `${Math.min(100, b.pct)}%`, background: progressColor(b.pct), transition: 'width 0.4s ease' }} />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                          <span style={{ color: b.pct >= 100 ? 'var(--red)' : 'var(--text-2)' }}>
-                            {fmtD(b.spent)} spent{b.pct >= 100 && ' — over budget'}
-                          </span>
-                          <span style={{ color: 'var(--text-2)' }}>
-                            {b.pct < 100 ? `${fmtD(b.remaining)} left of ` : 'of '}{fmtD(b.monthly_limit)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                    <div className="space-y-2">
+                      {budgets.map(b => (
+                        <Card key={b.id} className="bg-card border-border">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-sm font-semibold text-foreground">{b.category}</p>
+                              <Button variant="outline" size="sm" onClick={() => deleteBudget(b.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Remove</Button>
+                            </div>
+                            <Progress value={Math.min(100, b.pct)} className={cn('h-1.5', b.pct >= 100 ? '[&>div]:bg-red' : b.pct >= 80 ? '[&>div]:bg-amber' : '[&>div]:bg-green')} />
+                            <div className="flex justify-between text-xs text-muted-foreground mt-1.5">
+                              <span className={b.pct >= 100 ? 'text-red' : ''}>{fmtD(b.spent)} spent{b.pct >= 100 && ' — over budget'}</span>
+                              <span>{b.pct < 100 ? `${fmtD(b.remaining)} left of ` : 'of '}{fmtD(b.monthly_limit)}</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </>
                 )}
 
-                <div className="section-title">{budgets.length === 0 ? 'Set Your First Budget' : 'Add Budget'}</div>
-                {budgets.length === 0 && (
-                  <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12, lineHeight: 1.6 }}>
-                    Set monthly spending limits per category. We'll track your actual spending automatically.
-                  </div>
-                )}
-                <div className="card">
-                  <div className="form-group">
-                    <label>Category</label>
-                    <select value={budgetForm.category} onChange={e => setBudgetForm(p => ({ ...p, category: e.target.value }))}>
-                      {PRESET_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Monthly Limit ($)</label>
-                    <input type="number" min="1" step="1" placeholder="e.g. 500"
-                      value={budgetForm.limit} onChange={e => setBudgetForm(p => ({ ...p, limit: e.target.value }))} />
-                  </div>
-                  <button className="btn btn-primary btn-block" onClick={addBudget} disabled={budgetSaving || !budgetForm.limit}>
-                    {budgetSaving ? '…' : 'Add Budget'}
-                  </button>
-                </div>
-              </>
+                <Card className="bg-card border-border">
+                  <CardHeader className="pt-4 pb-2 px-4">
+                    <CardTitle className="text-sm font-semibold">{budgets.length === 0 ? 'Set Your First Budget' : 'Add Budget'}</CardTitle>
+                    {budgets.length === 0 && <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Set monthly spending limits per category. We'll track your actual spending automatically.</p>}
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Category</Label>
+                      <Select value={budgetForm.category} onValueChange={v => setBudgetForm(p => ({ ...p, category: v }))}>
+                        <SelectTrigger className="bg-input border-border text-foreground"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-card border-border text-foreground">
+                          {PRESET_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Monthly Limit ($)</Label>
+                      <Input type="number" min="1" step="1" placeholder="e.g. 500" value={budgetForm.limit}
+                        onChange={e => setBudgetForm(p => ({ ...p, limit: e.target.value }))}
+                        className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+                    </div>
+                    <Button onClick={addBudget} disabled={budgetSaving || !budgetForm.limit} className="w-full bg-primary hover:bg-primary/90">
+                      {budgetSaving ? '…' : 'Add Budget'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </>
         )}
@@ -427,72 +374,76 @@ export default function Accounts() {
         {/* ── REWARDS TAB ── */}
         {tab === 'rewards' && (
           <>
-            {rewardsState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Loading reward profiles…</p></div>}
+            {rewardsState === 'loading' && <div className="flex flex-col items-center py-16 gap-3"><div className="spinner" /><p className="text-sm text-muted-foreground">Loading reward profiles…</p></div>}
             {rewardsState === 'error' && (
-              <div className="error-state">
-                <div className="error-icon">⚠️</div>
-                <p>Could not load reward profiles</p>
-                <button className="btn btn-primary" onClick={loadRewardsCategories}>Try Again</button>
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span><p className="font-semibold">Could not load reward profiles</p>
+                <Button onClick={loadRewardsCategories} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
             {rewardsState === 'content' && (
-              <>
-                <div className="section-title">Spend Category</div>
-                <div className="category-grid">
-                  {categories.map(c => (
-                    <button key={c.id} className={`cat-btn ${activeCategory === c.id ? 'active' : ''}`} onClick={() => setActiveCategory(c.id)}>
-                      <span className="icon">{c.icon}</span>
-                      <span>{c.label}</span>
-                    </button>
-                  ))}
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Spend Category</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {categories.map(c => (
+                      <button key={c.id} onClick={() => setActiveCategory(c.id)}
+                        className={cn('flex flex-col items-center gap-1 p-2.5 rounded-xl border text-[10px] font-medium cursor-pointer font-[inherit] transition-all',
+                          activeCategory === c.id ? 'border-[var(--primary)]/50 bg-violet-dim/30 text-violet-light' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>
+                        <span className="text-xl">{c.icon}</span>
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>Amount</label>
-                  <input
-                    style={{ flex: 1, padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 15, fontFamily: 'inherit' }}
-                    type="number" min="1" step="1" placeholder="$ optional" value={rewardAmount}
+                <div className="flex items-center gap-3">
+                  <Label className="text-sm font-semibold shrink-0">Amount</Label>
+                  <Input type="number" min="1" step="1" placeholder="$ optional" value={rewardAmount}
                     onChange={e => setRewardAmount(e.target.value)}
-                  />
+                    className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
                 </div>
 
                 {rewardResults && (
                   rewardResults.recommendations.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px 20px', fontSize: 14, color: 'var(--text-sm)', lineHeight: 1.6 }}>
-                      <div style={{ fontSize: 32, marginBottom: 12 }}>🃏</div>
-                      <div>No connected cards matched a reward profile.</div>
+                    <div className="flex flex-col items-center py-12 gap-3 text-center">
+                      <span className="text-4xl">🃏</span>
+                      <p className="text-sm text-muted-foreground">No connected cards matched a reward profile.</p>
                     </div>
                   ) : (
-                    <>
+                    <div className="space-y-3">
                       {rewardResults.recommendations.map(r => (
-                        <div key={r.rank} className={`rec-card ${r.rank === 1 ? 'rank-1' : ''}`}>
-                          <div className={`rec-rank ${rankClass(r.rank)}`}>{rankLabel(r.rank)}</div>
-                          <div className="rec-name">{r.accountName}</div>
-                          {r.penalized && <div className="debt-badge">⚠️ Active balance — ranked lower</div>}
-                          <div className="rec-rate">{r.effectiveRate}%<span> effective back</span></div>
-                          <div className="rec-detail">
-                            {r.rewardType === 'cashback'
-                              ? `${r.effectiveRate}% cash back`
-                              : `${r.multiplier}x ${r.programName} (${r.effectiveRate}% value)`}
-                          </div>
-                          {r.earnedDollars != null && !r.penalized && <div className="rec-earn">Earn ${r.earnedDollars.toFixed(2)} on this purchase</div>}
-                          {r.earnedDollars != null && r.penalized && <div className="rec-earn" style={{ color: 'var(--yellow)' }}>~${(r.earnedDollars / 0.5).toFixed(2)} if not carrying a balance</div>}
-                          <div className="rec-notes">{r.notes}</div>
-                        </div>
+                        <Card key={r.rank} className={cn('bg-card border-border', r.rank === 1 && 'border-yellow-500/30')}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <p className="text-base font-bold text-foreground pr-12">{r.accountName}</p>
+                              <Badge variant="outline" className={cn('shrink-0 text-xs', r.rank === 1 ? 'border-yellow-500/40 text-yellow-400' : r.rank === 2 ? 'border-slate-400/30 text-slate-400' : r.rank === 3 ? 'border-amber-700/30 text-amber-600' : 'border-border text-muted-foreground')}>
+                                {rankLabel(r.rank)}
+                              </Badge>
+                            </div>
+                            {r.penalized && <Badge variant="outline" className="text-[10px] border-amber/30 text-amber mb-2">⚠️ Active balance — ranked lower</Badge>}
+                            <p className="text-2xl font-extrabold text-violet-light">{r.effectiveRate}%<span className="text-sm font-normal text-muted-foreground ml-1">effective back</span></p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {r.rewardType === 'cashback' ? `${r.effectiveRate}% cash back` : `${r.multiplier}x ${r.programName} (${r.effectiveRate}% value)`}
+                            </p>
+                            {r.earnedDollars != null && (
+                              <p className={cn('text-sm font-semibold mt-1.5', r.penalized ? 'text-amber' : 'text-green')}>
+                                {r.penalized ? `~$${(r.earnedDollars / 0.5).toFixed(2)} if not carrying a balance` : `Earn $${r.earnedDollars.toFixed(2)} on this purchase`}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{r.notes}</p>
+                          </CardContent>
+                        </Card>
                       ))}
                       {rewardResults.unmatchedAccounts.length > 0 && (
-                        <div style={{ fontSize: 12, color: 'var(--text-sm)', textAlign: 'center', padding: '8px 0' }}>
-                          Cards not in reward database: {rewardResults.unmatchedAccounts.join(', ')}
-                        </div>
+                        <p className="text-xs text-muted-foreground text-center">Not in database: {rewardResults.unmatchedAccounts.join(', ')}</p>
                       )}
-                    </>
+                    </div>
                   )
                 )}
 
-                <div style={{ fontSize: 11, color: 'var(--text-sm)', textAlign: 'center', marginTop: 12, paddingBottom: 4 }}>
-                  {updatedNote}
-                </div>
-              </>
+                <p className="text-xs text-muted-foreground text-center pb-2">{updatedNote}</p>
+              </div>
             )}
           </>
         )}

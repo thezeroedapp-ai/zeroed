@@ -3,6 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
 export default function Signup() {
   const navigate = useNavigate();
   const [name, setName]         = useState('');
@@ -43,31 +47,42 @@ export default function Signup() {
       <div className="auth-card">
         <div className="auth-title">Create account</div>
 
-        {error && <div className="auth-error">{error}</div>}
+        {error && (
+          <div className="bg-red/10 border border-red/25 rounded-xl px-4 py-3 text-sm text-red mb-4">
+            {error}
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Name</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Your name" />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Name</Label>
+            <Input type="text" value={name} onChange={e => setName(e.target.value)} required
+              placeholder="Your name"
+              className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
           </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@example.com" />
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Email</Label>
+            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              placeholder="you@example.com"
+              className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
           </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" minLength={6} />
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Password</Label>
+            <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+              placeholder="••••••••" minLength={6}
+              className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
           </div>
-          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+          <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90">
             {loading ? 'Creating account…' : 'Create account'}
-          </button>
+          </Button>
         </form>
 
         <div className="auth-divider">or</div>
 
-        <button className="btn btn-outline btn-block" onClick={handleGoogle} type="button">
+        <Button variant="outline" onClick={handleGoogle} type="button"
+          className="w-full border-border text-foreground hover:bg-card/80">
           Continue with Google
-        </button>
+        </Button>
       </div>
 
       <div className="auth-footer">

@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
 
 type PlanTab = 'strategy' | 'goals' | 'insights';
 type Strategy = 'avalanche' | 'snowball' | 'hybrid' | 'cashflow';
 
-const STRATEGIES: { id: Strategy; name: string; sub: string }[] = [
-  { id: 'avalanche', name: 'Avalanche',  sub: 'Highest APR first' },
-  { id: 'snowball',  name: 'Snowball',   sub: 'Smallest balance first' },
-  { id: 'hybrid',    name: 'Hybrid',     sub: 'Balanced approach' },
-  { id: 'cashflow',  name: 'Cash Flow',  sub: 'Free up minimums fast' },
+const STRATEGIES: { id: Strategy; name: string; sub: string; best: string; icon: string }[] = [
+  { id: 'avalanche', name: 'Avalanche',  sub: 'Highest APR first',       best: 'Min total interest',     icon: '🔥' },
+  { id: 'snowball',  name: 'Snowball',   sub: 'Smallest balance first',   best: 'Fast wins, motivation',  icon: '❄️' },
+  { id: 'hybrid',    name: 'Hybrid',     sub: 'APR + balance weighted',   best: 'Balanced approach',      icon: '⚖️' },
+  { id: 'cashflow',  name: 'Cash Flow',  sub: 'Free up minimums fastest', best: 'Maximize monthly cash',  icon: '💸' },
 ];
 
 interface PlanCard { name: string; balance_current: number; apr: number; minimum_payment: number; payoffMonth?: number; payoffDate?: string; }
@@ -45,24 +54,19 @@ const PLAN_TABS = [
 export default function Plan() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = (searchParams.get('tab') || 'strategy') as PlanTab;
+  function setTab(t: PlanTab) { t === 'strategy' ? setSearchParams({}) : setSearchParams({ tab: t }); }
 
-  function setTab(t: PlanTab) {
-    t === 'strategy' ? setSearchParams({}) : setSearchParams({ tab: t });
-  }
-
-  // ── Strategy tab state ──
-  const [planState, setPlanState] = useState<'loading' | 'error' | 'content'>('loading');
-  const [plan, setPlan]           = useState<PlanData | null>(null);
-  const [strategy, setStrategy]   = useState<Strategy>('avalanche');
-  const [planError, setPlanError] = useState('');
+  const [planState, setPlanState]   = useState<'loading' | 'error' | 'content'>('loading');
+  const [plan, setPlan]             = useState<PlanData | null>(null);
+  const [strategy, setStrategy]     = useState<Strategy>('avalanche');
+  const [planError, setPlanError]   = useState('');
   const [lumpAmount, setLumpAmount] = useState('');
   const [lumpResult, setLumpResult] = useState<LumpResult | null>(null);
   const [lumpLoading, setLumpLoading] = useState(false);
-  const [reqDate, setReqDate]     = useState('');
-  const [reqResult, setReqResult] = useState<ReqResult | null>(null);
+  const [reqDate, setReqDate]       = useState('');
+  const [reqResult, setReqResult]   = useState<ReqResult | null>(null);
   const [reqLoading, setReqLoading] = useState(false);
 
-  // ── Goals tab state ──
   const [goalsState, setGoalsState] = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
   const [goals, setGoals]           = useState<Goal[]>([]);
   const [goalAccounts, setGoalAccounts] = useState<GoalAccount[]>([]);
@@ -71,21 +75,15 @@ export default function Plan() {
   const [form, setForm]             = useState({ type: 'debt_free_date', accountId: '', targetDate: '', targetAmount: '' });
   const [saving, setSaving]         = useState(false);
 
-  // ── Insights tab state ──
   const [insightState, setInsightState] = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
   const [insightData, setInsightData]   = useState<InsightData | null>(null);
   const [generating, setGenerating]     = useState(false);
 
-  // Load plan on mount (strategy tab default)
   useEffect(() => { loadPlan(); }, []);
-
-  // Lazy-load Goals and Insights on first visit
   useEffect(() => {
     if (tab === 'goals'    && goalsState   === 'idle') loadGoals();
     if (tab === 'insights' && insightState === 'idle') loadInsights();
   }, [tab]);
-
-  // ── Strategy tab ──
 
   async function loadPlan(strat: Strategy = strategy) {
     setPlanState('loading');
@@ -120,8 +118,6 @@ export default function Plan() {
       setReqResult(await r.json());
     } finally { setReqLoading(false); }
   }
-
-  // ── Goals tab ──
 
   async function loadGoals() {
     setGoalsState('loading');
@@ -166,8 +162,6 @@ export default function Plan() {
     return 'Goal';
   }
 
-  // ── Insights tab ──
-
   async function loadInsights() {
     setInsightState('loading');
     try {
@@ -185,134 +179,177 @@ export default function Plan() {
       const d = await r.json();
       if (r.status === 429) { alert(d.error); return; }
       setInsightData(d);
+      setInsightState('content');
     } finally { setGenerating(false); }
   }
 
   return (
-    <div className="page">
-      <div className="top-bar">
-        <h1>Plan</h1>
-        <div className="sub">Your debt-free roadmap</div>
+    <div className="min-h-dvh bg-background">
+      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-[17px] font-bold text-foreground">Plan</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Your debt-free roadmap</p>
+        </div>
       </div>
 
-      <div className="content">
+      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-3xl mx-auto">
         <SubNav tabs={PLAN_TABS} active={tab} onChange={t => setTab(t as PlanTab)} />
 
         {/* ── STRATEGY TAB ── */}
         {tab === 'strategy' && (
           <>
-            {planState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Calculating your plan…</p></div>}
+            {planState === 'loading' && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="spinner" /><p className="text-sm text-muted-foreground">Calculating your plan…</p>
+              </div>
+            )}
             {planState === 'error' && (
-              <div className="error-state">
-                <div className="error-icon">⚠️</div>
-                <p>Could not load plan</p><small>{planError}</small>
-                <button className="btn btn-primary" onClick={() => loadPlan()}>Try Again</button>
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span>
+                <p className="font-semibold">Could not load plan</p>
+                <p className="text-sm text-muted-foreground">{planError}</p>
+                <Button onClick={() => loadPlan()} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
             {planState === 'content' && plan && (
-              <>
-                <div className="section-title">Strategy</div>
-                <div className="strategy-grid">
-                  {STRATEGIES.map(s => (
-                    <button key={s.id} className={`strategy-btn ${strategy === s.id ? 'active' : ''}`} onClick={() => selectStrategy(s.id)}>
-                      <span className="strat-name">{s.name}</span>
-                      <span className="strat-sub">{s.sub}</span>
-                    </button>
-                  ))}
+              <div className="space-y-4">
+                {/* Strategy selector */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Strategy</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {STRATEGIES.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => selectStrategy(s.id)}
+                        className={cn(
+                          'flex flex-col gap-1 p-3 rounded-xl border text-left transition-all cursor-pointer font-[inherit]',
+                          strategy === s.id
+                            ? 'border-[var(--primary)]/50 bg-violet-dim/30 ring-1 ring-[var(--primary)]/20'
+                            : 'border-border bg-card hover:border-border/60',
+                        )}
+                      >
+                        <span className="text-xl">{s.icon}</span>
+                        <span className="text-sm font-bold text-foreground">{s.name}</span>
+                        <span className="text-xs text-muted-foreground">{s.sub}</span>
+                        <Badge variant="outline" className={cn('text-[10px] w-fit mt-0.5', strategy === s.id ? 'border-[var(--primary)]/40 text-violet-light' : 'border-border text-muted-foreground')}>
+                          {s.best}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="card">
-                  <div className="card-label">Debt-Free Date</div>
-                  <div style={{ fontSize: 28, fontWeight: 800 }}>{plan.debtFreeDate}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-sm)', marginTop: 4 }}>
-                    {plan.months} months · {fmtD(plan.totalInterest)} total interest
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-sm)', marginTop: 2 }}>
-                    {fmtD(plan.surplus)}/mo surplus · {fmtD(plan.sinkingFundTotal)}/mo reserved
-                  </div>
-                </div>
+                {/* Debt-free summary */}
+                <Card className="bg-card border-border">
+                  <CardContent className="p-4">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Debt-Free Date</p>
+                    <p className="text-3xl font-extrabold text-foreground">{plan.debtFreeDate}</p>
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      <span className="text-xs text-muted-foreground">{plan.months} months</span>
+                      <span className="text-xs text-red">{fmtD(plan.totalInterest)} total interest</span>
+                      <span className="text-xs text-green">{fmtD(plan.surplus)}/mo surplus</span>
+                    </div>
+                  </CardContent>
+                </Card>
 
+                {/* Scenarios */}
                 {plan.scenarios && plan.scenarios.length > 0 && (
-                  <>
-                    <div className="section-title">Pay More Scenarios</div>
-                    <div className="scenarios">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Pay More Scenarios</p>
+                    <div className="grid grid-cols-3 gap-2">
                       {plan.scenarios.map((sc, i) => (
-                        <div key={i} className="scenario">
-                          <div className="sc-label">+{fmt(sc.extra)}/mo</div>
-                          <div className="sc-months">{sc.months}</div>
-                          <div className="sc-unit">months</div>
-                          <div className="sc-interest">Save {fmt(sc.interestSaved)}</div>
-                        </div>
+                        <Card key={i} className="bg-surface-2 border-border text-center">
+                          <CardContent className="p-3">
+                            <p className="text-xs text-muted-foreground font-semibold">+{fmt(sc.extra)}/mo</p>
+                            <p className="text-2xl font-extrabold text-foreground my-1">{sc.months}</p>
+                            <p className="text-xs text-muted-foreground">months</p>
+                            <p className="text-xs text-green font-semibold mt-1">Save {fmt(sc.interestSaved)}</p>
+                          </CardContent>
+                        </Card>
                       ))}
                     </div>
-                  </>
+                  </div>
                 )}
 
-                <div className="section-title">Attack Order</div>
-                <div className="card">
-                  {plan.cards.map((c, i) => (
-                    <div key={i} className="attack-item">
-                      <div className="attack-num">{i + 1}</div>
-                      <div className="attack-body">
-                        <div className="attack-name">{c.name}</div>
-                        <div className="attack-sub">{c.apr}% APR · {fmtD(c.minimum_payment)}/mo min</div>
-                      </div>
-                      <div className="attack-right">
-                        <div className="attack-balance">{fmtD(c.balance_current)}</div>
-                        {c.payoffDate && <div className="attack-payoff">Free {c.payoffDate}</div>}
-                      </div>
-                    </div>
-                  ))}
+                {/* Attack order */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Attack Order</p>
+                  <Card className="bg-card border-border">
+                    <CardContent className="p-0">
+                      {plan.cards.map((c, i) => (
+                        <div key={i} className={cn('flex items-center gap-3 px-4 py-3', i < plan.cards.length - 1 && 'border-b border-border')}>
+                          <div className="w-7 h-7 rounded-full bg-violet-dim border border-[var(--primary)]/30 text-violet-light text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{c.apr}% APR · {fmtD(c.minimum_payment)}/mo min</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold tabular text-foreground">{fmtD(c.balance_current)}</p>
+                            {c.payoffDate && <p className="text-xs text-green mt-0.5">Free {c.payoffDate}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
                 </div>
 
-                <div className="section-title">Lump-Sum Simulator</div>
-                <div className="card">
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-                    <input
-                      style={{ flex: 1, padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 15, fontFamily: 'inherit' }}
-                      type="number" min="1" placeholder="$ extra payment"
-                      value={lumpAmount} onChange={e => { setLumpAmount(e.target.value); setLumpResult(null); }}
-                    />
-                    <button className="btn btn-primary btn-sm" onClick={calcLump} disabled={!lumpAmount || lumpLoading}>
-                      {lumpLoading ? '…' : 'Calculate'}
-                    </button>
-                  </div>
-                  {lumpResult && (
-                    <div className="lump-result">
-                      <strong>Done by {lumpResult.newDebtFreeDate}</strong>
-                      Saves {lumpResult.monthsSaved} month{lumpResult.monthsSaved !== 1 ? 's' : ''} and {fmtD(lumpResult.interestSaved)} in interest
+                {/* Lump-sum */}
+                <Card className="bg-card border-border">
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-sm font-semibold text-foreground">💰 Lump-Sum Simulator</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        type="number" min="1" placeholder="$ extra payment"
+                        value={lumpAmount}
+                        onChange={e => { setLumpAmount(e.target.value); setLumpResult(null); }}
+                        className="bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-[var(--primary)]/50"
+                      />
+                      <Button onClick={calcLump} disabled={!lumpAmount || lumpLoading} className="bg-primary hover:bg-primary/90 shrink-0">
+                        {lumpLoading ? '…' : 'Calculate'}
+                      </Button>
                     </div>
-                  )}
-                </div>
+                    {lumpResult && (
+                      <div className="p-3 rounded-lg bg-green-dim border border-green/20 text-sm text-green">
+                        <p className="font-bold text-base">Done by {lumpResult.newDebtFreeDate}</p>
+                        <p className="mt-0.5 text-xs">Saves {lumpResult.monthsSaved} month{lumpResult.monthsSaved !== 1 ? 's' : ''} and {fmtD(lumpResult.interestSaved)} in interest</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-                <div className="section-title">Required Payment Calculator</div>
-                <div className="req-calc">
-                  <div style={{ fontSize: 13, color: 'var(--text-sm)', marginBottom: 10 }}>
-                    How much extra per month to be debt-free by a target date?
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      style={{ flex: 1, padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 10, fontSize: 15 }}
-                      type="date" value={reqDate}
-                      onChange={e => { setReqDate(e.target.value); setReqResult(null); }}
-                    />
-                    <button className="btn btn-primary btn-sm" onClick={calcRequired} disabled={!reqDate || reqLoading}>
-                      {reqLoading ? '…' : 'Calculate'}
-                    </button>
-                  </div>
-                  {reqResult && (
-                    <div className={`req-result ${reqResult.extra === 0 ? 'no-extra' : ''} ${!reqResult.feasible ? 'impossible' : ''}`}>
-                      {!reqResult.feasible ? (
-                        <><span className="req-amount">Not achievable</span>That date is before the minimum payment payoff. Try a later date.</>
-                      ) : reqResult.extra === 0 ? (
-                        <><span className="req-amount">No extra needed</span>Minimum payments already get you there.</>
-                      ) : (
-                        <><span className="req-amount">+{fmtD(reqResult.extra)}/mo</span>Extra payment needed on top of minimums.</>
-                      )}
+                {/* Required payment */}
+                <Card className="bg-card border-border">
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-sm font-semibold text-foreground">📅 Required Payment Calculator</CardTitle>
+                    <p className="text-xs text-muted-foreground">How much extra/mo to be debt-free by a target date?</p>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        type="date" value={reqDate}
+                        onChange={e => { setReqDate(e.target.value); setReqResult(null); }}
+                        className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50"
+                      />
+                      <Button onClick={calcRequired} disabled={!reqDate || reqLoading} className="bg-primary hover:bg-primary/90 shrink-0">
+                        {reqLoading ? '…' : 'Calculate'}
+                      </Button>
                     </div>
-                  )}
-                </div>
-              </>
+                    {reqResult && (
+                      <div className={cn('p-3 rounded-lg border text-sm', !reqResult.feasible ? 'bg-red-dim border-red/20 text-red' : reqResult.extra === 0 ? 'bg-green-dim border-green/20 text-green' : 'bg-violet-dim/30 border-[var(--primary)]/30 text-violet-light')}>
+                        {!reqResult.feasible ? (
+                          <><p className="text-base font-extrabold">Not achievable</p><p className="text-xs mt-0.5">That date is before the minimum payment payoff. Try a later date.</p></>
+                        ) : reqResult.extra === 0 ? (
+                          <><p className="text-base font-extrabold">No extra needed</p><p className="text-xs mt-0.5">Minimum payments already get you there.</p></>
+                        ) : (
+                          <><p className="text-2xl font-extrabold tabular">+{fmtD(reqResult.extra)}/mo</p><p className="text-xs mt-0.5">Extra payment needed on top of minimums.</p></>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </>
         )}
@@ -320,120 +357,131 @@ export default function Plan() {
         {/* ── GOALS TAB ── */}
         {tab === 'goals' && (
           <>
-            {goalsState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Loading goals…</p></div>}
+            {goalsState === 'loading' && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="spinner" /><p className="text-sm text-muted-foreground">Loading goals…</p>
+              </div>
+            )}
             {goalsState === 'error' && (
-              <div className="error-state">
-                <div className="error-icon">⚠️</div>
-                <p>Could not load goals</p><small>{goalsError}</small>
-                <button className="btn btn-primary" onClick={loadGoals}>Try Again</button>
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span>
+                <p className="font-semibold">Could not load goals</p>
+                <p className="text-sm text-muted-foreground">{goalsError}</p>
+                <Button onClick={loadGoals} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
             {goalsState === 'content' && (
-              <>
+              <div className="space-y-3">
                 {goals.length === 0 && !showForm && (
-                  <div className="empty">
-                    <div className="empty-icon">🎯</div>
-                    <p>No goals yet</p>
-                    <small>Add a goal to track your progress toward debt freedom.</small>
+                  <div className="flex flex-col items-center py-16 gap-3 text-center">
+                    <span className="text-4xl">🎯</span>
+                    <p className="font-semibold">No goals yet</p>
+                    <p className="text-sm text-muted-foreground">Add a goal to track your path to debt freedom.</p>
                   </div>
                 )}
 
                 {goals.map(g => (
-                  <div key={g.id} className={`goal-card ${g.onTrack ? 'on-track' : 'off-track'}`}>
-                    <div className="goal-header">
-                      <div>
-                        <div className="goal-type">{g.goal_type.replace(/_/g, ' ')}</div>
-                        <div className="goal-label">{goalLabel(g)}</div>
-                        {g.target_date && (
-                          <div className="goal-meta">Target: {new Date(g.target_date + 'T12:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
-                        )}
-                        {g.target_amount && <div className="goal-meta">Target: {fmtD(g.target_amount)}</div>}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                        <span className={`goal-status-badge ${g.onTrack ? 'on-track' : 'off-track'}`}>
-                          {g.onTrack ? '✅ On track' : '⚠️ Off track'}
-                        </span>
-                        <button className="btn btn-danger" onClick={() => deleteGoal(g.id)}>Delete</button>
-                      </div>
-                    </div>
-
-                    {g.progress != null && (
-                      <div className="progress-wrap">
-                        <div className="progress-bar">
-                          <div className="progress-fill blue" style={{ width: `${Math.min(g.progress, 100)}%` }} />
+                  <Card key={g.id} className={cn('bg-card border-border border-l-4', g.onTrack ? 'border-l-green' : 'border-l-amber')}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{g.goal_type.replace(/_/g, ' ')}</p>
+                          <p className="text-base font-semibold text-foreground mt-0.5">{goalLabel(g)}</p>
+                          {g.target_date && <p className="text-xs text-muted-foreground mt-1">Target: {new Date(g.target_date + 'T12:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>}
+                          {g.target_amount && <p className="text-xs text-muted-foreground mt-1">Target: {fmtD(g.target_amount)}</p>}
                         </div>
-                        <div className="progress-labels">
-                          <span>{g.progress.toFixed(0)}% complete</span>
-                          {g.projectedDate && <span>Projected: {g.projectedDate}</span>}
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <Badge variant="outline" className={cn('text-xs', g.onTrack ? 'bg-green-dim text-green border-green/20' : 'bg-amber-dim text-amber border-amber/20')}>
+                            {g.onTrack ? '✅ On track' : '⚠️ Off track'}
+                          </Badge>
+                          <Button variant="outline" size="sm" onClick={() => deleteGoal(g.id)} className="text-xs h-7 border-red/30 text-red hover:bg-red-dim">Delete</Button>
                         </div>
                       </div>
-                    )}
 
-                    {g.requiredExtra != null && g.requiredExtra > 0 && (
-                      <div className="goal-action">
-                        Needs <strong>+{fmt(g.requiredExtra)}/mo</strong> extra to stay on track.
-                      </div>
-                    )}
-
-                    {g.milestones && g.milestones.length > 0 && (
-                      <div className="milestone-list" style={{ marginTop: 12 }}>
-                        {g.milestones.map((m, i) => (
-                          <div key={i} className="milestone-row">
-                            <div className={`milestone-dot ${m.done ? 'done' : m.next ? 'next' : ''}`}>
-                              {m.done ? '✓' : m.next ? '→' : '○'}
-                            </div>
-                            <div className="milestone-body">
-                              <div className="milestone-title">{m.label}</div>
-                            </div>
-                            <div className="milestone-right">{m.date}</div>
+                      {g.progress != null && (
+                        <div className="mt-3">
+                          <Progress value={Math.min(g.progress, 100)} className="h-1.5" />
+                          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                            <span>{g.progress.toFixed(0)}% complete</span>
+                            {g.projectedDate && <span>Projected: {g.projectedDate}</span>}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      )}
+
+                      {g.requiredExtra != null && g.requiredExtra > 0 && (
+                        <div className="mt-3 p-2 rounded-lg bg-surface-2 text-xs text-muted-foreground">
+                          Needs <span className="font-bold text-violet-light">+{fmt(g.requiredExtra)}/mo</span> extra to stay on track.
+                        </div>
+                      )}
+
+                      {g.milestones && g.milestones.length > 0 && (
+                        <div className="mt-3 space-y-0">
+                          <Separator className="bg-border mb-2" />
+                          {g.milestones.map((m, i) => (
+                            <div key={i} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                              <div className={cn('w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-xs border-2', m.done ? 'bg-green border-green text-white' : m.next ? 'bg-primary border-primary text-white' : 'bg-surface-2 border-border text-muted-foreground')}>
+                                {m.done ? '✓' : m.next ? '→' : '○'}
+                              </div>
+                              <p className="flex-1 text-sm font-medium text-foreground">{m.label}</p>
+                              <p className="text-xs text-muted-foreground">{m.date}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 ))}
 
                 {showForm && (
-                  <div className="card" style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>New Goal</div>
-                    <div className="form-group">
-                      <label>Type</label>
-                      <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}>
-                        <option value="debt_free_date">Debt-Free Date</option>
-                        <option value="account_payoff">Pay Off Card</option>
-                        <option value="balance_target">Balance Target</option>
-                      </select>
-                    </div>
-                    {form.type !== 'debt_free_date' && (
-                      <div className="form-group">
-                        <label>Card</label>
-                        <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))}>
-                          <option value="">Select card…</option>
-                          {goalAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
+                  <Card className="bg-card border-border">
+                    <CardHeader className="pt-4 pb-2 px-4">
+                      <CardTitle className="text-base font-semibold">New Goal</CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Type</Label>
+                        <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
+                          <SelectTrigger className="bg-input border-border text-foreground"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-card border-border text-foreground">
+                            <SelectItem value="debt_free_date">Debt-Free Date</SelectItem>
+                            <SelectItem value="account_payoff">Pay Off Card</SelectItem>
+                            <SelectItem value="balance_target">Balance Target</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    )}
-                    <div className="form-group">
-                      <label>Target Date</label>
-                      <input type="date" value={form.targetDate} onChange={e => setForm(p => ({ ...p, targetDate: e.target.value }))} />
-                    </div>
-                    {form.type === 'balance_target' && (
-                      <div className="form-group">
-                        <label>Target Balance ($)</label>
-                        <input type="number" value={form.targetAmount} onChange={e => setForm(p => ({ ...p, targetAmount: e.target.value }))} placeholder="0.00" />
+                      {form.type !== 'debt_free_date' && (
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Card</Label>
+                          <Select value={form.accountId} onValueChange={v => setForm(p => ({ ...p, accountId: v }))}>
+                            <SelectTrigger className="bg-input border-border text-foreground"><SelectValue placeholder="Select card…" /></SelectTrigger>
+                            <SelectContent className="bg-card border-border text-foreground">
+                              {goalAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Target Date</Label>
+                        <Input type="date" value={form.targetDate} onChange={e => setForm(p => ({ ...p, targetDate: e.target.value }))} className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
                       </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-primary" onClick={addGoal} disabled={saving}>{saving ? '…' : 'Add Goal'}</button>
-                      <button className="btn btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
-                    </div>
-                  </div>
+                      {form.type === 'balance_target' && (
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Target Balance ($)</Label>
+                          <Input type="number" value={form.targetAmount} onChange={e => setForm(p => ({ ...p, targetAmount: e.target.value }))} placeholder="0.00" className="bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button onClick={addGoal} disabled={saving} className="bg-primary hover:bg-primary/90">{saving ? '…' : 'Add Goal'}</Button>
+                        <Button variant="outline" onClick={() => setShowForm(false)} className="border-border text-muted-foreground hover:text-foreground">Cancel</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )}
 
                 {!showForm && (
-                  <button className="btn btn-primary btn-block mt-12" onClick={() => setShowForm(true)}>+ Add Goal</button>
+                  <Button onClick={() => setShowForm(true)} className="w-full bg-primary hover:bg-primary/90">+ Add Goal</Button>
                 )}
-              </>
+              </div>
             )}
           </>
         )}
@@ -441,56 +489,55 @@ export default function Plan() {
         {/* ── INSIGHTS TAB ── */}
         {tab === 'insights' && (
           <>
-            {insightState === 'loading' && <div className="loading-state"><div className="spinner" /><p>Loading insights…</p></div>}
+            {insightState === 'loading' && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="spinner" /><p className="text-sm text-muted-foreground">Loading insights…</p>
+              </div>
+            )}
             {insightState === 'error' && (
-              <div className="error-state">
-                <div className="error-icon">⚠️</div>
-                <p>Could not load insights</p>
-                <button className="btn btn-primary" onClick={loadInsights}>Try Again</button>
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <span className="text-3xl">⚠️</span>
+                <p className="font-semibold">Could not load insights</p>
+                <Button onClick={loadInsights} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
             {insightState === 'content' && insightData && (
-              <>
-                <div className="card" style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div>
-                      <div className="card-label">AI Spending Analysis</div>
-                      {insightData.insight?.generated_at && (
-                        <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>
-                          {new Date(insightData.insight.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </div>
-                      )}
+              <div className="space-y-4">
+                <Card className="bg-card border-border">
+                  <CardHeader className="pt-4 pb-3 px-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Spending Analysis</CardTitle>
+                        {insightData.insight?.generated_at && (
+                          <p className="text-xs text-muted-foreground mt-1">{new Date(insightData.insight.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="text-xs border-border text-muted-foreground">
+                        {insightData.isPro ? 'Pro — unlimited' : `${insightData.used}/${insightData.limit} this month`}
+                      </Badge>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'right' }}>
-                      {insightData.isPro ? 'Pro — unlimited' : `${insightData.used}/${insightData.limit} this month`}
-                    </div>
-                  </div>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4">
+                    {insightData.insight ? (
+                      <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{insightData.insight.insight}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground leading-relaxed">No analysis yet. Generate your first AI spending insight — Claude will review your debt profile and transactions to surface personalized recommendations.</p>
+                    )}
+                  </CardContent>
+                </Card>
 
-                  {insightData.insight ? (
-                    <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>
-                      {insightData.insight.insight}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 8 }}>
-                      No analysis yet. Generate your first AI spending insight — Claude will review your debt profile and transactions to surface personalized recommendations.
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  className="btn btn-primary btn-block"
+                <Button
                   onClick={generateInsight}
                   disabled={generating || (!insightData.isPro && insightData.remaining === 0)}
+                  className="w-full bg-primary hover:bg-primary/90"
                 >
                   {generating ? 'Analyzing…' : insightData.insight ? 'Refresh Analysis' : 'Generate Analysis'}
-                </button>
+                </Button>
 
                 {!insightData.isPro && insightData.remaining === 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'center', marginTop: 8 }}>
-                    Monthly limit reached. Resets next month.
-                  </div>
+                  <p className="text-xs text-muted-foreground text-center">Monthly limit reached. Resets next month.</p>
                 )}
-              </>
+              </div>
             )}
           </>
         )}

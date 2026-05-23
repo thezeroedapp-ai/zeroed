@@ -1,61 +1,81 @@
 import { NavLink } from 'react-router-dom';
+import {
+  Home, Target, CreditCard, TrendingUp, Settings, Shield,
+} from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useAuth } from '../context/AuthContext';
 
-const navItems = [
-  {
-    to: '/', label: 'Home',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-  },
-  {
-    to: '/plan', label: 'Plan',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
-  },
-  {
-    to: '/accounts', label: 'Accounts',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
-  },
-  {
-    to: '/spending', label: 'Spending',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
-  },
-  {
-    to: '/settings', label: 'Settings',
-    icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-  },
+const NAV = [
+  { to: '/',         label: 'Home',     Icon: Home,       end: true  },
+  { to: '/plan',     label: 'Plan',     Icon: Target,     end: false },
+  { to: '/accounts', label: 'Accounts', Icon: CreditCard, end: false },
+  { to: '/spending', label: 'Spending', Icon: TrendingUp, end: false },
+  { to: '/settings', label: 'Settings', Icon: Settings,   end: false },
 ];
-
-const adminIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-  </svg>
-);
 
 export default function SideNav() {
   const { profile } = useAuth();
 
   return (
-    <nav className="side-nav">
-      <div className="side-nav-logo">Z</div>
-      {navItems.map(({ to, label, icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === '/'}
-          className={({ isActive }) => isActive ? 'active' : ''}
-        >
-          {icon}
-          <span className="side-nav-label">{label}</span>
-        </NavLink>
+    <nav className={cn(
+      'hidden md:flex flex-col fixed top-0 left-0 bottom-0 z-50',
+      'bg-[var(--nav-bg)] border-r border-border',
+      'w-[68px] lg:w-[220px]',
+      'pt-5 pb-4 gap-1',
+      'items-center lg:items-stretch px-2 lg:px-3',
+    )}>
+      {/* Logo */}
+      <div className="gradient-text font-extrabold tracking-tight mb-5 px-1 lg:px-1 text-center lg:text-left">
+        <span className="text-2xl lg:hidden">Z</span>
+        <span className="hidden lg:block text-2xl">Zeroed</span>
+      </div>
+
+      {NAV.map(({ to, label, Icon, end }) => (
+        <Tooltip key={to}>
+          <TooltipTrigger asChild>
+            <NavLink
+              to={to}
+              end={end}
+              className={({ isActive }) => cn(
+                'flex items-center justify-center lg:justify-start gap-3',
+                'w-10 h-10 lg:w-full lg:h-auto lg:px-3 lg:py-2.5 rounded-lg',
+                'text-[13px] font-medium transition-colors no-underline',
+                isActive
+                  ? 'bg-violet-dim text-violet-light'
+                  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+              )}
+            >
+              <Icon size={18} strokeWidth={1.75} className="shrink-0" />
+              <span className="hidden lg:block">{label}</span>
+            </NavLink>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="lg:hidden bg-card border-border text-foreground">
+            {label}
+          </TooltipContent>
+        </Tooltip>
       ))}
+
       {profile?.is_admin && (
-        <NavLink
-          to="/admin"
-          className={({ isActive }) => isActive ? 'active' : ''}
-          style={{ marginTop: 'auto' }}
-        >
-          {adminIcon}
-          <span className="side-nav-label">Admin</span>
-        </NavLink>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <NavLink
+              to="/admin"
+              className={({ isActive }) => cn(
+                'flex items-center justify-center lg:justify-start gap-3 mt-auto',
+                'w-10 h-10 lg:w-full lg:h-auto lg:px-3 lg:py-2.5 rounded-lg',
+                'text-[13px] font-medium transition-colors no-underline',
+                isActive
+                  ? 'bg-violet-dim text-violet-light'
+                  : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+              )}
+            >
+              <Shield size={18} strokeWidth={1.75} className="shrink-0" />
+              <span className="hidden lg:block">Admin</span>
+            </NavLink>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="lg:hidden bg-card border-border text-foreground">Admin</TooltipContent>
+        </Tooltip>
       )}
     </nav>
   );
