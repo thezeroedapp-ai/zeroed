@@ -6,6 +6,25 @@
 
 ## 2026-05-23
 
+### v4.4 — Cloud Functions 2nd Gen + Node 22
+
+**Why:** Deploy warnings after v4.3 ship — Node 20 deprecated (EOL 2026-10-30) and firebase-functions SDK v4 flagged as outdated.
+
+**What changed:**
+- `server/package.json`: `engines.node` 20 → 22; `firebase-functions` `^4.0.0` → `^5.1.0`
+- `server/index.js`: migrated from v1 API to v2 API:
+  - `functions.https.onRequest(app)` → `onRequest(app)` from `firebase-functions/v2/https`
+  - `functions.pubsub.schedule().timeZone().onRun()` → `onSchedule({ schedule, timeZone }, handler)` from `firebase-functions/v2/scheduler`
+  - v2 handler no longer needs `return null`
+
+**Deployment gotcha:** Firebase does not support upgrading 1st Gen → 2nd Gen in place. Had to delete the existing functions first (`firebase functions:delete api dailySync --region us-central1 --force`) before redeploying. Brief downtime (~2 min) during the transition.
+
+**After deploy:** Functions log shows `creating Node.js 22 (2nd Gen)` — both warnings gone.
+
+**Remaining non-issue:** Firebase CLI still prints "outdated firebase-functions" even on v5.1.1 — this is the CLI's own check lagging behind; deploy succeeds cleanly and can be ignored.
+
+---
+
 ### v4.3 — Tech Debt Cleanup + 5-Tab Nav Consolidation
 
 **Goal:** Before building more features, clean up naming inconsistencies and consolidate the 8+ page nav into a 5-tab structure suitable for web, iOS, and Android.

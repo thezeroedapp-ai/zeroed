@@ -12,7 +12,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v4.3 — Tech debt cleanup + 5-tab nav consolidation.** *(2026-05-23)*
+**v4.4 — Cloud Functions 2nd Gen + Node 22.** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
@@ -39,6 +39,7 @@ All screens working (5-tab structure):
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v4.4 | 2026-05-23 | Firebase Cloud Functions upgraded: Node 20 1st Gen → Node 22 2nd Gen; firebase-functions v4 → v5; index.js migrated from v1 API (functions.https/pubsub) to v2 API (onRequest/onSchedule) |
 | v4.3 | 2026-05-23 | Tech debt cleanup (expenses→sinking_funds, recommendations→rewards, removed old HTML public/ dir); 5-tab nav consolidation (Goals→Plan subtab, Budget+Rewards→Accounts subtabs); "Explore cards →" teaser in Spending→Transactions; legacy route redirects |
 | v4.2 | 2026-05-22 | Monarch/Origin parity — all Plaid account types (investment, loan, mortgage, brokerage); net worth on Dashboard + Accounts; Budget screen with per-category progress; Spending screen (transactions + stacked trends chart + recurring detection); first production Firebase deploy to zeroed-3331d.web.app |
 | v4.1 | 2026-05-22 | Dark premium UI redesign — complete `index.css` overhaul (violet accent, navy backgrounds, glassmorphism nav); Dashboard bento grid with recharts debt payoff projection; bug fixes: Recommend auth token, Goals Firestore string IDs, plan route response shape |
@@ -319,6 +320,7 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 - [x] **Mac + Windows simultaneous dev** — `.env.local` committed, `dev:web:remote` script proxies to production *(v4.2)*
 - [x] **Tech debt cleanup** — renamed `expenses`→`sinking_funds` (Firestore + routes), `recommendations`→`rewards`; removed old vanilla HTML public/ dir; consistent `monthly_amount` field throughout *(v4.3, 2026-05-23)*
 - [x] **5-tab nav consolidation** — Goals→Plan subtab, Budget+Rewards→Accounts subtabs; reusable `SubNav` component; URL-based subtab navigation via `useSearchParams`; "Explore cards →" cross-tab deep link *(v4.3, 2026-05-23)*
+- [x] **Cloud Functions 2nd Gen** — Node 20 → 22, firebase-functions v4 → v5, v1 API → v2 `onRequest`/`onSchedule` *(v4.4, 2026-05-23)*
 
 ### Up Next 🔜
 - [ ] Plaid production credentials (apply early — 2–3 week review)
