@@ -6,6 +6,82 @@
 
 ## 2026-05-23
 
+### v5.3 — Glass UI Design System + Dark/Light Theme Toggle
+
+**Why:** The UI was always-dark with no toggle, no elevation system, and flat opaque nav bars. User requested glass UI / material design aesthetic with consistent spacing and a dark/light toggle. Goal: look like a premium consumer fintech product, not a developer side project.
+
+**What changed:**
+
+**Theme system (`apps/web/src/context/ThemeContext.tsx` — new file):**
+- `ThemeProvider` with `useTheme()` hook — `theme: 'dark' | 'light'` + `toggle()` function
+- Reads initial theme from `localStorage.getItem('zeroed-theme')`, defaults to `'dark'`
+- Applies/removes `html.dark` class via `useEffect` on theme change
+- Persists to `localStorage` on every change
+- `toggle()` adds `html.theme-transitioning` class before state change, removes it after 280ms — enables smooth CSS transitions only during the toggle (not during normal interactions, which avoids GPU overhead)
+
+**No-flash init (`apps/web/index.html`):**
+- Added inline `<script>` before `</head>` that reads `localStorage.getItem('zeroed-theme')` and adds `.dark` to `<html>` synchronously before React renders. Without this, dark-mode users see a white flash on load. Script is one line: `(function(){var t=localStorage.getItem('zeroed-theme')||'dark';if(t==='dark')document.documentElement.classList.add('dark');})();`
+
+**`App.tsx`:** Wrapped `<AuthProvider>` with `<ThemeProvider>` — outermost context since theme doesn't depend on auth.
+
+**CSS overhaul (`apps/web/src/index.css`):**
+
+Theme structure:
+- `:root` = light theme (new) — `oklch(0.97 0.007 264)` background, `oklch(1 0 0)` cards, status colors darkened for WCAG contrast on white (`--green: oklch(0.40 0.15 162)`, `--red: oklch(0.46 0.22 22)`, `--amber: oklch(0.46 0.17 82)`)
+- `html.dark` = dark theme (moved from `:root`) — original dark palette unchanged
+- `--violet-light` differs by theme: dark = `oklch(0.72 0.14 290)` (light lavender for dark bg), light = `oklch(0.42 0.22 290)` (deep violet for white bg — maintains WCAG AA contrast)
+- `--gradient-to` CSS var for gradient text second stop — dark: `oklch(0.82 0.12 310)` (light mauve), light: `oklch(0.62 0.19 310)` (medium violet-pink). Both `.gradient-text` and `.auth-logo` now use `var(--gradient-to)` instead of hardcoded oklch
+
+Glass utilities added:
+- `.glass` — `backdrop-filter: blur(20px) saturate(180%)` + `-webkit-` prefix
+- `.side-nav` — glass sidebar with `var(--nav-bg)` background + `var(--shadow-nav)` side shadow. Replaces hardcoded `bg-[var(--nav-bg)]` on SideNav.
+- `.bottom-nav` — glass bottom bar with `var(--nav-bg)`. Replaces hardcoded `bg-[color:oklch(0.075_0.018_262/92%)]` (dark-mode-only color).
+- `.top-bar` — `color-mix(in oklch, var(--background) 88%, transparent)` + blur. Uses native CSS `color-mix()` for opacity (more reliable than Tailwind's `/85` modifier with oklch CSS vars).
+- `.card-hero` — `box-shadow: var(--shadow-hero)`. In dark mode this includes a 80px oklch violet ambient glow.
+
+Elevation shadow system:
+- `--shadow-card`: soft card shadow (light: `0 1px 3px + 0 4px 16px`, dark: `0 2px 8px oklch(0 0 0 / 35%) + 1px ring`)
+- `--shadow-elevated`: stronger shadow for dialogs, sheets
+- `--shadow-hero`: hero card — plus violet glow in dark (`0 0 80px oklch(0.49 0.21 290 / 14%)`)
+- `--shadow-nav`: directional sidebar shadow
+- In `@theme inline`: `--shadow-sm: var(--shadow-card)` and `--shadow-md: var(--shadow-elevated)` — overrides Tailwind's default shadow values. Since shadcn `Card` uses `shadow-sm` by default, every card in the app automatically gets elevation-aware shadows without touching any component code.
+
+Page background:
+- `body` now has `background-image: radial-gradient(ellipse 70% 45% at 65% -10%, oklch(0.49 0.21 290 / 10%) 0%, transparent 70%)` — violet bloom in the upper-right corner. In dark mode this is a visible purple glow; in light mode it's a very subtle tint. This gives glass cards something to reveal behind them via `backdrop-filter`.
+
+Theme transition:
+```css
+html.theme-transitioning *, ... {
+  transition: background-color 0.22s ease, border-color 0.22s ease, color 0.22s ease, box-shadow 0.22s ease, fill 0.22s ease !important;
+}
+```
+Applied only while toggling — not on every mouse interaction.
+
+**SideNav.tsx rewrites:**
+- Replaced `bg-[var(--nav-bg)] border-r border-border` → `side-nav border-r border-border` (CSS class)
+- Added `Sun` and `Moon` imports from lucide-react
+- Added `useTheme()` import
+- Replaced `mt-auto` on admin NavLink with explicit `<div className="flex-1" />` spacer — cleaner than CSS auto-margin trick
+- Added theme toggle button (Sun/Moon icon + label) at very bottom of sidebar, with `Tooltip` on icon-only (md) viewport
+- Extracted `itemClass()` helper to deduplicate active/inactive nav link styles
+
+**BottomNav.tsx:**
+- Changed `'bg-[color:oklch(0.075_0.018_262/92%)] backdrop-blur-xl'` → `'bottom-nav'` — removes dark-mode-only hardcoded color; now theme-aware
+
+**Dashboard.tsx:**
+- Top bar: `'backdrop-blur-xl border-b border-border bg-background/85'` → `'top-bar border-b border-border'` (CSS class, avoids Tailwind oklch opacity modifier issues)
+- Hero card: added `card-hero` CSS class for violet-glow shadow; changed `mb-4` → `mb-5` for breathing room; border changed from `border-border` → `border-[var(--primary)]/20` for a subtle violet tint
+
+**Decisions:**
+- **Default dark, not default light** — Zeroed's brand is dark. Light mode is a toggle for users who want it, not the primary experience.
+- **`html.dark` class strategy (not `prefers-color-scheme` media query)** — user preference should override system preference. The Sun/Moon toggle lets users set their own preference regardless of OS setting.
+- **`color-mix()` for top bar opacity** — Tailwind's `bg-background/85` opacity modifier is unreliable with oklch CSS custom properties in v4. `color-mix(in oklch, var(--background) 88%, transparent)` is a direct CSS solution that works in all modern browsers.
+- **Shadow override via `@theme inline`** — instead of adding `.shadow-*` classes to every card, overriding `--shadow-sm` in `@theme inline` means all existing shadcn cards get elevation-aware shadows automatically. One change, global effect.
+- **`backdrop-filter` only where it matters** — didn't apply glass to every card (GPU cost). Glass on: sidebar (always visible), bottom nav (always visible), top bar (sticky, always visible), hero card (main focal point). Widget cards get elevation via shadow only.
+- **No `useLayoutEffect` for theme init** — the `index.html` inline script handles the initial class synchronously. `useEffect` in `ThemeContext` handles subsequent toggles. The 1-frame delay on toggle is imperceptible and avoids SSR issues.
+
+---
+
 ### v5.2 — shadcn/ui + Tailwind v4 Migration
 
 **Why:** The hand-rolled CSS design system was showing cracks — subtle alignment bugs, inconsistent card sizing, no component hierarchy, and chart widgets that looked out of place across screens. The goal was a polished consumer-fintech UI with better charts and drill-down capability. Evaluated Tremor and Nivo; chose shadcn/ui because it gives the most control (copy-paste, not a dependency to fight), pairs natively with recharts (already installed), and Tailwind v4 removes all config friction.

@@ -12,17 +12,17 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v5.2 — shadcn/ui + Tailwind v4 migration, polished charts, drill-down panels.** *(2026-05-23)*
+**v5.3 — Glass UI design system + dark/light theme toggle.** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
-Full Firebase stack live with a dark premium UI:
+Full Firebase stack live with a premium UI supporting dark and light modes:
 
 - **Auth:** Firebase Authentication (email/password + Google OAuth)
 - **Database:** Firestore — subcollections under `users/{uid}/`
 - **API:** Express wrapped as Firebase Cloud Functions (`exports.api`)
 - **Hosting:** Firebase Hosting (React SPA) + Rewrites to Cloud Functions
-- **Frontend:** React 18 + Vite + TypeScript — shadcn/ui component library, Tailwind CSS v4, lucide-react icons, 5-tab nav with subtabs, drag-and-drop dashboard
+- **Frontend:** React 18 + Vite + TypeScript — shadcn/ui component library, Tailwind CSS v4, lucide-react icons, 5-tab nav with subtabs, drag-and-drop dashboard, glass UI with dark/light toggle
 
 All screens working (5-tab structure):
 - **Home (Dashboard)** — hero card (total debt + monthly interest cost + 3-stat strip), customizable 7-widget drag-and-drop grid: payoff projection area chart, spending by category horizontal bars (click → drill-down Sheet), net worth sparkline (click → assets/liabilities detail), priority attack card, goals progress, AI insights, alerts. Widget order + visibility saved to Firestore. Touch-friendly (dnd-kit).
@@ -39,6 +39,7 @@ All screens working (5-tab structure):
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v5.3 | 2026-05-23 | Glass UI design system + dark/light theme toggle: `ThemeContext` with `localStorage` persistence (`zeroed-theme` key), `html.dark` CSS class strategy, inline script in `index.html` prevents flash; full light theme (separate oklch palette — near-white surfaces, darker status colors for contrast); frosted glass SideNav, BottomNav, Dashboard top bar via `backdrop-filter: blur(20px)`; hero card violet glow (`card-hero` box-shadow with oklch ambient glow in dark mode); elevation shadow system (`--shadow-card`/`--shadow-elevated`/`--shadow-hero` CSS vars override Tailwind `shadow-sm`/`shadow-md`); violet radial gradient page background gives glass depth; Sun/Moon toggle at sidebar bottom; smooth `theme-transitioning` CSS class animates colors on toggle |
 | v5.2 | 2026-05-23 | shadcn/ui + Tailwind v4 migration: replaced hand-rolled CSS with shadcn/ui component library (Card, Button, Badge, Input, Select, Progress, Sheet, ChartContainer, Tooltip — 15 components); Tailwind CSS v4 via `@tailwindcss/vite`, CSS-first `@theme inline` config with oklch color palette; lucide-react icons; all pages rewritten (Dashboard, Plan, Accounts, Spending, Settings, Login, Signup); drill-down `Sheet` panels on dashboard (spending category → full list, net worth → assets/liabilities, goals → details); fixed sidebar layout bug (flex + fixed = content overlap; switched to margin-left approach); improved hero card (two-column debt+interest layout, 3-stat strip); taller charts; collapsed sidebar shows icon-only at md breakpoint |
 | v5.1 | 2026-05-23 | Drag-and-drop dashboard: replaced ↑/↓ reorder buttons with dnd-kit (`@dnd-kit/core`, `@dnd-kit/sortable`) — `PointerSensor` (8px) + `TouchSensor` (200ms/8px) for desktop+mobile, `DragOverlay` ghost card, debounced 600ms auto-save to Firestore; `SortableWidgetShell` with dedicated `⠿` drag handle + `×` remove; uniform `.widget-grid` (2-col tablet/desktop); comprehensive demo seed (`scripts/seed-demo.js`) — 10 accounts, 201 transactions, 6 months Dec 2025–May 2026, 6 net worth snapshots, 3 goals, 7 budgets, 3 sinking funds |
 | v5.0 | 2026-05-23 | Phase 1 complete: design system lock-in (`--font-mono`, `.widget-card`, compat alias sweep); net worth monthly snapshots on every sync stored to `net_worth_history/{YYYY-MM}`; Dashboard manager — 9 configurable widgets with Firestore-backed layout (`dashboard_config/default`), edit mode with toggle + reorder |
@@ -190,7 +191,8 @@ zeroed/
 │   │   │   ├── firebase.ts    # Firebase client init (Auth)
 │   │   │   └── api.ts         # apiFetch — attaches Firebase ID token to all requests
 │   │   ├── context/
-│   │   │   └── AuthContext.tsx # Firebase onAuthStateChanged, profile fetch, signOut
+│   │   │   ├── AuthContext.tsx  # Firebase onAuthStateChanged, profile fetch, signOut
+│   │   │   └── ThemeContext.tsx # Dark/light toggle — localStorage, html.dark class, no-flash init
 │   │   ├── components/
 │   │   │   ├── Layout.tsx
 │   │   │   ├── SideNav.tsx    # 5-tab sidebar (Home, Plan, Accounts, Spending, Settings)
@@ -362,9 +364,11 @@ Zeroed's freemium model is a user acquisition advantage — lower friction to si
 Consumer fintech lives on trust and first impressions. A test user decides in 10 seconds whether this feels like a real product or a side project. The goal is a UI that feels *premium and purposeful* — not generic SaaS. Every screen should communicate that this app understands debt better than any other.
 
 **Design language:**
-- **Dark-first** — `oklch(0.065 0.015 264)` (`#07090f`) background, `oklch(0.105 0.024 258)` (`#0d1424`) card surfaces. Dark signals premium in fintech.
-- **Violet accent** — `oklch(0.49 0.21 290)` (`#7c3aed`) primary, `oklch(0.72 0.14 290)` (`#a78bfa`) light. Intentional differentiation from blue (every other finance app).
-- **Always-dark** — all CSS vars in `:root` (no `.dark` class toggle); no light mode.
+- **Dark-first with light/dark toggle** — default is dark (`oklch(0.065 0.015 264)` background); users toggle via Sun/Moon button at the bottom of the sidebar. Preference persisted in `localStorage` under `zeroed-theme`. Applied before first paint via inline `<script>` in `index.html` (no flash).
+- **Violet accent** — `oklch(0.49 0.21 290)` (`#7c3aed`) primary, `oklch(0.72 0.14 290)` (`#a78bfa`) light in dark mode / `oklch(0.42 0.22 290)` deep violet in light mode. Intentional differentiation from blue (every other finance app).
+- **Theme switching** — `:root` defines light theme; `html.dark` overrides to dark. `ThemeContext` (`src/context/ThemeContext.tsx`) manages the class. `theme-transitioning` CSS class applied during toggle for smooth 220ms color transitions.
+- **Glass UI** — frosted glass nav bars and hero card via `backdrop-filter: blur(20px) saturate(180%)`. Page background has a violet radial gradient bloom so glass surfaces have visual depth behind them. CSS classes: `.side-nav`, `.bottom-nav`, `.top-bar`, `.card-hero`.
+- **Elevation system** — `--shadow-card` / `--shadow-elevated` / `--shadow-hero` CSS vars define per-theme shadows. Wired into Tailwind `shadow-sm` / `shadow-md` via `@theme inline` override — every shadcn `Card` automatically gets elevation-aware shadows.
 - **shadcn/ui** — copy-paste component model; `@/components/ui/` for Card, Button, Badge, Input, Select, Progress, Sheet, Tooltip, ChartContainer. `cn()` utility (`clsx` + `tailwind-merge`) for conditional classes.
 - **Tabular numerals** — all currency and percentage values use `tabular` utility class (`font-variant-numeric: tabular-nums`).
 - **recharts via ChartContainer** — all data visualizations; `ChartConfig` for label/color mapping; `ChartTooltipContent` for consistent tooltips.
@@ -513,6 +517,7 @@ The Dashboard is the first screen every user sees. Nail this before adding featu
 - [x] **Net worth history chart** — month-over-month line chart; monthly snapshots written to `net_worth_history/{YYYY-MM}` on every Plaid sync *(v5.0, 2026-05-23)*
 - [x] **shadcn/ui + Tailwind v4 migration** — complete rewrite of all pages and components; 15 shadcn components, oklch color system, lucide-react icons, drill-down Sheet panels, fixed sidebar layout, improved hero card *(v5.2, 2026-05-23)*
 - [x] **`index.html` title** — changed from "Vite + React + TS" to "Zeroed"
+- [x] **Glass UI + dark/light theme toggle** — `ThemeContext`, `html.dark` CSS class strategy, `localStorage` persistence, no-flash init script; full light oklch palette; frosted glass nav + hero card; elevation shadow system; violet page background gradient *(v5.3, 2026-05-23)*
 - [ ] **Promo APR expiry date** — wire up the field Plaid already returns (currently hardcoded `null`); expose in Accounts inline edit
 
 ### Phase 2 — Feature Parity with Monarch/Origin 📋
