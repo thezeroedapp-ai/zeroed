@@ -87,7 +87,7 @@ All screens working (5-tab structure):
 
 ## Prerequisites
 
-- **Node.js v20+**
+- **Node.js v22+**
 - **Firebase project** — [console.firebase.google.com](https://console.firebase.google.com); enable Authentication (Email/Password + Google) and Firestore
 - **Plaid account** — free sandbox at [dashboard.plaid.com](https://dashboard.plaid.com)
 - **Anthropic API key** — optional, powers AI insights
