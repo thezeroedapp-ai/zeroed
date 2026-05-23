@@ -160,6 +160,26 @@ body {
   background-clip: text;
 }
 
+/* ── Sidebar-aware main layout ──
+   Tailwind v4 responsive arbitrary-value classes (ml-[220px]) are unreliable
+   in production builds. Explicit media queries are the safe path. */
+.app-main {
+  margin-left: 0;
+  width: 100%;
+}
+@media (min-width: 768px) {
+  .app-main {
+    margin-left: 68px;
+    width: calc(100% - 68px);
+  }
+}
+@media (min-width: 1024px) {
+  .app-main {
+    margin-left: 220px;
+    width: calc(100% - 220px);
+  }
+}
+
 /* ── Widget drag-and-drop ── */
 .widget-grid {
   display: grid;
