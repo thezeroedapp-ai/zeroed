@@ -6,10 +6,7 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Accounts from './pages/Accounts';
 import Plan from './pages/Plan';
-import Goals from './pages/Goals';
 import Spending from './pages/Spending';
-import Budget from './pages/Budget';
-import Rewards from './pages/Rewards';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 
@@ -41,17 +38,18 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login"     element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/signup"    element={<PublicRoute><Signup /></PublicRoute>} />
-          <Route path="/"          element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/accounts"  element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
-          <Route path="/plan"      element={<ProtectedRoute><Plan /></ProtectedRoute>} />
-          <Route path="/goals"     element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-          <Route path="/spending"  element={<ProtectedRoute><Spending /></ProtectedRoute>} />
-          <Route path="/budget"    element={<ProtectedRoute><Budget /></ProtectedRoute>} />
-          <Route path="/rewards"   element={<ProtectedRoute><Rewards /></ProtectedRoute>} />
-          <Route path="/settings"  element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/admin"     element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/signup"   element={<PublicRoute><Signup /></PublicRoute>} />
+          <Route path="/"         element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
+          <Route path="/plan"     element={<ProtectedRoute><Plan /></ProtectedRoute>} />
+          <Route path="/spending" element={<ProtectedRoute><Spending /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/admin"    element={<AdminRoute><Admin /></AdminRoute>} />
+          {/* Legacy redirects for deep links that used to be standalone pages */}
+          <Route path="/goals"    element={<Navigate to="/plan?tab=goals" replace />} />
+          <Route path="/budget"   element={<Navigate to="/accounts?tab=budget" replace />} />
+          <Route path="/rewards"  element={<Navigate to="/accounts?tab=rewards" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

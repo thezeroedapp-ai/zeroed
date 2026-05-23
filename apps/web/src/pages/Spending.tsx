@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -160,6 +161,18 @@ export default function Spending() {
                     </button>
                   ))}
                 </div>
+
+                {filtered.length > 0 && (
+                  <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '12px 16px', background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(59,130,246,0.08))', border: '1px solid rgba(124,58,237,0.25)' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>💳 Using the right card?</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>See which cards earn the most on your top categories.</div>
+                    </div>
+                    <Link to="/accounts?tab=rewards" style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-2)', whiteSpace: 'nowrap', marginLeft: 12, textDecoration: 'none' }}>
+                      Explore cards →
+                    </Link>
+                  </div>
+                )}
 
                 {filtered.length === 0 ? (
                   <div className="empty">
