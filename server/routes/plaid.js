@@ -13,6 +13,22 @@ router.post('/create-link-token', async (req, res) => {
   }
 });
 
+router.post('/create-link-token/update', async (req, res) => {
+  try {
+    const { item_id } = req.body;
+    if (!item_id) return res.status(400).json({ error: 'item_id required' });
+    const uid   = req.user.uid;
+    const items = await db.getPlaidItems(uid);
+    const item  = items.find(i => i.id === item_id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    const linkToken = await plaidService.createUpdateLinkToken(uid, item.access_token);
+    res.json({ link_token: linkToken });
+  } catch (err) {
+    console.error('create-link-token/update:', err.response?.data || err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/exchange-token', async (req, res) => {
   try {
     const { public_token, institution_name } = req.body;
@@ -70,9 +86,42 @@ router.get('/items', async (req, res) => {
         item_id:          i.id,
         institution_name: i.institution_name || 'Unknown Bank',
         last_synced:      i.updated_at || null,
+        error_status:     i.error_status || null,
       })),
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/items/:itemId', async (req, res) => {
+  try {
+    const uid    = req.user.uid;
+    const itemId = req.params.itemId;
+    const items  = await db.getPlaidItems(uid);
+    const item   = items.find(i => i.id === itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    if (item.access_token) {
+      try { await plaidService.removeItem(item.access_token); } catch { /* already removed */ }
+    }
+
+    const accounts = await db.getAccountsByUser(uid);
+    for (const account of accounts.filter(a => a.plaid_item_id === itemId)) {
+      await db.userRef(uid).collection('accounts').doc(account.id).delete();
+      const txSnap = await db.userRef(uid).collection('transactions')
+        .where('account_id', '==', account.id).get();
+      if (txSnap.docs.length) {
+        const batch = db.firestore.batch();
+        txSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    }
+
+    await db.userRef(uid).collection('plaid_items').doc(itemId).delete();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('delete-item:', err.response?.data || err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -127,6 +176,11 @@ router.delete('/accounts/:id', async (req, res) => {
     // Remove plaid item if this was its only account
     const remaining = accounts.filter(a => a.plaid_item_id === account.plaid_item_id && a.id !== accountId);
     if (!remaining.length && account.plaid_item_id) {
+      const items = await db.getPlaidItems(uid);
+      const item  = items.find(i => i.id === account.plaid_item_id);
+      if (item?.access_token) {
+        try { await plaidService.removeItem(item.access_token); } catch { /* already removed */ }
+      }
       await db.userRef(uid).collection('plaid_items').doc(account.plaid_item_id).delete();
     }
 

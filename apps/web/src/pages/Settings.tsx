@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 const SINKING_CATEGORIES = ['car', 'home', 'medical', 'travel', 'education', 'holiday', 'tax', 'other'];
 
 interface SinkingFund { id: string; category: string; monthly_amount: number; label?: string; }
-interface PlaidItem { item_id: string; institution_name: string; last_synced?: string; }
+interface PlaidItem { item_id: string; institution_name: string; last_synced?: string; error_status?: string | null; }
 
 export default function Settings() {
   const { signOut } = useAuth();
@@ -18,7 +18,80 @@ export default function Settings() {
   const [plaidItems, setPlaidItems] = useState<PlaidItem[]>([]);
   const [sfForm, setSfForm] = useState({ category: 'car', amount: '', label: '' });
   const [sfSaving, setSfSaving] = useState(false);
-  const [appVersion] = useState('4.2');
+  const [appVersion] = useState('4.4');
+  const [plaidLoading, setPlaidLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  function loadPlaidScript(): Promise<void> {
+    return new Promise(resolve => {
+      if ((window as any).Plaid) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+      s.onload = () => resolve();
+      document.head.appendChild(s);
+    });
+  }
+
+  async function connectBank() {
+    setPlaidLoading(true);
+    try {
+      await loadPlaidScript();
+      const r = await apiFetch('/api/plaid/create-link-token', { method: 'POST' });
+      const { link_token } = await r.json();
+      (window as any).Plaid.create({
+        token: link_token,
+        onSuccess: async (publicToken: string, metadata: any) => {
+          await apiFetch('/api/plaid/exchange-token', {
+            method: 'POST',
+            body: JSON.stringify({ public_token: publicToken, institution_name: metadata.institution?.name }),
+          });
+          await apiFetch('/api/plaid/sync', { method: 'POST' });
+          loadSettings();
+        },
+        onExit: () => {},
+      }).open();
+    } finally {
+      setPlaidLoading(false);
+    }
+  }
+
+  async function reconnectItem(itemId: string) {
+    setPlaidLoading(true);
+    try {
+      await loadPlaidScript();
+      const r = await apiFetch('/api/plaid/create-link-token/update', {
+        method: 'POST',
+        body: JSON.stringify({ item_id: itemId }),
+      });
+      const { link_token } = await r.json();
+      (window as any).Plaid.create({
+        token: link_token,
+        onSuccess: async () => {
+          await apiFetch('/api/plaid/sync', { method: 'POST' });
+          loadSettings();
+        },
+        onExit: () => {},
+      }).open();
+    } finally {
+      setPlaidLoading(false);
+    }
+  }
+
+  async function disconnectItem(itemId: string) {
+    if (!confirm('Disconnect this bank? All accounts and transactions from this bank will be removed.')) return;
+    await apiFetch(`/api/plaid/items/${itemId}`, { method: 'DELETE' });
+    loadSettings();
+  }
+
+  async function syncNow() {
+    setSyncing(true);
+    try {
+      await apiFetch('/api/plaid/sync', { method: 'POST' });
+      loadSettings();
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function loadSettings() {
     try {
@@ -140,22 +213,57 @@ export default function Settings() {
 
         {/* Connected Banks */}
         <div className="section-title">Connected Banks</div>
+
         {plaidItems.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--text-sm)', fontSize: 14 }}>
-            No banks connected. Use Plaid Link to connect your accounts.
+          <div className="card" style={{ textAlign: 'center', color: 'var(--text-sm)', fontSize: 14, marginBottom: 10 }}>
+            No banks connected yet.
           </div>
         ) : (
           plaidItems.map(item => (
-            <div key={item.item_id} className="bank-group">
-              <div className="bank-header">
-                <div className="bank-name">{item.institution_name}</div>
-                {item.last_synced && (
-                  <div className="bank-count">Last synced: {new Date(item.last_synced).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                )}
+            <div key={item.item_id} className="card" style={{ marginBottom: 10 }}>
+              {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
+                <div style={{
+                  background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+                  borderRadius: 8, padding: '8px 12px', marginBottom: 10,
+                  fontSize: 13, color: '#f87171',
+                }}>
+                  Bank connection expired — please reconnect to resume syncing.
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{item.institution_name}</div>
+                  {item.last_synced && (
+                    <div style={{ fontSize: 12, color: 'var(--text-sm)', marginTop: 2 }}>
+                      Synced {new Date(item.last_synced).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {item.error_status === 'ITEM_LOGIN_REQUIRED' ? (
+                    <button className="btn btn-primary btn-sm" onClick={() => reconnectItem(item.item_id)} disabled={plaidLoading}>
+                      Reconnect
+                    </button>
+                  ) : null}
+                  <button className="btn btn-danger btn-sm" onClick={() => disconnectItem(item.item_id)}>
+                    Disconnect
+                  </button>
+                </div>
               </div>
             </div>
           ))
         )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary btn-block" onClick={connectBank} disabled={plaidLoading} style={{ flex: 1 }}>
+            {plaidLoading ? '…' : '+ Connect Bank'}
+          </button>
+          {plaidItems.length > 0 && (
+            <button className="btn btn-sm" onClick={syncNow} disabled={syncing} style={{ whiteSpace: 'nowrap' }}>
+              {syncing ? 'Syncing…' : 'Sync Now'}
+            </button>
+          )}
+        </div>
 
         {/* Account */}
         <div className="section-title">Account</div>

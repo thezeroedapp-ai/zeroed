@@ -12,7 +12,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v4.4 — Cloud Functions 2nd Gen + Node 22.** *(2026-05-23)*
+**v4.5 — Plaid production readiness + competitive feature planning.** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
@@ -31,7 +31,7 @@ All screens working (5-tab structure):
 - **Spending** — 3 subtabs: Transactions (filterable by expenses/payments, "Explore cards →" teaser linking to Accounts › Rewards), Trends (6-month stacked bar chart by category), Recurring (auto-detected subscriptions with annual cost estimate)
 - **Settings** — bank connect/disconnect, income profile, sinking funds manager
 
-**Next:** Connect Plaid production; Stripe freemium gate.
+**Next:** Dashboard UI overhaul + design system lock-in → credit score, net worth history chart, manual accounts, cash flow forecast, investment tracking → budget AI recommendations, couples mode. Plaid production + Stripe are pre-go-live gates, not pre-test-user gates.
 
 ---
 
@@ -39,6 +39,7 @@ All screens working (5-tab structure):
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v4.5 | 2026-05-23 | Plaid production readiness: update mode (reconnect broken connections), item-level disconnect with Plaid token revocation, cursor-based `transactionsSync` replacing legacy `transactionsGet`, `error_status` on plaid items, Settings UI with Connect/Reconnect/Disconnect/Sync Now |
 | v4.4 | 2026-05-23 | Firebase Cloud Functions upgraded: Node 20 1st Gen → Node 22 2nd Gen; firebase-functions v4 → v5; index.js migrated from v1 API (functions.https/pubsub) to v2 API (onRequest/onSchedule) |
 | v4.3 | 2026-05-23 | Tech debt cleanup (expenses→sinking_funds, recommendations→rewards, removed old HTML public/ dir); 5-tab nav consolidation (Goals→Plan subtab, Budget+Rewards→Accounts subtabs); "Explore cards →" teaser in Spending→Transactions; legacy route redirects |
 | v4.2 | 2026-05-22 | Monarch/Origin parity — all Plaid account types (investment, loan, mortgage, brokerage); net worth on Dashboard + Accounts; Budget screen with per-category progress; Spending screen (transactions + stacked trends chart + recurring detection); first production Firebase deploy to zeroed-3331d.web.app |
@@ -225,11 +226,13 @@ All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`.
 | GET | `/api/dashboard` | Aggregated totals, alerts, priority card, debt-free date |
 | GET | `/api/plaid/accounts` | All connected accounts |
 | POST | `/api/plaid/create-link-token` | Start Plaid Link flow |
+| POST | `/api/plaid/create-link-token/update` | Update mode link token (reconnect broken connection) |
 | POST | `/api/plaid/exchange-token` | Complete Plaid Link, store access token |
-| POST | `/api/plaid/sync` | Refresh balances + pull new transactions |
-| GET | `/api/plaid/items` | Connected bank institutions |
+| POST | `/api/plaid/sync` | Refresh balances + pull new transactions (cursor-based) |
+| GET | `/api/plaid/items` | Connected bank institutions (includes `error_status`) |
+| DELETE | `/api/plaid/items/:itemId` | Disconnect entire bank — revokes Plaid token, deletes all accounts + transactions |
 | PUT | `/api/plaid/accounts/:id/credit-details` | Set APR, min payment, due date |
-| DELETE | `/api/plaid/accounts/:id` | Remove account |
+| DELETE | `/api/plaid/accounts/:id` | Remove single account |
 | POST | `/api/plan/generate` | Run payoff engine + Claude insight, persist plan |
 | GET | `/api/plan/latest` | Last saved plan |
 | GET | `/api/plan/alerts` | Promo APR expiry + high utilization alerts |
@@ -270,8 +273,10 @@ All user data lives under `users/{uid}/`:
 | `budgets` | auto | category, monthly_limit, created_at, updated_at |
 | `insights` | auto | content, created_at |
 | `ai_usage` | `YYYY-MM` | count |
-| `plaid_items` | `plaid_item_id` | access_token, institution_name, last_synced |
+| `plaid_items` | `plaid_item_id` | access_token, institution_name, transactions_cursor, error_status, updated_at |
 | `payoff_plans` | auto | strategy, surplus, items (embedded array) |
+| `dashboard_config` | `default` | widgets (ordered string array, max 9) |
+| `net_worth_history` | `YYYY-MM` | total_assets, total_liabilities, net_worth, recorded_at |
 
 ---
 
@@ -293,6 +298,177 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 
 - **Username:** `user_good`
 - **Password:** `pass_good`
+
+---
+
+## Competitive Landscape
+
+Zeroed competes directly with **Monarch Money** and **Origin** — the two leading all-in-one personal finance apps. Both are priced at ~$99/year. Both are pure subscription with no free tier.
+
+### Where Zeroed Wins
+
+| Feature | Zeroed | Monarch | Origin |
+|---|---|---|---|
+| **Debt payoff strategies** | 4 (Avalanche, Snowball, Hybrid, Cash Flow) | Basic | Basic |
+| **Freed-minimum rollover** | ✅ Automatic | ❌ | ❌ |
+| **Lump-sum simulator** | ✅ (months + interest saved) | ❌ | ❌ |
+| **Required-payment calculator** | ✅ (binary search to target date) | ❌ | ❌ |
+| **Card reward recommendations** | ✅ (10 cards, TPG valuations, debt penalty) | ❌ | ❌ |
+| **Freemium tier** | ✅ (10 AI insights/mo free) | ❌ | ❌ |
+
+Zeroed's debt payoff engine is the deepest in the consumer market. Neither competitor models freed-minimum rollover, runs lump-sum simulations, or calculates the exact extra monthly payment needed to hit a target date. This is the moat.
+
+### Where Zeroed Is Behind
+
+| Feature | Zeroed | Monarch | Origin |
+|---|---|---|---|
+| **Credit score monitoring** | ❌ | ✅ VantageScore via Spinwheel | ❌ |
+| **Net worth history** | Snapshot only | ✅ Month-over-month chart | ✅ + 30-yr projection |
+| **Investment tracking** | Accounts pulled, nothing shown | ✅ Real-time portfolio | ✅ + direct investing |
+| **Budget AI recommendations** | Manual entry only | ✅ AI-suggested | ✅ AI-suggested |
+| **Cash flow forecasting** | ❌ | ✅ (Plus tier) | ✅ |
+| **Couples/household mode** | ❌ | ✅ | ✅ |
+| **Native iOS/Android** | PWA only | ✅ | ✅ |
+| **AI depth** | 10/mo gated | Unlimited (Sparkle + Weekly Recap) | SEC-regulated CFP-level advisor |
+
+### What We're Not Chasing
+
+- **Retirement modeling / tax filing / estate planning** — Origin's premium positioning. Not Zeroed's identity.
+- **Direct investing / cash management accounts** — Licensed financial products, not a feature.
+- **Rewards points balances** — Plaid doesn't have this data. Yodlee does but costs $1–2K/month minimum and is fully sales-led. Not viable pre-revenue.
+
+### Business Model Comparison
+
+| | Monarch | Origin | Zeroed (target) |
+|---|---|---|---|
+| **Price** | $99/yr or $15/mo | $99/yr or $13/mo | TBD |
+| **Free tier** | 7-day trial only | 7-day trial only | 10 AI insights/mo free |
+| **Model** | Pure subscription | Pure subscription | Freemium → Pro |
+| **Native app** | iOS + Android | iOS + Android | PWA (React Native later) |
+
+Zeroed's freemium model is a user acquisition advantage — lower friction to sign up than either competitor. The Pro gate needs to be meaningful enough to convert: unlimited AI insights, advanced forecasting, couples mode.
+
+---
+
+## UI Design Plan
+
+### Philosophy
+
+Consumer fintech lives on trust and first impressions. A test user decides in 10 seconds whether this feels like a real product or a side project. The goal is a UI that feels *premium and purposeful* — not generic SaaS. Every screen should communicate that this app understands debt better than any other.
+
+**Design language:**
+- **Dark-first** — `#07090f` base, `#0d1424` card surfaces. Dark signals premium in fintech.
+- **Violet accent** — `#7c3aed` primary, `#a78bfa` light. Intentional differentiation from blue (every other finance app).
+- **Glassmorphism nav** — frosted sticky top-bar and bottom nav via `backdrop-filter: blur`
+- **Tabular numerals** — all currency and percentage values use `font-variant-numeric: tabular-nums`
+- **Recharts** — all data visualizations; consistent palette across all charts
+
+### Dashboard Manager
+
+The Home screen is fully customizable. Users can build their own dashboard from a library of 9 widgets, arranged in a drag-and-drop bento grid.
+
+**Available widgets:**
+
+| Widget | Data source | Chart type |
+|---|---|---|
+| **Debt Payoff Projection** | Payoff engine | Area chart — remaining balance over months |
+| **Net Worth Trend** | Monthly Firestore snapshots | Line chart — assets vs liabilities over 12 months |
+| **Cash Flow Forecast** | Income + recurring + debt payments | Bar chart — projected monthly surplus 6 months out |
+| **Spending by Category** | Transactions last 30 days | Donut chart — top 6 categories |
+| **Credit Score** | Credit monitoring API | Single stat + trend line |
+| **Goals Progress** | Goals subcollection | Progress bars — active goals with % complete |
+| **Upcoming Bills** | Recurring + payment due dates | List — next 7 days |
+| **Interest Cost Over Time** | Payoff engine | Area chart — cumulative interest paid vs saved |
+| **Savings Rate** | Income vs spending | Gauge — % of income not spent or debt-serviced |
+
+**Implementation:**
+- Widget config stored in Firestore at `users/{uid}/dashboard_config` as `{ widgets: ['debt_projection', 'net_worth', ...] }` — ordered array, max 9
+- Default config for new users: `['debt_projection', 'net_worth', 'spending_by_category', 'goals_progress']`
+- Each widget is a self-contained React component that fetches its own data on mount
+- Bento grid layout: mobile = single column; tablet = 2-col; desktop = dynamic based on widget count
+- Edit mode: tap "Edit Dashboard" to enter drag-and-drop reorder mode and show add/remove widget picker
+
+### Design System — Tokens to Lock In
+
+All values to be defined as CSS custom properties in `index.css` and used consistently across every screen:
+
+```
+/* Surfaces */
+--bg:          #07090f    /* page background */
+--surface:     #0d1424    /* cards */
+--surface-2:   #111827    /* nested surfaces, inputs */
+--border:      rgba(255,255,255,0.08)
+
+/* Accent */
+--accent:      #7c3aed
+--accent-light: #a78bfa
+--accent-dim:  rgba(124,58,237,0.15)
+
+/* Text */
+--text:        #f1f5f9    /* primary */
+--text-sm:     #94a3b8    /* secondary */
+--text-xs:     #64748b    /* tertiary */
+
+/* Status */
+--green:       #22c55e
+--red:         #ef4444
+--amber:       #f59e0b
+
+/* Spacing */
+--pad:         16px       /* standard card padding */
+--radius:      12px       /* card border radius */
+--radius-sm:   8px        /* inner elements */
+
+/* Typography */
+--font-mono:   'SF Mono', 'Fira Code', monospace  /* numbers */
+```
+
+**Card anatomy (standard across all screens):**
+```
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--pad);
+}
+```
+
+**Button hierarchy:**
+- `.btn-primary` — violet fill, used for primary actions only (1 per screen max)
+- `.btn` — surface-colored outline, secondary actions
+- `.btn-danger` — red tint, destructive actions only
+
+### Screen-by-Screen UI Plan
+
+**Dashboard (Phase 1 priority)**
+- Replace static bento grid with dynamic widget grid driven by `dashboard_config`
+- Add "Edit Dashboard" button (top-right) that enters drag-and-drop mode
+- Widget picker modal: 3-column grid of available widgets with toggle on/off
+- Each widget card has a consistent header (title + icon + optional "view full" link to the relevant tab)
+- Empty state per widget (skeleton loaders while data fetches, not blank cards)
+
+**Plan**
+- Strategy tab: make the 4-strategy selector more visual — card-style with icon, name, one-line description, and "best for" tag; highlight the active strategy with violet border
+- Payoff timeline: upgrade from plain card list to a visual timeline with milestones
+- Lump-sum simulator: add a before/after comparison bar to visualize months saved
+
+**Accounts**
+- Account cards: add institution logo (use Plaid's institution logo URL or favicon fallback)
+- Net worth strip: upgrade to a mini sparkline showing 3-month trend instead of just today's number
+- APR warning badges: more prominent — amber dot with tooltip explaining why it matters
+
+**Spending**
+- Transactions: merchant logo / icon (Plaid provides `logo_url` on some transactions)
+- Trends chart: add a "you spent X% more/less than last month" callout above the chart
+- Recurring: add estimated annual total more prominently; sort by highest annual cost
+
+**Settings**
+- Connected banks: show institution logo next to bank name
+- Add a "Last sync" relative timestamp ("2 minutes ago", "Yesterday") instead of raw date
+
+### Figma / Design Reference
+
+No Figma yet — design is being built directly in code. When a component is finalized, screenshot it and add to a `/design` directory as the reference for future consistency checks.
 
 ---
 
@@ -321,17 +497,44 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 - [x] **Tech debt cleanup** — renamed `expenses`→`sinking_funds` (Firestore + routes), `recommendations`→`rewards`; removed old vanilla HTML public/ dir; consistent `monthly_amount` field throughout *(v4.3, 2026-05-23)*
 - [x] **5-tab nav consolidation** — Goals→Plan subtab, Budget+Rewards→Accounts subtabs; reusable `SubNav` component; URL-based subtab navigation via `useSearchParams`; "Explore cards →" cross-tab deep link *(v4.3, 2026-05-23)*
 - [x] **Cloud Functions 2nd Gen** — Node 20 → 22, firebase-functions v4 → v5, v1 API → v2 `onRequest`/`onSchedule` *(v4.4, 2026-05-23)*
+- [x] **Plaid production readiness** — update mode link token, `itemRemove` token revocation, cursor-based `transactionsSync` (incremental + handles removed transactions), `error_status` per item, Settings UI with Connect/Reconnect/Disconnect/Sync Now *(v4.5, 2026-05-23)*
 
-### Up Next 🔜
-- [ ] Plaid production credentials (apply early — 2–3 week review)
-- [ ] Stripe freemium — Pro gate for unlimited AI; `is_pro` flag already in schema
+### Phase 1 — Dashboard UI + Design System 🔜
+The Dashboard is the first screen every user sees. Nail this before adding features so the design language is locked before new screens are built.
+
+- [ ] **Dashboard manager** — users can add, remove, and reorder up to 9 chart widgets on the Home screen (debt projection, net worth trend, cash flow, spending by category, credit score, goals progress, upcoming bills, interest cost over time, savings rate)
+- [ ] **Net worth history chart** — month-over-month sparkline/trend (store monthly snapshots in Firestore)
+- [ ] **Design system lock-in** — audit and finalize design tokens, card styles, typography scale, spacing so all future screens inherit consistently
+- [ ] **`index.html` title** — change from "Vite + React + TS" to "Zeroed"
+- [ ] **Promo APR expiry date** — wire up the field Plaid already returns (currently hardcoded `null`); expose in Accounts inline edit
+
+### Phase 2 — Feature Parity with Monarch/Origin 📋
+Build these features using the locked design system.
+
+- [ ] **Credit score monitoring** — integrate Experian or Spinwheel (VantageScore); monthly update card on Dashboard; show how debt payoff trajectory affects score over time
+- [ ] **Manual account entry** — add debt/account without Plaid (medical debt, personal loans, family debt); critical for users whose institution isn't Plaid-supported
+- [ ] **Cash flow forecasting (3–6 months)** — project available monthly cash based on income, recurring expenses, and debt payoff schedule
+- [ ] **Investment tracking** — use accounts already pulled via Plaid; show gains/losses, asset allocation, performance over time (currently pulled but not displayed)
+- [ ] **Budget AI recommendations** — analyze 3 months of transaction history, suggest per-category spending limits via Claude instead of requiring manual entry
+
+### Phase 3 — Differentiation 📋
+- [ ] **Couples/household mode** — shared access to payoff plan and finances; joint vs. individual view; needs auth + data model design
+- [ ] **Lump-sum split across multiple cards** — current simulator applies full amount to one card
+- [ ] **PDF/CSV export** — payoff plan, debt list, net worth history
+- [ ] **Subscription cancellation workflow** — detected recurring charges surface a "how to cancel" link or direct integration
+- [ ] **Reward profile updates** — quarterly TPG valuation refresh for `cardProfiles.js`
+
+### Pre-Go-Live Gates 🔒
+These are not needed for test users — only before public launch.
+
+- [ ] **Plaid production credentials** — apply via dashboard.plaid.com; free Trial plan (10 Items) now auto-approved; swap `PLAID_ENV=sandbox` → `production`
+- [ ] **Stripe freemium gate** — Pro subscription for unlimited AI insights; `is_pro` flag already in Firestore schema; needs Stripe Checkout + webhook to flip the flag
+- [ ] **Plaid webhooks** — push transaction updates instead of polling; required for real-time data feel at scale
 
 ### Later 📋
-- [ ] React Native + Expo — iOS + Android
-- [ ] Push notifications for due dates and promo APR expiry
-- [ ] Reward profile updates — quarterly TPG valuation refresh
-- [ ] Lump-sum split across multiple cards
-- [ ] PDF/CSV export of payoff plan
+- [ ] React Native + Expo — iOS + Android (both Monarch and Origin have native apps; PWA is a gap)
+- [ ] Push notifications — due dates, promo APR expiry, debt payoff milestones
+- [ ] Retirement readiness calculator — simple "on track / off track" based on current trajectory
 
 ---
 

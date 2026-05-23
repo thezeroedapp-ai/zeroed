@@ -90,6 +90,17 @@ async function saveTransactions(uid, transactions) {
   }
 }
 
+async function deleteTransactions(uid, transactionIds) {
+  if (!transactionIds.length) return;
+  for (let i = 0; i < transactionIds.length; i += 500) {
+    const batch = firestore.batch();
+    transactionIds.slice(i, i + 500).forEach(id => {
+      batch.delete(userRef(uid).collection('transactions').doc(id));
+    });
+    await batch.commit();
+  }
+}
+
 async function getTransactionsByUser(uid, { accountId, limit = 50, offset = 0 } = {}) {
   let q = userRef(uid).collection('transactions').orderBy('date', 'desc');
   if (accountId) q = q.where('account_id', '==', accountId);
@@ -252,7 +263,7 @@ module.exports = {
   getUser, upsertUser,
   getAccountsByUser, upsertAccount,
   getPlaidItems, upsertPlaidItem,
-  saveTransactions, getTransactionsByUser, getTransactionSummary,
+  saveTransactions, deleteTransactions, getTransactionsByUser, getTransactionSummary,
   getPayoffPlan, savePlan,
   getGoals, createGoal, deleteGoal,
   getSinkingFunds, addSinkingFund, deleteSinkingFund,

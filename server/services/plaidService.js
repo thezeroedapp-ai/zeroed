@@ -61,63 +61,101 @@ async function getAccounts(accessToken) {
   }));
 }
 
-async function getTransactions(accessToken, startDate, endDate) {
-  const now   = new Date();
-  const end   = endDate   || now.toISOString().split('T')[0];
-  const start = startDate || (() => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 90);
-    return d.toISOString().split('T')[0];
-  })();
-
-  const response = await client.transactionsGet({
+async function createUpdateLinkToken(uid, accessToken) {
+  const response = await client.linkTokenCreate({
+    user:         { client_user_id: uid },
+    client_name:  'Zeroed',
+    country_codes: [CountryCode.Us],
+    language:     'en',
     access_token: accessToken,
-    start_date:   start,
-    end_date:     end,
-    options:      { count: 500 },
   });
+  return response.data.link_token;
+}
 
-  return response.data.transactions.map(t => ({
+async function removeItem(accessToken) {
+  await client.itemRemove({ access_token: accessToken });
+}
+
+// Cursor-based incremental sync — replaces old transactionsGet
+async function syncTransactions(accessToken, cursor = null) {
+  const added = [], modified = [], removed = [];
+  let nextCursor = cursor;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await client.transactionsSync({
+      access_token: accessToken,
+      cursor:       nextCursor || undefined,
+    });
+    added.push(...response.data.added);
+    modified.push(...response.data.modified);
+    removed.push(...response.data.removed);
+    nextCursor = response.data.next_cursor;
+    hasMore    = response.data.has_more;
+  }
+
+  return { added, modified, removed, nextCursor };
+}
+
+function mapTransaction(t) {
+  return {
     plaid_transaction_id: t.transaction_id,
-    plaid_account_id:     t.account_id,
+    account_id:           t.account_id,
     date:                 t.date,
     description:          t.name,
     amount:               t.amount,
-    category:             t.category?.[0] || null,
-  }));
+    category:             t.personal_finance_category?.primary || t.category?.[0] || null,
+  };
 }
 
 async function syncAllAccounts(uid) {
   const items   = await db.getPlaidItems(uid);
-  const results = { accounts: 0, transactions: 0 };
+  const results = { accounts: 0, transactions: 0, removed: 0, errors: [] };
 
   for (const item of items) {
-    const [accounts, transactions] = await Promise.all([
-      getAccounts(item.access_token),
-      getTransactions(item.access_token),
-    ]);
+    try {
+      const accounts = await getAccounts(item.access_token);
+      for (const acct of accounts) {
+        const { credit_details, ...rest } = acct;
+        await db.upsertAccount(uid, {
+          ...rest,
+          ...(credit_details || {}),
+          plaid_item_id:    item.id,
+          institution_name: item.institution_name || null,
+        });
+      }
+      results.accounts += accounts.length;
 
-    for (const acct of accounts) {
-      const { credit_details, ...rest } = acct;
-      await db.upsertAccount(uid, {
-        ...rest,
-        ...(credit_details || {}),
-        plaid_item_id:    item.id,
-        institution_name: item.institution_name || null,
+      const { added, modified, removed, nextCursor } = await syncTransactions(
+        item.access_token,
+        item.transactions_cursor || null,
+      );
+
+      const toSave = [...added, ...modified].filter(t => t.account_id).map(mapTransaction);
+      if (toSave.length) await db.saveTransactions(uid, toSave);
+      results.transactions += toSave.length;
+
+      const removedIds = removed.map(r => r.transaction_id);
+      if (removedIds.length) await db.deleteTransactions(uid, removedIds);
+      results.removed += removedIds.length;
+
+      await db.upsertPlaidItem(uid, item.id, {
+        transactions_cursor: nextCursor,
+        error_status:        null,
+        updated_at:          db.FieldValue.serverTimestamp(),
       });
+    } catch (err) {
+      const code = err.response?.data?.error_code;
+      if (code === 'ITEM_LOGIN_REQUIRED' || code === 'ITEM_NOT_FOUND') {
+        await db.upsertPlaidItem(uid, item.id, { error_status: code });
+        results.errors.push({ item_id: item.id, institution_name: item.institution_name, error_code: code });
+      } else {
+        throw err;
+      }
     }
-    results.accounts += accounts.length;
-
-    // plaid_account_id IS the Firestore account doc ID — no mapping needed
-    const mapped = transactions
-      .filter(t => t.plaid_account_id)
-      .map(({ plaid_account_id, ...t }) => ({ ...t, account_id: plaid_account_id }));
-
-    await db.saveTransactions(uid, mapped);
-    results.transactions += mapped.length;
   }
 
   return results;
 }
 
-module.exports = { createLinkToken, exchangePublicToken, getAccounts, getTransactions, syncAllAccounts };
+module.exports = { createLinkToken, createUpdateLinkToken, removeItem, exchangePublicToken, getAccounts, syncAllAccounts };

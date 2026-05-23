@@ -6,6 +6,82 @@
 
 ## 2026-05-23
 
+### v4.5 — Plaid Production Readiness
+
+**What changed:**
+
+**Backend — `server/services/plaidService.js`:**
+- Added `createUpdateLinkToken(uid, accessToken)` — creates a Plaid Link token in update mode (passes `access_token` instead of `products`). Used to re-authenticate a broken bank connection without disconnecting it.
+- Added `removeItem(accessToken)` — calls `client.itemRemove()` to revoke the Plaid access token on Plaid's side. Previously, deleting a bank only removed it from Firestore; the access token lived forever.
+- Replaced `transactionsGet` (old date-range API) with cursor-based `transactionsSync`. Key differences: incremental (only fetches new/changed since last sync), handles `added` + `modified` + `removed` arrays, paginates automatically via `has_more`, stores `next_cursor` on the plaid_item doc so each sync is a delta not a full re-pull.
+- `syncAllAccounts` now catches `ITEM_LOGIN_REQUIRED` / `ITEM_NOT_FOUND` per-item instead of failing the whole sync. Marks `error_status` on the item in Firestore and continues to the next item.
+
+**Backend — `server/routes/plaid.js`:**
+- Added `POST /api/plaid/create-link-token/update` — takes `item_id`, looks up the access token, returns an update-mode link token.
+- Added `DELETE /api/plaid/items/:itemId` — disconnect an entire bank institution: calls `removeItem` on Plaid, deletes all accounts + transactions for that item, deletes the plaid_item doc.
+- Fixed `DELETE /api/plaid/accounts/:id` — now calls `removeItem` on Plaid before deleting the plaid_item doc when removing the last account for an institution.
+- `GET /api/plaid/items` now returns `error_status` field per item.
+
+**Backend — `server/db/database.js`:**
+- Added `deleteTransactions(uid, transactionIds)` — batch-deletes transactions by ID (used by cursor sync to handle Plaid's `removed` array).
+
+**Frontend — `apps/web/src/pages/Settings.tsx`:**
+- Added Connect Bank flow: loads Plaid Link script dynamically (`cdn.plaid.com/link/v2/stable/link-initialize.js`), calls create-link-token, opens Link widget, exchanges token, syncs immediately.
+- Added Reconnect flow: for items with `error_status === 'ITEM_LOGIN_REQUIRED'`, shows a red warning banner and Reconnect button; opens Link in update mode; syncs on success to clear the error.
+- Added Disconnect button per institution (with confirm prompt).
+- Added Sync Now button (manual trigger for all connected banks).
+- Updated `PlaidItem` interface to include `error_status`.
+- Bumped displayed app version to 4.4.
+
+---
+
+### Competitive Analysis — Monarch vs Origin vs Zeroed
+
+Researched feature parity with Monarch Money ($99/yr or $15/mo) and Origin ($99/yr or $13/mo).
+
+**Where Zeroed is ahead:**
+- Debt payoff engine depth (4 strategies + freed-minimum rollover + lump-sum simulator + required-payment calculator) — neither competitor goes this deep
+- Card recommendation engine with TPG valuations — unique in the market
+- Freed-minimum rollover specifically is sophisticated math neither Monarch nor Origin implements
+
+**Critical gaps vs competitors:**
+
+| Gap | Priority |
+|-----|----------|
+| Credit score monitoring (Monarch has Spinwheel/VantageScore) | High |
+| Net worth history chart (both show trends; Zeroed only shows today's snapshot) | High |
+| Manual account entry (can't add medical debt, personal loans without Plaid) | High |
+| Cash flow forecasting 3–6 months | Medium |
+| Investment tracking (Plaid pulls accounts but Zeroed shows nothing) | Medium |
+| Budget AI recommendations (both competitors auto-suggest limits) | Medium |
+| Couples/household mode (both have it) | Medium |
+| Native iOS/Android (both have native apps; Zeroed is PWA) | High (pre-launch) |
+
+**Ruled out:**
+- Rewards/points balance data: Plaid doesn't have it. Yodlee does but costs $1–2K/month minimum, fully sales-led — not viable pre-revenue.
+- Retirement modeling, tax filing, estate planning: that's Origin's premium positioning, not Zeroed's identity. Don't chase it.
+
+**Business model decision:** Both Monarch and Origin are pure subscription, no free tier. Zeroed's freemium model (10 AI insights/month free) is a user acquisition differentiator — keep it but make the Pro gate meaningful.
+
+**Plaid pricing update (as of April 15, 2026):** New "Trial plan" replaces old Limited Production. Auto-approved, free, up to 10 Production Items. No 2–3 week review anymore. Plaid prod is ready to flip when needed.
+
+---
+
+### Strategic Decisions Made
+
+**Build order: UI first, then features.**
+
+Reasoning: Consumer fintech lives on first impressions. A test user decides in 10 seconds whether this feels like a real product. Polish the Dashboard and lock in the design system before building new features — otherwise each new screen inherits inconsistencies. The Dashboard's net worth history chart is both a UI win and a feature gap, so these overlap.
+
+**Phase 1 (now):** Dashboard overhaul + design system + dashboard manager
+**Phase 2:** Credit score, manual accounts, net worth history, cash flow forecast, investment tracking
+**Phase 3:** Budget AI, couples mode, lump-sum split, export
+**Pre-go-live:** Plaid production credentials, Stripe gate, Plaid webhooks
+
+**Dashboard manager concept:** Users can add, remove, and reorder up to 9 chart widgets on the Home screen. Planned widgets: debt projection, net worth trend, cash flow forecast, spending by category, credit score, goals progress, upcoming bills, interest cost over time, savings rate. Implementation will need a widget config stored per user in Firestore (array of widget IDs + order).
+
+---
+
 ### v4.4 — Cloud Functions 2nd Gen + Node 22
 
 **Why:** Deploy warnings after v4.3 ship — Node 20 deprecated (EOL 2026-10-30) and firebase-functions SDK v4 flagged as outdated.
