@@ -13,6 +13,7 @@ const goalsRoutes           = require('./routes/goals');
 const expensesRoutes        = require('./routes/expenses');
 const insightsRoutes        = require('./routes/insights');
 const recommendationsRoutes = require('./routes/recommendations');
+const budgetsRoutes         = require('./routes/budgets');
 const adminRoutes           = require('./routes/admin');
 
 const app = express();
@@ -40,6 +41,7 @@ app.use('/api/expenses',        expensesRoutes);
 app.use('/api/goals',           goalsRoutes);
 app.use('/api/insights',        insightsRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/budgets',         budgetsRoutes);
 app.use('/api/admin',           adminRoutes);
 
 app.get('/api/user', async (req, res) => {
@@ -55,19 +57,26 @@ app.get('/api/dashboard', async (req, res) => {
     const uid  = req.user.uid;
     const user = req.user;
 
-    const allAccounts = await db.getAccountsByUser(uid);
-    const accounts    = allAccounts.filter(a => a.type === 'credit');
+    const allAccounts    = await db.getAccountsByUser(uid);
+    const creditAccounts = allAccounts.filter(a => a.type === 'credit');
+    const assetAccounts  = allAccounts.filter(a => ['depository', 'investment', 'brokerage'].includes(a.type));
+    const loanAccounts   = allAccounts.filter(a => ['loan', 'mortgage'].includes(a.type));
 
     const expenses     = await db.getExpenses(uid);
-    const sinkingTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+    const sinkingTotal = expenses.reduce((s, e) => s + (e.monthly_amount || 0), 0);
 
-    const totalDebt       = accounts.reduce((s, a) => s + (a.balance_current || 0), 0);
-    const monthlyInterest = accounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
-    const totalMinimums   = accounts.reduce((s, a) => s + (a.minimum_payment || 0), 0);
+    const totalDebt        = creditAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
+    const totalLoanDebt    = loanAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
+    const totalLiabilities = totalDebt + totalLoanDebt;
+    const totalAssets      = assetAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
+    const netWorth         = totalAssets - totalLiabilities;
+
+    const monthlyInterest = creditAccounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
+    const totalMinimums   = creditAccounts.reduce((s, a) => s + (a.minimum_payment || 0), 0);
     const surplus         = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMinimums - sinkingTotal;
     const strategy        = user.strategy || 'avalanche';
 
-    const debts = accounts.filter(a => a.balance_current > 0).map(a => ({
+    const debts = creditAccounts.filter(a => a.balance_current > 0).map(a => ({
       name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
     }));
 
@@ -77,7 +86,7 @@ app.get('/api/dashboard', async (req, res) => {
       return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     })() : null;
 
-    const priorityCard = [...accounts]
+    const priorityCard = [...creditAccounts]
       .filter(a => a.balance_current > 0)
       .sort((a, b) => strategy === 'avalanche'
         ? (b.apr || 0) - (a.apr || 0) || a.balance_current - b.balance_current
@@ -86,15 +95,18 @@ app.get('/api/dashboard', async (req, res) => {
 
     res.json({
       user,
-      totalDebt:       Math.round(totalDebt * 100) / 100,
-      monthlyInterest: Math.round(monthlyInterest * 100) / 100,
-      totalMinimums:   Math.round(totalMinimums * 100) / 100,
-      surplus:         Math.round(surplus * 100) / 100,
-      debtFreeMonths:  months,
+      totalDebt:        Math.round(totalDebt * 100) / 100,
+      totalAssets:      Math.round(totalAssets * 100) / 100,
+      totalLiabilities: Math.round(totalLiabilities * 100) / 100,
+      netWorth:         Math.round(netWorth * 100) / 100,
+      monthlyInterest:  Math.round(monthlyInterest * 100) / 100,
+      totalMinimums:    Math.round(totalMinimums * 100) / 100,
+      surplus:          Math.round(surplus * 100) / 100,
+      debtFreeMonths:   months,
       debtFreeDate,
       priorityCard,
-      alerts:          payoffEngine.checkAlerts(accounts),
-      accountCount:    accounts.length,
+      alerts:           payoffEngine.checkAlerts(creditAccounts),
+      accountCount:     creditAccounts.length,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

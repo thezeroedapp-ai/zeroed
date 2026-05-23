@@ -52,7 +52,8 @@ async function getAccounts(accessToken) {
   return accounts.map(a => ({
     plaid_account_id:  a.account_id,
     name:              a.name,
-    type:              a.type === 'credit' ? 'credit' : 'depository',
+    type:              a.type,     // 'depository', 'credit', 'investment', 'loan', 'mortgage', 'brokerage'
+    subtype:           a.subtype,  // 'checking', 'savings', 'credit card', '401k', 'ira', etc.
     balance_current:   a.balances.current,
     balance_available: a.balances.available,
     credit_limit:      a.balances.limit,

@@ -202,6 +202,31 @@ async function incrementUsage(uid, yearMonth) {
   await ref.set({ year_month: yearMonth, count: FieldValue.increment(1) }, { merge: true });
 }
 
+// --- Budgets ---
+
+async function getBudgets(uid) {
+  const snap = await userRef(uid).collection('budgets').orderBy('created_at', 'asc').get();
+  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+}
+
+async function upsertBudget(uid, budgetId, data) {
+  const ref = budgetId
+    ? userRef(uid).collection('budgets').doc(budgetId)
+    : userRef(uid).collection('budgets').doc();
+  await ref.set({ ...data, updated_at: FieldValue.serverTimestamp() }, { merge: true });
+  if (!data.created_at) await ref.set({ created_at: FieldValue.serverTimestamp() }, { merge: true });
+  const snap = await ref.get();
+  return { id: ref.id, ...toObj(snap) };
+}
+
+async function deleteBudget(uid, budgetId) {
+  const ref = userRef(uid).collection('budgets').doc(budgetId);
+  const snap = await ref.get();
+  if (!snap.exists) return { changes: 0 };
+  await ref.delete();
+  return { changes: 1 };
+}
+
 // --- Admin ---
 
 async function getAllUsers() {
@@ -210,7 +235,7 @@ async function getAllUsers() {
 }
 
 async function deleteUserData(uid) {
-  const subs = ['accounts', 'transactions', 'goals', 'expenses', 'insights', 'ai_usage', 'plaid_items', 'payoff_plans'];
+  const subs = ['accounts', 'transactions', 'goals', 'expenses', 'insights', 'ai_usage', 'plaid_items', 'payoff_plans', 'budgets'];
   for (const sub of subs) {
     const snap = await userRef(uid).collection(sub).get();
     for (let i = 0; i < snap.docs.length; i += 500) {
@@ -233,4 +258,5 @@ module.exports = {
   getExpenses, addExpense, deleteExpense,
   getLatestInsight, saveInsight, getUsage, incrementUsage,
   getAllUsers, deleteUserData,
+  getBudgets, upsertBudget, deleteBudget,
 };

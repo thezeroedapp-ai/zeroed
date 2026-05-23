@@ -7,6 +7,9 @@ import { apiFetch, fmt, fmtD } from '../lib/api';
 interface DashboardData {
   user?: { name: string };
   totalDebt: number;
+  totalAssets?: number;
+  totalLiabilities?: number;
+  netWorth?: number;
   monthlyInterest: number;
   surplus: number;
   accountCount: number;
@@ -164,6 +167,25 @@ export default function Dashboard() {
                 </span>
                 {data.debtFreeDate && <span className="hero-date">{data.debtFreeDate}</span>}
               </div>
+              {data.netWorth != null && (
+                <div style={{ display: 'flex', gap: 16, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 2 }}>Total Assets</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>
+                      {fmt(data.totalAssets ?? 0)}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 2 }}>Net Worth</div>
+                    <div style={{
+                      fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                      color: data.netWorth >= 0 ? 'var(--green)' : 'var(--red)',
+                    }}>
+                      {data.netWorth < 0 ? '-' : ''}{fmt(Math.abs(data.netWorth))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Monthly interest */}
