@@ -1,8 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor,
+  useSensor, useSensors, DragEndEvent, DragOverlay, DragStartEvent,
+} from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import { apiFetch, fmt, fmtD } from '../lib/api';
+
+// ─── Interfaces ──────────────────────────────────────────────────────────────
 
 interface DashboardData {
   user?: { name: string };
@@ -40,15 +48,14 @@ interface GoalRow {
 interface NetWorthPoint {
   month: string;
   net_worth: number;
-  total_assets: number;
-  total_liabilities: number;
 }
 
 interface SpendingCategory {
   category: string;
   total: number;
-  count: number;
 }
+
+// ─── Widget catalog ───────────────────────────────────────────────────────────
 
 const DEFAULT_WIDGETS = [
   'debt_projection', 'net_worth_trend', 'spending_by_category',
@@ -68,13 +75,15 @@ const WIDGET_CATALOG = [
   { id: 'alerts',               label: 'Alerts'               },
 ];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function greeting(name: string) {
   const h = new Date().getHours();
   const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   return `${g}, ${name}`;
 }
 
-function buildChartData(totalDebt: number, months: number): { month: string; balance: number }[] {
+function buildChartData(totalDebt: number, months: number) {
   if (!months || months <= 0 || months > 360 || !totalDebt) return [];
   const cap = Math.min(months, 60);
   const step = Math.max(1, Math.floor(cap / 24));
@@ -96,6 +105,63 @@ function buildChartData(totalDebt: number, months: number): { month: string; bal
   return data;
 }
 
+// ─── Sortable widget shell ────────────────────────────────────────────────────
+
+function SortableWidgetShell({ id, editMode, onRemove, children }: {
+  id: string;
+  editMode: boolean;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.35 : 1,
+        position: 'relative',
+        zIndex: isDragging ? 50 : undefined,
+      }}
+    >
+      {editMode && (
+        <>
+          <div
+            ref={setActivatorNodeRef}
+            {...listeners}
+            {...attributes}
+            style={{
+              position: 'absolute', top: 10, left: 10, zIndex: 20,
+              cursor: 'grab', color: 'var(--text-2)',
+              background: 'var(--bg-elevated)', borderRadius: 6,
+              width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 14, lineHeight: 1, border: '1px solid var(--border)',
+              touchAction: 'none',
+            }}
+            title="Drag to reorder"
+          >⠿</div>
+          <button
+            onClick={onRemove}
+            style={{
+              position: 'absolute', top: 10, right: 10, zIndex: 20,
+              background: 'var(--red-dim)', border: '1px solid rgba(244,63,94,0.25)',
+              borderRadius: '50%', width: 26, height: 26, cursor: 'pointer',
+              color: 'var(--red)', fontSize: 16, lineHeight: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+              fontFamily: 'inherit',
+            }}
+          >×</button>
+        </>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const [state, setState] = useState<'loading' | 'error' | 'content'>('loading');
   const [data, setData] = useState<DashboardData | null>(null);
@@ -104,12 +170,18 @@ export default function Dashboard() {
   const [spendingData, setSpendingData] = useState<SpendingCategory[]>([]);
   const [activeWidgets, setActiveWidgets] = useState<string[]>(DEFAULT_WIDGETS);
   const [editMode, setEditMode] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [draftWidgets, setDraftWidgets] = useState<string[]>(DEFAULT_WIDGETS);
+  const [dragActiveId, setDragActiveId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [aiState, setAiState] = useState<'loading' | 'empty' | 'content' | 'limit' | 'error'>('loading');
   const [insight, setInsight] = useState<InsightData | null>(null);
   const [aiError, setAiError] = useState('');
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
 
   async function load() {
     setState('loading');
@@ -144,11 +216,7 @@ export default function Dashboard() {
       const r = await apiFetch('/api/insights/latest');
       const d: InsightData = await r.json();
       setInsight(d);
-      if (!d.insight) {
-        setAiState(d.remaining === 0 && !d.isPro ? 'limit' : 'empty');
-      } else {
-        setAiState('content');
-      }
+      setAiState(!d.insight ? (d.remaining === 0 && !d.isPro ? 'limit' : 'empty') : 'content');
     } catch { setAiState('empty'); }
   }
 
@@ -167,60 +235,76 @@ export default function Dashboard() {
     }
   }
 
-  async function saveConfig(widgets: string[]) {
-    setSavingConfig(true);
-    try {
-      await apiFetch('/api/dashboard-config', {
+  function persistConfig(widgets: string[]) {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      apiFetch('/api/dashboard-config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ widgets }),
+      }).catch(() => {});
+    }, 600);
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setDragActiveId(event.active.id as string);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setDragActiveId(null);
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setActiveWidgets(prev => {
+        const next = arrayMove(prev, prev.indexOf(active.id as string), prev.indexOf(over.id as string));
+        persistConfig(next);
+        return next;
       });
-      setActiveWidgets(widgets);
-      setEditMode(false);
-    } catch { /* silent — layout already applied locally */ }
-    setSavingConfig(false);
+    }
   }
 
-  function toggleWidget(id: string, current: string[]) {
-    if (current.includes(id)) return current.filter(w => w !== id);
-    return [...current, id];
+  function removeWidget(id: string) {
+    setActiveWidgets(prev => {
+      const next = prev.filter(w => w !== id);
+      persistConfig(next);
+      return next;
+    });
   }
 
-  function moveWidget(id: string, dir: -1 | 1, current: string[]) {
-    const idx = current.indexOf(id);
-    if (idx === -1) return current;
-    const next = [...current];
-    const swap = idx + dir;
-    if (swap < 0 || swap >= next.length) return current;
-    [next[idx], next[swap]] = [next[swap], next[idx]];
-    return next;
+  function addWidget(id: string) {
+    setActiveWidgets(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      persistConfig(next);
+      return next;
+    });
   }
 
   useEffect(() => { load(); loadInsight(); }, []);
 
-  useEffect(() => { if (editMode) setDraftWidgets(activeWidgets); }, [editMode]);
-
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const chartData = data ? buildChartData(data.totalDebt, data.debtFreeMonths || 0) : [];
+  const hiddenWidgets = WIDGET_CATALOG.filter(w => !activeWidgets.includes(w.id));
 
-  function renderWidget(id: string) {
+  // ── Widget renderer ──────────────────────────────────────────────────────────
+
+  function renderWidgetContent(id: string) {
     if (!data) return null;
 
     switch (id) {
       case 'interest_cost':
         return (
-          <div key="interest_cost" className="card bento-stat">
+          <div className="card" style={{ height: '100%' }}>
             <div className="card-label">Monthly Interest</div>
-            <div className="stat-value red">{fmtD(data.monthlyInterest)}</div>
+            <div className="stat-value red" style={{ marginTop: 8 }}>{fmtD(data.monthlyInterest)}</div>
             <div className="stat-sub">cost of carrying debt</div>
           </div>
         );
 
       case 'savings_rate':
         return (
-          <div key="savings_rate" className="card bento-stat">
+          <div className="card" style={{ height: '100%' }}>
             <div className="card-label">Monthly Surplus</div>
-            <div className={`stat-value ${data.surplus >= 0 ? 'green' : 'red'}`}>{fmt(data.surplus)}</div>
+            <div className={`stat-value ${data.surplus >= 0 ? 'green' : 'red'}`} style={{ marginTop: 8 }}>{fmt(data.surplus)}</div>
             <div className="stat-sub">for extra payments</div>
           </div>
         );
@@ -228,9 +312,9 @@ export default function Dashboard() {
       case 'debt_projection':
         if (chartData.length <= 2) return null;
         return (
-          <div key="debt_projection" className="card bento-chart">
-            <div className="card-label" style={{ marginBottom: 16 }}>Payoff Projection</div>
-            <ResponsiveContainer width="100%" height={148}>
+          <div className="card" style={{ height: '100%' }}>
+            <div className="card-label" style={{ marginBottom: 12 }}>Payoff Projection</div>
+            <ResponsiveContainer width="100%" height={112}>
               <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
@@ -238,12 +322,7 @@ export default function Dashboard() {
                     <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 10, fill: '#64748b' }}
-                  tickLine={false} axisLine={false}
-                  interval={Math.max(1, Math.floor(chartData.length / 5))}
-                />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} interval={Math.max(1, Math.floor(chartData.length / 5))} />
                 <Tooltip
                   contentStyle={{ background: '#0d1424', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, color: '#e2e8f0' }}
                   formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Balance']}
@@ -258,19 +337,19 @@ export default function Dashboard() {
 
       case 'priority_attack':
         return (
-          <div key="priority_attack" className="card bento-focus focus-card">
+          <div className="card focus-card" style={{ height: '100%' }}>
             <div className="focus-label">⚡ Priority Attack</div>
             {data.priorityCard ? (
               <>
-                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>{data.priorityCard.name}</div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--red)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{fmtD(data.priorityCard.balance_current)}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>{data.priorityCard.name}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--red)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{fmtD(data.priorityCard.balance_current)}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6 }}>
                   {data.priorityCard.apr}% APR
                   {data.priorityCard.payment_due_date && (
                     <> · Due {new Date(data.priorityCard.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--accent-2)', marginTop: 10, lineHeight: 1.5 }}>Highest APR — extra dollars here save the most.</div>
+                <div style={{ fontSize: 12, color: 'var(--accent-2)', marginTop: 8, lineHeight: 1.5 }}>Highest APR — extra dollars here save the most.</div>
               </>
             ) : (
               <div style={{ fontSize: 13, color: 'var(--text-2)' }}>No debt cards found.</div>
@@ -281,7 +360,7 @@ export default function Dashboard() {
       case 'alerts':
         if (!data.alerts || data.alerts.length === 0) return null;
         return (
-          <div key="alerts" className="bento-full">
+          <div style={{ height: '100%' }}>
             {data.alerts.map((a, i) => (
               <div key={i} className="warning">
                 <div className="warn-icon">{a.severity === 'danger' ? '🔴' : '⚠️'}</div>
@@ -299,24 +378,24 @@ export default function Dashboard() {
         const latest = netWorthHistory[netWorthHistory.length - 1];
         const delta  = latest.net_worth - netWorthHistory[0].net_worth;
         return (
-          <div key="net_worth_trend" className="card bento-full">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div className="card" style={{ height: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
               <div>
-                <div className="card-label">Net Worth Trend</div>
-                <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: latest.net_worth >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                <div className="card-label">Net Worth</div>
+                <div style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: latest.net_worth >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 4 }}>
                   {latest.net_worth < 0 ? '-' : ''}{fmt(Math.abs(latest.net_worth))}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-2)' }}>vs {netWorthHistory.length} months ago</div>
-                <div style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: delta >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-2)' }}>{netWorthHistory.length}mo change</div>
+                <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: delta >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 2 }}>
                   {delta >= 0 ? '+' : ''}{fmt(delta)}
                 </div>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={120}>
+            <ResponsiveContainer width="100%" height={96}>
               <LineChart data={netWorthHistory} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 6))} />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 5))} />
                 <YAxis hide domain={['auto', 'auto']} />
                 <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
                 <Tooltip
@@ -337,13 +416,13 @@ export default function Dashboard() {
         const top5 = spendingData.slice(0, 5);
         const maxTotal = top5[0].total;
         return (
-          <div key="spending_by_category" className="card bento-chart">
-            <div className="card-label" style={{ marginBottom: 12 }}>Spending by Category</div>
+          <div className="card" style={{ height: '100%' }}>
+            <div className="card-label" style={{ marginBottom: 10 }}>Spending by Category</div>
             {top5.map(c => (
-              <div key={c.category} style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                  <span style={{ color: 'var(--text)', fontWeight: 500 }}>{c.category}</span>
-                  <span style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{fmtD(c.total)}</span>
+              <div key={c.category} style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                  <span style={{ color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{c.category}</span>
+                  <span style={{ color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{fmtD(c.total)}</span>
                 </div>
                 <div className="progress-bar">
                   <div className="progress-fill blue" style={{ width: `${(c.total / maxTotal) * 100}%` }} />
@@ -357,64 +436,59 @@ export default function Dashboard() {
       case 'goals_progress':
         if (!goals.length) return null;
         return (
-          <div key="goals_progress" className="card bento-goals">
+          <div className="card" style={{ height: '100%' }}>
             <div className="card-label">Goals</div>
             {goals.slice(0, 3).map(g => {
               const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
               return (
-                <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>{label}</div>
+                <div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 8 }}>{label}</div>
                   <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: g.onTrack ? 'var(--green-dim)' : 'var(--amber-dim)', color: g.onTrack ? 'var(--green)' : 'var(--amber)', flexShrink: 0 }}>
                     {g.onTrack ? 'On track' : g.requiredExtra ? `+${fmt(g.requiredExtra)}/mo` : 'Off track'}
                   </span>
                 </div>
               );
             })}
-            <Link to="/plan?tab=goals" style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 13, color: 'var(--accent-2)', textDecoration: 'none', fontWeight: 600 }}>
-              View All Goals →
+            <Link to="/plan?tab=goals" style={{ display: 'block', textAlign: 'center', marginTop: 10, fontSize: 13, color: 'var(--accent-2)', textDecoration: 'none', fontWeight: 600 }}>
+              View All →
             </Link>
           </div>
         );
 
       case 'ai_insights':
         return (
-          <div key="ai_insights" className="card bento-ai">
+          <div className="card" style={{ height: '100%' }}>
             <div className="card-label">AI Analysis</div>
             {aiState === 'loading' && (
-              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <div className="spinner" style={{ margin: '0 auto 10px' }} />
-                <div style={{ fontSize: 13, color: 'var(--text-2)' }}>Analyzing your habits…</div>
+                <div style={{ fontSize: 13, color: 'var(--text-2)' }}>Analyzing…</div>
               </div>
             )}
             {aiState === 'empty' && (
-              <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>🧠</div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Get personalized insights</div>
-                <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.6 }}>
-                  Claude analyzes your spending and debt profile to surface 3 actions that get you debt-free faster.
-                </div>
-                <button className="btn btn-primary btn-block" onClick={generateInsight}>Generate Insights</button>
+              <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🧠</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Get AI insights</div>
+                <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 14, lineHeight: 1.6 }}>3 actions to get debt-free faster.</div>
+                <button className="btn btn-primary btn-block" onClick={generateInsight}>Generate</button>
               </div>
             )}
             {aiState === 'content' && insight?.insight && (
               <>
-                <div>
-                  {insight.insight.insight.split('\n').filter(l => l.trim()).map((line, i) => {
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  {insight.insight.insight.split('\n').filter(l => l.trim()).slice(0, 3).map((line, i) => {
                     const m = line.trim().match(/^(\d+)\.\s*(.*)/s);
                     if (m) return (
-                      <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                        <div style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid var(--accent-border)', color: 'var(--accent-2)', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{m[1]}</div>
-                        <div style={{ fontSize: 13, lineHeight: 1.6, paddingTop: 2, color: 'var(--text)' }}>{m[2]}</div>
+                      <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'var(--accent-dim)', border: '1px solid var(--accent-border)', color: 'var(--accent-2)', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{m[1]}</div>
+                        <div style={{ fontSize: 12, lineHeight: 1.5, paddingTop: 2, color: 'var(--text)' }}>{m[2]}</div>
                       </div>
                     );
-                    return <div key={i} style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 8 }}>{line}</div>;
+                    return <div key={i} style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 6 }}>{line}</div>;
                   })}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-2)' }}>
-                    {new Date(insight.insight.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    {' · '}{insight.isPro ? 'Pro — unlimited' : `${insight.used} of ${insight.limit} used`}
-                  </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{insight.isPro ? 'Unlimited' : `${insight.used}/${insight.limit}`}</div>
                   {(insight.isPro || (insight.remaining ?? 0) > 0) && (
                     <button className="btn btn-ghost btn-sm" onClick={generateInsight}>Refresh</button>
                   )}
@@ -422,14 +496,14 @@ export default function Dashboard() {
               </>
             )}
             {aiState === 'limit' && (
-              <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-                <div style={{ fontSize: 28, marginBottom: 10 }}>🔒</div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Monthly limit reached</div>
-                <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>10 free analyses used this month.<br />Resets on the 1st.</div>
+              <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                <div style={{ fontSize: 26, marginBottom: 8 }}>🔒</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Limit reached</div>
+                <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.5 }}>10 free uses/month. Resets on the 1st.</div>
               </div>
             )}
             {aiState === 'error' && (
-              <div style={{ fontSize: 13, color: 'var(--red)', textAlign: 'center', padding: '8px 0' }}>{aiError}</div>
+              <div style={{ fontSize: 13, color: 'var(--red)', textAlign: 'center', padding: '12px 0' }}>{aiError}</div>
             )}
           </div>
         );
@@ -438,6 +512,8 @@ export default function Dashboard() {
         return null;
     }
   }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="page">
@@ -449,7 +525,7 @@ export default function Dashboard() {
           </div>
           {state === 'content' && (
             <button
-              className="btn btn-ghost btn-sm"
+              className={`btn btn-sm ${editMode ? 'btn-primary' : 'btn-ghost'}`}
               style={{ marginTop: 2 }}
               onClick={() => setEditMode(e => !e)}
             >
@@ -471,10 +547,11 @@ export default function Dashboard() {
             <button className="btn btn-primary" onClick={load}>Try Again</button>
           </div>
         )}
+
         {state === 'content' && data && (
-          <div className="bento">
-            {/* Hero — always shown */}
-            <div className="card bento-hero">
+          <>
+            {/* Hero — always shown, not draggable */}
+            <div className="card" style={{ marginBottom: 10 }}>
               <div className="card-label">Total Debt</div>
               <div className="hero-value" style={{ color: 'var(--red)' }}>{fmt(data.totalDebt)}</div>
               <div className="progress-wrap">
@@ -508,65 +585,68 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Configurable widgets */}
-            {activeWidgets.map(id => renderWidget(id))}
-          </div>
+            {/* Draggable widget grid */}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={activeWidgets} strategy={rectSortingStrategy}>
+                <div className="widget-grid">
+                  {activeWidgets.map(id => {
+                    const content = renderWidgetContent(id);
+                    if (!content && !editMode) return null;
+                    return (
+                      <SortableWidgetShell
+                        key={id}
+                        id={id}
+                        editMode={editMode}
+                        onRemove={() => removeWidget(id)}
+                      >
+                        {content ?? (
+                          <div className="card" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-2)', textAlign: 'center' }}>
+                              {WIDGET_CATALOG.find(w => w.id === id)?.label}<br />
+                              <span style={{ fontSize: 11 }}>No data yet</span>
+                            </div>
+                          </div>
+                        )}
+                      </SortableWidgetShell>
+                    );
+                  })}
+                </div>
+              </SortableContext>
+
+              <DragOverlay>
+                {dragActiveId ? (
+                  <div style={{ opacity: 0.85, transform: 'scale(1.02)', filter: 'drop-shadow(0 8px 24px rgba(124,58,237,0.35))' }}>
+                    {renderWidgetContent(dragActiveId) ?? (
+                      <div className="card">
+                        <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{WIDGET_CATALOG.find(w => w.id === dragActiveId)?.label}</div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+
+            {/* Add widgets row (edit mode only) */}
+            {editMode && hiddenWidgets.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <div className="section-title">Add Widgets</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {hiddenWidgets.map(w => (
+                    <button key={w.id} className="btn btn-outline btn-sm" onClick={() => addWidget(w.id)}>
+                      + {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Edit mode panel */}
-      {editMode && (
-        <div style={{
-          position: 'fixed', bottom: 'var(--nav-h)', left: 0, right: 0,
-          maxWidth: 480, margin: '0 auto',
-          background: 'var(--bg-card)', borderTop: '1px solid var(--border)',
-          borderRadius: 'var(--radius) var(--radius) 0 0',
-          padding: 'var(--pad)', zIndex: 200,
-          maxHeight: '55vh', overflowY: 'auto',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Customize Dashboard</div>
-          <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 14 }}>Toggle or reorder your widgets.</div>
-          {WIDGET_CATALOG.map(w => {
-            const isActive = draftWidgets.includes(w.id);
-            const idx = draftWidgets.indexOf(w.id);
-            return (
-              <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  style={{ accentColor: 'var(--accent)', width: 16, height: 16, flexShrink: 0, cursor: 'pointer' }}
-                  onChange={() => setDraftWidgets(prev => toggleWidget(w.id, prev))}
-                />
-                <span style={{ flex: 1, fontSize: 14, color: isActive ? 'var(--text)' : 'var(--text-2)' }}>{w.label}</span>
-                {isActive && (
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: '4px 8px', fontSize: 12 }}
-                      disabled={idx === 0}
-                      onClick={() => setDraftWidgets(prev => moveWidget(w.id, -1, prev))}
-                    >↑</button>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ padding: '4px 8px', fontSize: 12 }}
-                      disabled={idx === draftWidgets.length - 1}
-                      onClick={() => setDraftWidgets(prev => moveWidget(w.id, 1, prev))}
-                    >↓</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          <button
-            className="btn btn-primary btn-block"
-            style={{ marginTop: 16 }}
-            onClick={() => saveConfig(draftWidgets)}
-            disabled={savingConfig}
-          >
-            {savingConfig ? 'Saving…' : 'Save Layout'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

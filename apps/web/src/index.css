@@ -411,6 +411,20 @@ select option { background: var(--bg-card); color: var(--text); }
 .widget-card-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
 .widget-card-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
+/* ==================== WIDGET GRID (Dashboard manager) ==================== */
+.widget-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.widget-grid .card {
+  min-height: 180px;
+  overflow: hidden;
+}
+.widget-grid-full {
+  grid-column: 1 / -1;
+}
+
 /* ==================== AUTH ==================== */
 .auth-page {
   max-width: 480px; margin: 0 auto; min-height: 100dvh;
@@ -527,6 +541,8 @@ select option { background: var(--bg-card); color: var(--text); }
 
   /* Bento activates on tablet — 2 columns */
   .bento { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .widget-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
   .bento-hero  { grid-column: span 2; }
   .bento-chart { grid-column: span 2; }
   .bento-focus { grid-column: span 2; }
