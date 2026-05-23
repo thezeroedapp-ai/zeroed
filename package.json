@@ -12,9 +12,13 @@
   "scripts": {
     "dev": "node server/server.js",
     "dev:web": "npm run dev --workspace=apps/web",
+    "dev:web:remote": "cross-env API_TARGET=https://zeroed-3331d.web.app npm run dev --workspace=apps/web",
     "build": "npm run build:web",
     "build:web": "npm run build --workspace=apps/web",
     "start": "NODE_ENV=production node server/server.js",
     "deploy": "npm run build:web && firebase deploy"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
   }
 }
