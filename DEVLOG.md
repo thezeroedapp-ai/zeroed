@@ -4,6 +4,57 @@
 
 ---
 
+## 2026-05-23
+
+### v4.3 — Tech Debt Cleanup + 5-Tab Nav Consolidation
+
+**Goal:** Before building more features, clean up naming inconsistencies and consolidate the 8+ page nav into a 5-tab structure suitable for web, iOS, and Android.
+
+**Tech debt cleaned up:**
+
+- **`expenses` → `sinking_funds`**: Firestore collection renamed. `database.js` functions renamed (`getExpenses` → `getSinkingFunds`, etc.). Field name standardized to `monthly_amount` throughout — previously Firestore stored as `amount` but all readers expected `monthly_amount`, causing `sinkingTotal` to always show $0.
+- **`recommendations` → `rewards`**: `server/routes/recommendations.js` rewritten as `rewards.js`. API routes now `/api/rewards/categories` and `/api/rewards`. Frontend page `Recommend.tsx` renamed `Rewards.tsx` (deleted — now absorbed into Accounts).
+- **`Activity.tsx` → `Spending.tsx`**: Page and function name aligned.
+- **`/activity` → `/spending`**, **`/recommend` → `/rewards`**: Routes, nav components, and `packages/core/index.ts` ROUTES constants all updated.
+- **Old vanilla HTML deleted**: `server/public/` (11 files from pre-React v3.1) removed — these were dead code serving nothing.
+- **Duplicate routes eliminated**: `expenses.js` had both `/api/expenses` and `/api/expenses/sinking-funds` doing the same thing. Rewritten as clean single-route `sinking-funds.js`.
+
+**Nav consolidation — 8 pages → 5 tabs with subtabs:**
+
+Previous structure: Dashboard, Plan, Goals, Accounts, Budget, Spending, Rewards, Settings (8 standalone pages).
+
+New structure:
+| Tab | Subtabs |
+|-----|---------|
+| Home | — (Dashboard unchanged) |
+| Plan | Strategy · Goals · AI Insights |
+| Accounts | Accounts · Budget · Rewards |
+| Spending | Transactions · Trends · Recurring |
+| Settings | — |
+
+**Built:**
+- `Plan.tsx` rewritten — absorbs full `Goals.tsx` content as a subtab; adds AI Insights subtab (`GET /api/insights/latest`, `POST /api/insights/generate`)
+- `Accounts.tsx` rewritten — absorbs `Budget.tsx` and `Rewards.tsx` content as subtabs
+- `Spending.tsx` — adds "💳 Using the right card?" teaser card in Transactions tab with "Explore cards →" deep link to `/accounts?tab=rewards`
+- `SubNav.tsx` — new reusable horizontal subtab bar component using existing `.pills`/`.pill` CSS classes
+- `BottomNav.tsx` + `SideNav.tsx` — reduced from 7–8 items to 5 tabs
+- `App.tsx` — removed standalone `/goals`, `/budget`, `/rewards` routes; added legacy redirects so old bookmarks still work (`/goals` → `/plan?tab=goals`, `/budget` → `/accounts?tab=budget`, `/rewards` → `/accounts?tab=rewards`)
+- Deleted: `Goals.tsx`, `Budget.tsx`, `Rewards.tsx` (all content absorbed)
+
+**Implementation decisions:**
+- URL search params (`?tab=goals`) for subtab navigation, not component state — enables deep links like `/accounts?tab=rewards` that work on page load and are shareable
+- `useSearchParams` from React Router v6 reads and writes subtab state; default tab maps to no param (clean URL)
+- Lazy-load pattern for subtabs: each subtab only fetches data on first visit using `'idle'` state check — same pattern Spending already used for Trends/Recurring
+- Rewards debounce timer uses `useRef` (not `useState`) — avoids re-render loops and TypeScript array-index errors
+- Cross-tab flow (Spending → Rewards) uses a URL link not internal state — simpler and survives page refresh
+
+**Bugs fixed during rewrite:**
+- `sinkingTotal` always $0: Firestore stored field as `amount`, all readers expected `monthly_amount`. Fixed by standardizing storage to `monthly_amount`.
+- Accounts.tsx: imported `useNavigate` and assigned `navigate` but never used it — removed.
+- Accounts.tsx: `debounceRef` initially typed as `useState` instead of `useRef` — caused `[0]`/`[1]` index errors. Fixed to `useRef<ReturnType<typeof setTimeout> | null>(null)`.
+
+---
+
 ## 2026-05-20
 
 ### v1.0 — Initial Build

@@ -12,7 +12,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v4.2 — Monarch/Origin feature parity + first production deploy.** *(2026-05-22)*
+**v4.3 — Tech debt cleanup + 5-tab nav consolidation.** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
@@ -22,16 +22,13 @@ Full Firebase stack live with a dark premium UI:
 - **Database:** Firestore — subcollections under `users/{uid}/`
 - **API:** Express wrapped as Firebase Cloud Functions (`exports.api`)
 - **Hosting:** Firebase Hosting (React SPA) + Rewrites to Cloud Functions
-- **Frontend:** React 18 + Vite + TypeScript — all 8 screens, dark design system, bento grid dashboard
+- **Frontend:** React 18 + Vite + TypeScript — 5-tab nav with subtabs, dark design system, bento grid dashboard
 
-All screens working:
-- **Dashboard** — bento grid layout with interactive debt payoff projection chart (recharts), monthly stats, net worth summary (assets − liabilities), priority attack card, AI analysis, goals preview
-- **Plan** — 4 payoff strategies, freed-minimum rollover, lump-sum simulator, extra payment calculator, AI insights
-- **Goals** — debt-free date targets, per-card payoff goals, balance targets; required-payment calculator
-- **Accounts** — all account types (depository, credit, investment, loan, mortgage, brokerage), net worth strip, grouped by type, utilization bars, due date badges, promo APR warnings, inline edit for APR/min payment/due date
-- **Budget** — per-category monthly budgets with progress bars, spent/remaining/limit, overall summary strip
-- **Reward** — category-based card recommendations ranked by reward multipliers and TPG point valuations
-- **Spending** — 3 tabs: transaction history (filterable by expenses/payments), spending trends (stacked bar chart by category, 6-month view), recurring subscriptions (detected from transaction history, annual cost estimate)
+All screens working (5-tab structure):
+- **Home (Dashboard)** — bento grid layout with interactive debt payoff projection chart (recharts), monthly stats, net worth summary (assets − liabilities), priority attack card, AI analysis, goals preview
+- **Plan** — 3 subtabs: Strategy (4 payoff strategies, freed-minimum rollover, lump-sum simulator, extra payment calculator), Goals (debt-free date targets, per-card payoff goals, balance targets, required-payment calculator), AI Insights (Claude-powered spending analysis)
+- **Accounts** — 3 subtabs: Accounts (all types grouped by institution, net worth strip, inline APR/min edit), Budget (per-category monthly budgets with progress bars), Rewards (category-based card recommendations ranked by reward multipliers and TPG valuations)
+- **Spending** — 3 subtabs: Transactions (filterable by expenses/payments, "Explore cards →" teaser linking to Accounts › Rewards), Trends (6-month stacked bar chart by category), Recurring (auto-detected subscriptions with annual cost estimate)
 - **Settings** — bank connect/disconnect, income profile, sinking funds manager
 
 **Next:** Connect Plaid production; Stripe freemium gate.
@@ -42,6 +39,7 @@ All screens working:
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v4.3 | 2026-05-23 | Tech debt cleanup (expenses→sinking_funds, recommendations→rewards, removed old HTML public/ dir); 5-tab nav consolidation (Goals→Plan subtab, Budget+Rewards→Accounts subtabs); "Explore cards →" teaser in Spending→Transactions; legacy route redirects |
 | v4.2 | 2026-05-22 | Monarch/Origin parity — all Plaid account types (investment, loan, mortgage, brokerage); net worth on Dashboard + Accounts; Budget screen with per-category progress; Spending screen (transactions + stacked trends chart + recurring detection); first production Firebase deploy to zeroed-3331d.web.app |
 | v4.1 | 2026-05-22 | Dark premium UI redesign — complete `index.css` overhaul (violet accent, navy backgrounds, glassmorphism nav); Dashboard bento grid with recharts debt payoff projection; bug fixes: Recommend auth token, Goals Firestore string IDs, plan route response shape |
 | v4.0 | 2026-05-22 | Firebase migration — replaced Railway + Supabase + PostgreSQL with Firebase Auth + Firestore + Cloud Functions + Hosting; React frontend migrated from Supabase SDK to Firebase SDK; all routes scoped to `req.user.uid` (string); Firestore subcollections under `users/{uid}/`; `firebase deploy` ships everything |
@@ -62,13 +60,16 @@ All screens working:
 
 ### Core Features
 
-- **Dashboard** — Total debt, monthly interest cost, surplus, debt-free date, net worth (assets − liabilities), smart alerts, and a live goals status card
-- **Accounts** — All connected accounts grouped by type (Cash & Savings, Investments, Credit Cards, Loans); net worth summary strip; inline edit for APR/min payment/due date on credit cards
-- **Plan** — Four payoff strategies, 3 scenarios, extra payment slider, lump-sum simulator, attack order with per-card payoff dates, AI analysis
-- **Goals** — Set targets and track progress; required-payment calculator answers "what does it take to be free by [date]?"
-- **Budget** — Set per-category monthly spending limits; see progress bars (spent/remaining/pct), overall summary strip; add/remove budgets
-- **Reward** — Pick a spend category and get ranked card recommendations; active-debt cards ranked lower automatically
-- **Spending** — 3 tabs: transaction history (filterable expenses/payments, account name lookup), 6-month category spending trends (stacked bar chart), recurring subscription detection (2+ months, annual estimate)
+- **Home (Dashboard)** — Total debt, monthly interest cost, surplus, debt-free date, net worth (assets − liabilities), smart alerts, live goals status card, projected payoff chart
+- **Plan › Strategy** — Four payoff strategies, 3 scenarios, extra payment slider, lump-sum simulator, attack order with per-card payoff dates
+- **Plan › Goals** — Set debt-free date targets, per-card payoff goals, balance targets; required-payment calculator answers "what does it take to be free by [date]?"
+- **Plan › AI Insights** — Claude-powered spending analysis, 10 free/month with freemium gate
+- **Accounts › Accounts** — All connected accounts grouped by institution and type (Cash & Savings, Investments, Credit Cards, Loans); net worth summary strip; inline edit for APR/min payment on credit cards
+- **Accounts › Budget** — Set per-category monthly spending limits; progress bars (spent/remaining/pct), overall summary strip; add/remove budgets
+- **Accounts › Rewards** — Pick a spend category and get ranked card recommendations; active-debt cards ranked lower automatically
+- **Spending › Transactions** — Filterable by expenses/payments, account name lookup; "Explore cards →" teaser linking to Accounts › Rewards
+- **Spending › Trends** — 6-month stacked bar chart by category (recharts)
+- **Spending › Recurring** — Auto-detected subscriptions from 2+ months of history, annual cost estimate
 - **Settings** — Connect/disconnect banks via Plaid Link, update income/strategy, manage sinking funds
 
 ### Payoff Strategies
@@ -165,11 +166,11 @@ zeroed/
 │   │   ├── plaid.js          # /api/plaid/* — link token, exchange, sync, accounts, items
 │   │   ├── plan.js           # /api/plan/* — generate, latest, lump-sum, required-payment, alerts
 │   │   ├── goals.js          # /api/goals — CRUD + live progress computation
-│   │   ├── expenses.js       # /api/expenses — income + sinking funds CRUD
+│   │   ├── sinking-funds.js  # /api/sinking-funds — income + sinking funds CRUD
 │   │   ├── transactions.js   # /api/transactions — history, category summary, trends, recurring
 │   │   ├── budgets.js        # /api/budgets — CRUD + current-month spending enrichment
 │   │   ├── insights.js       # /api/insights — AI spending analysis, freemium gate
-│   │   ├── recommendations.js # /api/recommendations — ranked card suggestions
+│   │   ├── rewards.js        # /api/rewards — ranked card suggestions
 │   │   └── admin.js          # /api/admin — admin-only user management
 │   ├── services/
 │   │   ├── plaidService.js         # Plaid API — sync accounts + transactions (all account types)
@@ -187,12 +188,15 @@ zeroed/
 │   │   │   └── AuthContext.tsx # Firebase onAuthStateChanged, profile fetch, signOut
 │   │   ├── components/
 │   │   │   ├── Layout.tsx
-│   │   │   ├── SideNav.tsx
-│   │   │   └── BottomNav.tsx
+│   │   │   ├── SideNav.tsx    # 5-tab sidebar (Home, Plan, Accounts, Spending, Settings)
+│   │   │   ├── BottomNav.tsx  # 5-tab mobile nav (same tabs)
+│   │   │   └── SubNav.tsx     # Reusable horizontal subtab bar
 │   │   └── pages/
-│   │       ├── Dashboard.tsx, Accounts.tsx, Plan.tsx, Goals.tsx
-│   │       ├── Budget.tsx, Activity.tsx, Recommend.tsx, Settings.tsx
-│   │       ├── Admin.tsx, Login.tsx, Signup.tsx
+│   │       ├── Dashboard.tsx  # Home tab
+│   │       ├── Plan.tsx       # Plan tab (Strategy / Goals / AI Insights subtabs)
+│   │       ├── Accounts.tsx   # Accounts tab (Accounts / Budget / Rewards subtabs)
+│   │       ├── Spending.tsx   # Spending tab (Transactions / Trends / Recurring subtabs)
+│   │       ├── Settings.tsx, Admin.tsx, Login.tsx, Signup.tsx
 │   ├── .env.local             # VITE_FIREBASE_* vars (committed — Firebase client config is public)
 │   └── package.json
 ├── packages/core/
@@ -240,15 +244,15 @@ All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`.
 | GET | `/api/budgets` | All budgets enriched with current-month spent/remaining/pct |
 | POST | `/api/budgets` | Create budget (`category` + `monthly_limit`) |
 | DELETE | `/api/budgets/:id` | Remove budget |
-| GET | `/api/expenses/income` | Saved monthly income |
-| PUT | `/api/expenses/income` | Update monthly income |
-| GET | `/api/expenses/sinking-funds` | All sinking funds |
-| POST | `/api/expenses/sinking-funds` | Add a sinking fund |
-| DELETE | `/api/expenses/sinking-funds/:id` | Remove a sinking fund |
+| GET | `/api/sinking-funds/income` | Saved monthly income |
+| PUT | `/api/sinking-funds/income` | Update monthly income |
+| GET | `/api/sinking-funds` | All sinking funds |
+| POST | `/api/sinking-funds` | Add a sinking fund |
+| DELETE | `/api/sinking-funds/:id` | Remove a sinking fund |
 | GET | `/api/insights/latest` | Cached AI insight + usage stats |
 | POST | `/api/insights/generate` | Generate AI spending insight (10/mo free limit) |
-| GET | `/api/recommendations/categories` | Spend categories with icons |
-| GET | `/api/recommendations?category=dining` | Ranked card recommendations |
+| GET | `/api/rewards/categories` | Spend categories with icons |
+| GET | `/api/rewards?category=dining` | Ranked card recommendations |
 
 ---
 
@@ -261,7 +265,7 @@ All user data lives under `users/{uid}/`:
 | `accounts` | `plaid_account_id` | name, type (`depository`/`credit`/`investment`/`loan`/`mortgage`/`brokerage`), subtype, balance_current, apr, minimum_payment, credit_limit, institution_name |
 | `transactions` | `plaid_transaction_id` | account_id, amount, date, name, category |
 | `goals` | auto | goal_type, target_date, target_balance, account_id, is_active |
-| `expenses` | auto | category, monthly_amount, label (sinking funds) |
+| `sinking_funds` | auto | category, monthly_amount, label |
 | `budgets` | auto | category, monthly_limit, created_at, updated_at |
 | `insights` | auto | content, created_at |
 | `ai_usage` | `YYYY-MM` | count |
@@ -313,6 +317,8 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 - [x] **Recurring detection** — auto-detect subscriptions from 2+ months of history, annual cost *(v4.2)*
 - [x] **Firebase production deploy** — live at zeroed-3331d.web.app *(v4.2, 2026-05-22)*
 - [x] **Mac + Windows simultaneous dev** — `.env.local` committed, `dev:web:remote` script proxies to production *(v4.2)*
+- [x] **Tech debt cleanup** — renamed `expenses`→`sinking_funds` (Firestore + routes), `recommendations`→`rewards`; removed old vanilla HTML public/ dir; consistent `monthly_amount` field throughout *(v4.3, 2026-05-23)*
+- [x] **5-tab nav consolidation** — Goals→Plan subtab, Budget+Rewards→Accounts subtabs; reusable `SubNav` component; URL-based subtab navigation via `useSearchParams`; "Explore cards →" cross-tab deep link *(v4.3, 2026-05-23)*
 
 ### Up Next 🔜
 - [ ] Plaid production credentials (apply early — 2–3 week review)
