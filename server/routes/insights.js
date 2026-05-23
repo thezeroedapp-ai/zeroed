@@ -62,8 +62,8 @@ router.post('/generate', async (req, res) => {
     const totalDebt       = accounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const monthlyInterest = accounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
     const totalMin        = accounts.reduce((s, a) => s + (a.minimum_payment || 0), 0);
-    const expenses        = await db.getExpenses(uid);
-    const sinkingTotal    = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+    const sinkingFunds    = await db.getSinkingFunds(uid);
+    const sinkingTotal    = sinkingFunds.reduce((s, f) => s + (f.monthly_amount || 0), 0);
     const surplus         = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin - sinkingTotal;
 
     const insightText = await getSpendingInsight(user, accounts, byCategory, totalDebt, monthlyInterest, surplus);

@@ -6,15 +6,15 @@ const db           = require('./db/database');
 const payoffEngine = require('./services/payoffEngine');
 const { authenticate } = require('./middleware/auth');
 
-const plaidRoutes           = require('./routes/plaid');
-const planRoutes            = require('./routes/plan');
-const transactionRoutes     = require('./routes/transactions');
-const goalsRoutes           = require('./routes/goals');
-const expensesRoutes        = require('./routes/expenses');
-const insightsRoutes        = require('./routes/insights');
-const recommendationsRoutes = require('./routes/recommendations');
-const budgetsRoutes         = require('./routes/budgets');
-const adminRoutes           = require('./routes/admin');
+const plaidRoutes        = require('./routes/plaid');
+const planRoutes         = require('./routes/plan');
+const transactionRoutes  = require('./routes/transactions');
+const goalsRoutes        = require('./routes/goals');
+const sinkingFundsRoutes = require('./routes/sinking-funds');
+const insightsRoutes     = require('./routes/insights');
+const rewardsRoutes      = require('./routes/rewards');
+const budgetsRoutes      = require('./routes/budgets');
+const adminRoutes        = require('./routes/admin');
 
 const app = express();
 
@@ -25,7 +25,6 @@ app.use(express.json());
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../apps/web/dist')));
 }
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -34,15 +33,15 @@ app.get('/api/health', (req, res) => {
 // All /api/* routes below require a valid Firebase ID token
 app.use('/api', authenticate);
 
-app.use('/api/plaid',           plaidRoutes);
-app.use('/api/plan',            planRoutes);
-app.use('/api/transactions',    transactionRoutes);
-app.use('/api/expenses',        expensesRoutes);
-app.use('/api/goals',           goalsRoutes);
-app.use('/api/insights',        insightsRoutes);
-app.use('/api/recommendations', recommendationsRoutes);
-app.use('/api/budgets',         budgetsRoutes);
-app.use('/api/admin',           adminRoutes);
+app.use('/api/plaid',         plaidRoutes);
+app.use('/api/plan',          planRoutes);
+app.use('/api/transactions',  transactionRoutes);
+app.use('/api/sinking-funds', sinkingFundsRoutes);
+app.use('/api/goals',         goalsRoutes);
+app.use('/api/insights',      insightsRoutes);
+app.use('/api/rewards',       rewardsRoutes);
+app.use('/api/budgets',       budgetsRoutes);
+app.use('/api/admin',         adminRoutes);
 
 app.get('/api/user', async (req, res) => {
   try {
@@ -62,8 +61,8 @@ app.get('/api/dashboard', async (req, res) => {
     const assetAccounts  = allAccounts.filter(a => ['depository', 'investment', 'brokerage'].includes(a.type));
     const loanAccounts   = allAccounts.filter(a => ['loan', 'mortgage'].includes(a.type));
 
-    const expenses     = await db.getExpenses(uid);
-    const sinkingTotal = expenses.reduce((s, e) => s + (e.monthly_amount || 0), 0);
+    const sinkingFunds = await db.getSinkingFunds(uid);
+    const sinkingTotal = sinkingFunds.reduce((s, f) => s + (f.monthly_amount || 0), 0);
 
     const totalDebt        = creditAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const totalLoanDebt    = loanAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);

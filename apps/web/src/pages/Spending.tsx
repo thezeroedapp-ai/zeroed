@@ -42,7 +42,7 @@ function monthKey(date: string) {
 
 const CHART_COLORS = ['#7c3aed', '#a78bfa', '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4'];
 
-export default function Activity() {
+export default function Spending() {
   const [tab, setTab] = useState<Tab>('transactions');
 
   // Transactions tab

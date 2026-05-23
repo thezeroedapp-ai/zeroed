@@ -153,22 +153,22 @@ async function deleteGoal(uid, goalId) {
   return { changes: 1 };
 }
 
-// --- Sinking Funds (Expenses) ---
+// --- Sinking Funds ---
 
-async function getExpenses(uid) {
-  const snap = await userRef(uid).collection('expenses').orderBy('created_at', 'asc').get();
+async function getSinkingFunds(uid) {
+  const snap = await userRef(uid).collection('sinking_funds').orderBy('created_at', 'asc').get();
   return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
 }
 
-async function addExpense(uid, expense) {
-  const ref = userRef(uid).collection('expenses').doc();
-  await ref.set({ ...expense, created_at: FieldValue.serverTimestamp() });
+async function addSinkingFund(uid, fund) {
+  const ref = userRef(uid).collection('sinking_funds').doc();
+  await ref.set({ ...fund, created_at: FieldValue.serverTimestamp() });
   const snap = await ref.get();
   return { id: ref.id, ...toObj(snap) };
 }
 
-async function deleteExpense(uid, expenseId) {
-  const ref = userRef(uid).collection('expenses').doc(expenseId);
+async function deleteSinkingFund(uid, fundId) {
+  const ref = userRef(uid).collection('sinking_funds').doc(fundId);
   const snap = await ref.get();
   if (!snap.exists) return { changes: 0 };
   await ref.delete();
@@ -235,7 +235,7 @@ async function getAllUsers() {
 }
 
 async function deleteUserData(uid) {
-  const subs = ['accounts', 'transactions', 'goals', 'expenses', 'insights', 'ai_usage', 'plaid_items', 'payoff_plans', 'budgets'];
+  const subs = ['accounts', 'transactions', 'goals', 'sinking_funds', 'insights', 'ai_usage', 'plaid_items', 'payoff_plans', 'budgets'];
   for (const sub of subs) {
     const snap = await userRef(uid).collection(sub).get();
     for (let i = 0; i < snap.docs.length; i += 500) {
@@ -255,7 +255,7 @@ module.exports = {
   saveTransactions, getTransactionsByUser, getTransactionSummary,
   getPayoffPlan, savePlan,
   getGoals, createGoal, deleteGoal,
-  getExpenses, addExpense, deleteExpense,
+  getSinkingFunds, addSinkingFund, deleteSinkingFund,
   getLatestInsight, saveInsight, getUsage, incrementUsage,
   getAllUsers, deleteUserData,
   getBudgets, upsertBudget, deleteBudget,

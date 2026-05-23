@@ -19,8 +19,8 @@ router.post('/generate', async (req, res) => {
     if (!accounts.length) return res.status(400).json({ error: 'No debt accounts found.' });
 
     const strategy     = req.body.strategy || user.strategy || 'avalanche';
-    const expenses     = await db.getExpenses(uid);
-    const sinkingTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+    const sinkingFunds = await db.getSinkingFunds(uid);
+    const sinkingTotal = sinkingFunds.reduce((s, f) => s + (f.monthly_amount || 0), 0);
     const debts = accounts.map(a => ({
       name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0,
     }));
@@ -120,7 +120,7 @@ router.post('/lump-sum', async (req, res) => {
     const lump         = parseFloat(amount) || 0;
     const debts        = accounts.map(a => ({ id: a.id, name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0 }));
     const totalMin     = debts.reduce((s, d) => s + d.minimumPayment, 0);
-    const sinkingTotal = (await db.getExpenses(user.uid)).reduce((s, e) => s + (e.amount || 0), 0);
+    const sinkingTotal = (await db.getSinkingFunds(user.uid)).reduce((s, f) => s + (f.monthly_amount || 0), 0);
     const surplus      = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin - sinkingTotal;
 
     res.json(payoffEngine.simulateLumpSum(debts, lump, accountId || null, Math.max(0, surplus), strategy));
@@ -140,7 +140,7 @@ router.post('/required-payment', async (req, res) => {
     const strategy     = reqStrategy || user.strategy || 'avalanche';
     const debts        = accounts.map(a => ({ name: a.name, balance: a.balance_current, apr: a.apr || 0, minimumPayment: a.minimum_payment || 0 }));
     const totalMin     = debts.reduce((s, d) => s + d.minimumPayment, 0);
-    const sinkingTotal = (await db.getExpenses(user.uid)).reduce((s, e) => s + (e.amount || 0), 0);
+    const sinkingTotal = (await db.getSinkingFunds(user.uid)).reduce((s, f) => s + (f.monthly_amount || 0), 0);
     const surplus      = (user.monthly_income || 0) - (user.monthly_expenses || 0) - totalMin - sinkingTotal;
 
     const target       = new Date(targetDate);

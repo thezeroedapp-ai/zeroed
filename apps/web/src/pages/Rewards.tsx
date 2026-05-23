@@ -35,7 +35,7 @@ function rankLabel(rank: number) {
   return `#${rank}`;
 }
 
-export default function Recommend() {
+export default function Rewards() {
   const [state, setState] = useState<'loading' | 'error' | 'content'>('loading');
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export default function Recommend() {
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    apiFetch('/api/recommendations/categories')
+    apiFetch('/api/rewards/categories')
       .then(async r => {
         if (!r.ok) throw new Error('Failed to load categories');
         const d = await r.json();
@@ -67,7 +67,7 @@ export default function Recommend() {
 
   async function fetchResults() {
     if (!activeCategory) return;
-    const url = `/api/recommendations?category=${activeCategory}${amount ? '&amount=' + encodeURIComponent(amount) : ''}`;
+    const url = `/api/rewards?category=${activeCategory}${amount ? '&amount=' + encodeURIComponent(amount) : ''}`;
     try {
       const r = await apiFetch(url);
       if (!r.ok) throw new Error('Failed to fetch recommendations');

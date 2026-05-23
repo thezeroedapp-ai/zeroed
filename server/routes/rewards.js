@@ -5,12 +5,12 @@ const db = require('../db/database');
 
 const router = express.Router();
 
-// GET /api/recommendations/categories
+// GET /api/rewards/categories
 router.get('/categories', (req, res) => {
   res.json({ categories: getCategoryMeta(), profilesLastUpdated: PROFILES_LAST_UPDATED });
 });
 
-// GET /api/recommendations?category=dining&amount=50
+// GET /api/rewards?category=dining&amount=50
 router.get('/', async (req, res) => {
   try {
     const { category, amount } = req.query;

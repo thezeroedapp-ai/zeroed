@@ -7,9 +7,9 @@ import Dashboard from './pages/Dashboard';
 import Accounts from './pages/Accounts';
 import Plan from './pages/Plan';
 import Goals from './pages/Goals';
-import Activity from './pages/Activity';
+import Spending from './pages/Spending';
 import Budget from './pages/Budget';
-import Recommend from './pages/Recommend';
+import Rewards from './pages/Rewards';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 
@@ -47,9 +47,9 @@ export default function App() {
           <Route path="/accounts"  element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
           <Route path="/plan"      element={<ProtectedRoute><Plan /></ProtectedRoute>} />
           <Route path="/goals"     element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-          <Route path="/activity"  element={<ProtectedRoute><Activity /></ProtectedRoute>} />
+          <Route path="/spending"  element={<ProtectedRoute><Spending /></ProtectedRoute>} />
           <Route path="/budget"    element={<ProtectedRoute><Budget /></ProtectedRoute>} />
-          <Route path="/recommend" element={<ProtectedRoute><Recommend /></ProtectedRoute>} />
+          <Route path="/rewards"   element={<ProtectedRoute><Rewards /></ProtectedRoute>} />
           <Route path="/settings"  element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/admin"     element={<AdminRoute><Admin /></AdminRoute>} />
         </Routes>

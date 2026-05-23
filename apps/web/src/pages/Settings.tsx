@@ -18,16 +18,16 @@ export default function Settings() {
   const [plaidItems, setPlaidItems] = useState<PlaidItem[]>([]);
   const [sfForm, setSfForm] = useState({ category: 'car', amount: '', label: '' });
   const [sfSaving, setSfSaving] = useState(false);
-  const [appVersion] = useState('4.0');
+  const [appVersion] = useState('4.2');
 
   async function loadSettings() {
     try {
       const [r1, r2, r3] = await Promise.all([
-        apiFetch('/api/expenses/income'),
-        apiFetch('/api/expenses/sinking-funds'),
+        apiFetch('/api/sinking-funds/income'),
+        apiFetch('/api/sinking-funds'),
         apiFetch('/api/plaid/items'),
       ]);
-      if (r1.ok) { const d = await r1.json(); setIncome(d.monthlyIncome?.toString() || ''); }
+      if (r1.ok) { const d = await r1.json(); setIncome(d.monthly_income?.toString() || ''); }
       if (r2.ok) { const d = await r2.json(); setSinkingFunds(d.funds || []); }
       if (r3.ok) { const d = await r3.json(); setPlaidItems(d.items || []); }
     } catch { /* ignore */ }
@@ -38,7 +38,7 @@ export default function Settings() {
   async function saveIncome() {
     setIncomeLoading(true);
     try {
-      await apiFetch('/api/expenses/income', {
+      await apiFetch('/api/sinking-funds/income', {
         method: 'PUT',
         body: JSON.stringify({ monthly_income: parseFloat(income) }),
       });
@@ -49,7 +49,7 @@ export default function Settings() {
     if (!sfForm.amount) return;
     setSfSaving(true);
     try {
-      await apiFetch('/api/expenses/sinking-funds', {
+      await apiFetch('/api/sinking-funds', {
         method: 'POST',
         body: JSON.stringify({ category: sfForm.category, monthly_amount: parseFloat(sfForm.amount), label: sfForm.label || null }),
       });
@@ -60,7 +60,7 @@ export default function Settings() {
 
   async function deleteFund(id: string) {
     if (!confirm('Delete this sinking fund?')) return;
-    await apiFetch(`/api/expenses/sinking-funds/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/sinking-funds/${id}`, { method: 'DELETE' });
     loadSettings();
   }
 
