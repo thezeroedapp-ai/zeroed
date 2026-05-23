@@ -12,7 +12,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v4.5 — Plaid production readiness + competitive feature planning.** *(2026-05-23)*
+**v5.0 — Phase 1: Dashboard overhaul (design system lock-in + net worth history + dashboard manager).** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
@@ -25,13 +25,13 @@ Full Firebase stack live with a dark premium UI:
 - **Frontend:** React 18 + Vite + TypeScript — 5-tab nav with subtabs, dark design system, bento grid dashboard
 
 All screens working (5-tab structure):
-- **Home (Dashboard)** — bento grid layout with interactive debt payoff projection chart (recharts), monthly stats, net worth summary (assets − liabilities), priority attack card, AI analysis, goals preview
+- **Home (Dashboard)** — customizable 9-widget bento grid: debt payoff projection, net worth history sparkline, spending by category bars, goals preview, interest/surplus stats, priority attack, AI analysis, alerts. Widget order + visibility saved to Firestore per user. Edit mode via top-bar "Edit" button.
 - **Plan** — 3 subtabs: Strategy (4 payoff strategies, freed-minimum rollover, lump-sum simulator, extra payment calculator), Goals (debt-free date targets, per-card payoff goals, balance targets, required-payment calculator), AI Insights (Claude-powered spending analysis)
 - **Accounts** — 3 subtabs: Accounts (all types grouped by institution, net worth strip, inline APR/min edit), Budget (per-category monthly budgets with progress bars), Rewards (category-based card recommendations ranked by reward multipliers and TPG valuations)
 - **Spending** — 3 subtabs: Transactions (filterable by expenses/payments, "Explore cards →" teaser linking to Accounts › Rewards), Trends (6-month stacked bar chart by category), Recurring (auto-detected subscriptions with annual cost estimate)
 - **Settings** — bank connect/disconnect, income profile, sinking funds manager
 
-**Next:** Dashboard UI overhaul + design system lock-in → credit score, net worth history chart, manual accounts, cash flow forecast, investment tracking → budget AI recommendations, couples mode. Plaid production + Stripe are pre-go-live gates, not pre-test-user gates.
+**Next (Phase 2):** Credit score monitoring, manual account entry, cash flow forecast, investment tracking display → budget AI recommendations, couples mode. Plaid production + Stripe are pre-go-live gates, not pre-test-user gates.
 
 ---
 
@@ -39,6 +39,7 @@ All screens working (5-tab structure):
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v5.0 | 2026-05-23 | Phase 1 complete: design system lock-in (`--font-mono`, `.widget-card`, compat alias sweep); net worth monthly snapshots on every sync stored to `net_worth_history/{YYYY-MM}`; Dashboard manager — 9 configurable widgets with Firestore-backed layout (`dashboard_config/default`), edit mode with toggle + reorder |
 | v4.5 | 2026-05-23 | Plaid production readiness: update mode (reconnect broken connections), item-level disconnect with Plaid token revocation, cursor-based `transactionsSync` replacing legacy `transactionsGet`, `error_status` on plaid items, Settings UI with Connect/Reconnect/Disconnect/Sync Now |
 | v4.4 | 2026-05-23 | Firebase Cloud Functions upgraded: Node 20 1st Gen → Node 22 2nd Gen; firebase-functions v4 → v5; index.js migrated from v1 API (functions.https/pubsub) to v2 API (onRequest/onSchedule) |
 | v4.3 | 2026-05-23 | Tech debt cleanup (expenses→sinking_funds, recommendations→rewards, removed old HTML public/ dir); 5-tab nav consolidation (Goals→Plan subtab, Budget+Rewards→Accounts subtabs); "Explore cards →" teaser in Spending→Transactions; legacy route redirects |

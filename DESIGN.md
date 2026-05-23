@@ -255,16 +255,15 @@ input:focus    — accent-border
 
 ---
 
-## Current Gaps (to address in Phase 1)
+## Current Gaps
 
-| Gap | Plan |
+| Gap | Status |
 |---|---|
-| No `--font-mono` token | Add to `:root`; use for all numeric displays |
-| `--text-3` only used for placeholders | Promote as the official tertiary text token |
-| Compat alias tokens still used in some inline styles | Sweep and replace in Phase 1 |
-| No standard widget card class for Dashboard manager | Add `.widget-card` as a `.card` variant |
-| No skeleton pattern per widget | Add per-widget skeleton shapes |
-| No drag-and-drop reorder CSS | Needed for Dashboard manager edit mode |
+| `--text-3` only used for placeholders | Promote as official tertiary token when needed |
+| No skeleton pattern per widget | Add per-widget skeleton shapes (Phase 2) |
+| No drag-and-drop reorder CSS | Dashboard edit mode uses ↑/↓ buttons for now (Phase 2 upgrade) |
+
+*Phase 1 complete: `--font-mono` added to `:root`, `.widget-card` added, compat alias sweep confirmed clean (no TSX references).*
 
 ---
 

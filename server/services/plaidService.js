@@ -155,6 +155,13 @@ async function syncAllAccounts(uid) {
     }
   }
 
+  try {
+    const allAccounts = await db.getAccountsByUser(uid);
+    await db.recordNetWorthSnapshot(uid, allAccounts);
+  } catch (snapErr) {
+    console.error('[syncAllAccounts] Net worth snapshot failed:', snapErr.message);
+  }
+
   return results;
 }
 

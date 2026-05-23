@@ -6,6 +6,44 @@
 
 ## 2026-05-23
 
+### v5.0 — Phase 1: Dashboard Overhaul
+
+**What changed:**
+
+**Design system lock-in:**
+- Added `--font-mono` token to `:root` in `index.css` (Menlo/Consolas/Monaco fallback chain)
+- Added `.widget-card`, `.widget-card-label`, `.widget-card-value` classes to `index.css` — standard card variant for dashboard widgets
+- Confirmed compat alias tokens (`--text-sm`, `--yellow`, `--gray`, etc.) are not used in any TSX file — sweep is clean
+- Updated `DESIGN.md` gaps section to reflect Phase 1 completion
+
+**Net worth history (backend):**
+- Added `recordNetWorthSnapshot(uid, accounts)` to `database.js` — computes `total_assets`, `total_liabilities`, `net_worth` from the accounts array, writes to `net_worth_history/{YYYY-MM}` with merge semantics (idempotent per month)
+- Added `getNetWorthHistory(uid, limit=12)` to `database.js` — fetches ordered by doc ID (lexicographic = chronological for YYYY-MM), returns oldest-first for chart rendering
+- `syncAllAccounts` in `plaidService.js` now calls `recordNetWorthSnapshot` after the sync loop completes, wrapped in try/catch so a snapshot failure never kills a sync
+- Added `GET /api/net-worth-history` endpoint to `server.js`
+
+**Dashboard manager (backend):**
+- Added `getDashboardConfig(uid)` and `saveDashboardConfig(uid, widgets)` to `database.js` — reads/writes `dashboard_config/default` doc with `{ widgets: string[] }`; defaults to all 9 widgets if no doc exists
+- Added `GET /api/dashboard-config` and `PUT /api/dashboard-config` endpoints to `server.js`
+
+**Dashboard manager (frontend — `apps/web/src/pages/Dashboard.tsx`):**
+- Complete restructure: fixed-order bento grid → dynamic `activeWidgets.map(renderWidget)` with hero widget pinned first
+- Added `WIDGET_CATALOG` (9 widgets: debt_projection, net_worth_trend, spending_by_category, goals_progress, interest_cost, savings_rate, priority_attack, ai_insights, alerts)
+- `load()` now fetches 5 in parallel: dashboard data, goals, net worth history, spending summary, dashboard config
+- `renderWidget(id)` switch renders each widget as the correct bento card class; conditionally returns null if required data isn't available (e.g., no history for net_worth_trend)
+- Edit mode: "Edit" button in top-bar; bottom sheet with checkbox toggles + ↑/↓ reorder buttons; "Save Layout" persists to Firestore via PUT
+- Net worth trend widget: Recharts `LineChart` with `ReferenceLine` at y=0, shows `δ` vs first month
+- Spending by category widget: top-5 categories with CSS progress bars (no extra chart)
+- Fixed Goals link: `/goals` → `/plan?tab=goals`
+
+**Decisions:**
+- Hero widget (Total Debt) is not configurable — it's always shown. The 9-widget system covers secondary widgets.
+- Edit mode uses ↑/↓ buttons instead of drag-and-drop (CSS for drag not yet in design system; listed as Phase 2 gap)
+- Dashboard config saves as `string[]` (not a map) — order is layout order, presence = active
+- Net worth snapshot uses `set({ merge: true })` so it overwrites the same YYYY-MM doc on re-sync — last sync of the month wins
+
+---
+
 ### v4.5 — Plaid Production Readiness
 
 **What changed:**

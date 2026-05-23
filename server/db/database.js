@@ -238,6 +238,55 @@ async function deleteBudget(uid, budgetId) {
   return { changes: 1 };
 }
 
+// --- Dashboard Config ---
+
+const DEFAULT_DASHBOARD_WIDGETS = [
+  'debt_projection', 'net_worth_trend', 'spending_by_category',
+  'goals_progress', 'interest_cost', 'savings_rate',
+  'priority_attack', 'ai_insights', 'alerts',
+];
+
+async function getDashboardConfig(uid) {
+  const snap = await userRef(uid).collection('dashboard_config').doc('default').get();
+  if (!snap.exists) return { widgets: DEFAULT_DASHBOARD_WIDGETS };
+  return { widgets: snap.data().widgets || DEFAULT_DASHBOARD_WIDGETS };
+}
+
+async function saveDashboardConfig(uid, widgets) {
+  await userRef(uid).collection('dashboard_config').doc('default').set({
+    widgets,
+    updated_at: FieldValue.serverTimestamp(),
+  });
+}
+
+// --- Net Worth History ---
+
+async function recordNetWorthSnapshot(uid, accounts) {
+  const assetTypes     = ['depository', 'investment', 'brokerage'];
+  const liabilityTypes = ['credit', 'loan', 'mortgage'];
+
+  const totalAssets      = accounts.filter(a => assetTypes.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
+  const totalLiabilities = accounts.filter(a => liabilityTypes.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
+  const netWorth         = totalAssets - totalLiabilities;
+
+  const yearMonth = new Date().toISOString().slice(0, 7);
+  const ref = userRef(uid).collection('net_worth_history').doc(yearMonth);
+  await ref.set({
+    total_assets:      Math.round(totalAssets * 100) / 100,
+    total_liabilities: Math.round(totalLiabilities * 100) / 100,
+    net_worth:         Math.round(netWorth * 100) / 100,
+    recorded_at:       FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function getNetWorthHistory(uid, limit = 12) {
+  const snap = await userRef(uid).collection('net_worth_history')
+    .orderBy(admin.firestore.FieldPath.documentId(), 'desc')
+    .limit(limit)
+    .get();
+  return snap.docs.map(d => ({ month: d.id, ...toObj(d) })).reverse();
+}
+
 // --- Admin ---
 
 async function getAllUsers() {
@@ -270,4 +319,6 @@ module.exports = {
   getLatestInsight, saveInsight, getUsage, incrementUsage,
   getAllUsers, deleteUserData,
   getBudgets, upsertBudget, deleteBudget,
+  recordNetWorthSnapshot, getNetWorthHistory,
+  getDashboardConfig, saveDashboardConfig,
 };

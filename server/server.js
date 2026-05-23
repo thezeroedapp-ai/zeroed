@@ -112,6 +112,35 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
+app.get('/api/dashboard-config', async (req, res) => {
+  try {
+    const config = await db.getDashboardConfig(req.user.uid);
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/dashboard-config', async (req, res) => {
+  try {
+    const { widgets } = req.body;
+    if (!Array.isArray(widgets)) return res.status(400).json({ error: 'widgets must be an array' });
+    await db.saveDashboardConfig(req.user.uid, widgets);
+    res.json({ widgets });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/net-worth-history', async (req, res) => {
+  try {
+    const history = await db.getNetWorthHistory(req.user.uid);
+    res.json({ history });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.put('/api/user', async (req, res) => {
   try {
     const { monthly_income, monthly_expenses, strategy } = req.body;
