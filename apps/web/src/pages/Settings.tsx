@@ -15,6 +15,28 @@ const SINKING_CATEGORIES = ['car', 'home', 'medical', 'travel', 'education', 'ho
 interface SinkingFund { id: string; category: string; monthly_amount: number; label?: string; }
 interface PlaidItem { item_id: string; institution_name: string; last_synced?: string; error_status?: string | null; }
 
+function AvatarCircle({ name, size = 36 }: { name: string; size?: number }) {
+  const PALETTE = ['#3b82f6', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#f97316', '#8b5cf6'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: PALETTE[Math.abs(h) % PALETTE.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: Math.round(size * 0.40), color: 'white', flexShrink: 0 }}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+function relativeTime(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function Settings() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
@@ -142,18 +164,18 @@ export default function Settings() {
 
   return (
     <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-4 top-bar border-b border-border">
+      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-xl font-bold text-foreground">Settings</h1>
+          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Preferences, banks, and account</p>
         </div>
       </div>
 
-      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-6 max-w-3xl mx-auto space-y-8">
+      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto space-y-8">
 
         {/* Monthly Income */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Monthly Income</p>
+          <p className="text-sm font-semibold text-foreground mb-3">Monthly Income</p>
           <Card className="bg-card border-border">
             <CardContent className="p-5 space-y-3">
               <div className="flex gap-2 items-end">
@@ -178,7 +200,7 @@ export default function Settings() {
         {/* Sinking Funds */}
         <section>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Sinking Funds</p>
+            <p className="text-sm font-semibold text-foreground">Sinking Funds</p>
             {totalSinking > 0 && (
               <span className="text-xs text-muted-foreground">{fmtD(totalSinking)}/mo reserved</span>
             )}
@@ -192,7 +214,7 @@ export default function Settings() {
               <CardContent className="p-0">
                 {sinkingFunds.map((f, i) => (
                   <div key={f.id} className={cn(
-                    'flex items-center justify-between px-4 py-3',
+                    'flex items-center justify-between px-4 py-4',
                     i < sinkingFunds.length - 1 && 'border-b border-border',
                   )}>
                     <div>
@@ -210,10 +232,10 @@ export default function Settings() {
           )}
 
           <Card className="bg-card border-border">
-            <CardHeader className="pt-4 pb-2 px-4">
+            <CardHeader className="pt-5 pb-2 px-5">
               <CardTitle className="text-sm font-semibold">{sinkingFunds.length === 0 ? 'Add Your First Fund' : 'Add Fund'}</CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-3">
+            <CardContent className="px-5 pb-5 space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Category</Label>
                 <Select value={sfForm.category} onValueChange={v => setSfForm(p => ({ ...p, category: v }))}>
@@ -246,7 +268,7 @@ export default function Settings() {
 
         {/* Connected Banks */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Connected Banks</p>
+          <p className="text-sm font-semibold text-foreground mb-3">Connected Banks</p>
 
           {plaidItems.length === 0 ? (
             <Card className="bg-card border-border mb-3">
@@ -265,16 +287,19 @@ export default function Settings() {
                         <p className="text-xs text-red">Bank connection expired — please reconnect to resume syncing.</p>
                       </div>
                     )}
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{item.institution_name}</p>
-                        {item.last_synced && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Synced {new Date(item.last_synced).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </p>
-                        )}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <AvatarCircle name={item.institution_name} size={36} />
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{item.institution_name}</p>
+                          {item.last_synced && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Synced {relativeTime(item.last_synced)}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 shrink-0">
                         {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
                           <Button size="sm" onClick={() => reconnectItem(item.item_id)} disabled={plaidLoading}
                             className="h-8 bg-primary hover:bg-primary/90">Reconnect</Button>
@@ -304,16 +329,17 @@ export default function Settings() {
 
         {/* Account */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Account</p>
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
+          <p className="text-sm font-semibold text-foreground mb-3">Account</p>
+          <Card className="bg-card border-red/20">
+            <CardContent className="p-5">
+              <p className="text-xs text-muted-foreground mb-4">Signing out will end your current session.</p>
               <Button variant="outline" onClick={handleSignOut}
-                className="w-full border-red/30 text-red hover:bg-red/10">Sign Out</Button>
+                className="w-full border-red/30 text-red hover:bg-red-dim">Sign Out</Button>
             </CardContent>
           </Card>
         </section>
 
-        <p className="text-center text-xs text-muted-foreground pb-2">Zeroed v4.4</p>
+        <p className="text-center text-xs text-muted-foreground pb-2">Zeroed v4.5</p>
       </div>
     </div>
   );

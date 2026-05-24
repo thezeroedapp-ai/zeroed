@@ -167,14 +167,14 @@ export default function Accounts() {
 
   return (
     <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-4 top-bar border-b border-border">
+      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-xl font-bold text-foreground">Accounts</h1>
+          <h1 className="text-2xl font-bold text-foreground">Accounts</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Balances, budgets, and rewards</p>
         </div>
       </div>
 
-      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-6 max-w-3xl mx-auto">
+      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto">
         <SubNav tabs={ACCOUNT_TABS} active={tab} onChange={t => setTab(t as AccountTab)} />
 
         {/* ── ACCOUNTS TAB ── */}
@@ -205,9 +205,9 @@ export default function Accounts() {
                       { label: 'Net Worth',   value: (netWorth < 0 ? '−' : '') + fmt(Math.abs(netWorth)), color: netWorth >= 0 ? 'text-foreground' : 'text-red', accent: '#7c3aed' },
                     ].map(({ label, value, color, accent }) => (
                       <Card key={label} className="bg-card border-border" style={{ borderLeft: `3px solid ${accent}` }}>
-                        <CardContent className="p-3">
+                        <CardContent className="p-4">
                           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
-                          <p className={cn('text-lg font-extrabold tabular mt-1 leading-tight', color)}>{value}</p>
+                          <p className={cn('text-2xl font-extrabold tabular mt-1 leading-tight', color)}>{value}</p>
                         </CardContent>
                       </Card>
                     ))}
@@ -218,7 +218,7 @@ export default function Accounts() {
                     const sorted = [...accs].sort((a, b) => GROUP_ORDER.indexOf(accountGroup(a.type)) - GROUP_ORDER.indexOf(accountGroup(b.type)));
                     return (
                       <Card key={bank} className="bg-card border-border">
-                        <CardHeader className="pt-4 pb-3 px-5 border-b border-border">
+                        <CardHeader className="pt-5 pb-4 px-6 border-b border-border">
                           <div className="flex items-center gap-3">
                             <AvatarCircle name={bank} size={34} />
                             <div className="flex-1 min-w-0">
@@ -227,13 +227,13 @@ export default function Accounts() {
                             </div>
                           </div>
                         </CardHeader>
-                        <CardContent className="px-5 pb-4 space-y-0">
+                        <CardContent className="px-6 pb-5 space-y-0">
                           {sorted.map((acc, idx) => {
                             const isCredit = acc.type === 'credit';
                             const isAsset  = ASSET_TYPES.includes(acc.type);
                             const group    = accountGroup(acc.type);
                             return (
-                              <div key={acc.id} className={cn('py-4 flex items-start gap-3', idx < sorted.length - 1 && 'border-b border-border')}>
+                              <div key={acc.id} className={cn('py-5 flex items-start gap-3', idx < sorted.length - 1 && 'border-b border-border')}>
                                 <AvatarCircle name={bank} size={36} />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-semibold text-foreground truncate">{acc.name}</p>
@@ -325,7 +325,7 @@ export default function Accounts() {
                         { label: `Spent — ${month.split(' ')[0]}`, value: fmtD(totalSpent), sub: `${overallPct}% used`, color: totalSpent > totalBudgeted ? 'text-red' : 'text-green' },
                       ].map(({ label, value, sub, color }) => (
                         <Card key={label} className="bg-card border-border text-center">
-                          <CardContent className="p-3">
+                          <CardContent className="p-4">
                             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
                             <p className={cn('text-xl font-extrabold tabular mt-1', color)}>{value}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>

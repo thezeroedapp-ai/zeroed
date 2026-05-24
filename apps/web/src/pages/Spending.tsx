@@ -47,6 +47,18 @@ function monthKey(date: string) {
   return new Date(date + 'T12:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+function MerchantAvatar({ name, isPayment }: { name: string; isPayment: boolean }) {
+  const PALETTE = ['#3b82f6', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#f97316', '#8b5cf6'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  const bg = isPayment ? '#10b981' : PALETTE[Math.abs(h) % PALETTE.length];
+  return (
+    <div style={{ width: 36, height: 36, borderRadius: '50%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: 'white', flexShrink: 0 }}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 const CHART_PALETTE = [
   'var(--primary)', 'var(--violet-light)', 'var(--blue)',
   'var(--green)', 'var(--amber)', 'var(--red)',
@@ -135,6 +147,7 @@ export default function Spending() {
     (grouped[k] = grouped[k] || []).push(t);
   });
 
+  const sortedRecurring = [...recurring].sort((a, b) => b.annualEstimate - a.annualEstimate);
   const annualRecurring = recurring.reduce((s, r) => s + r.annualEstimate, 0);
 
   function buildChartConfig(categories: string[]): ChartConfig {
@@ -145,14 +158,14 @@ export default function Spending() {
 
   return (
     <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-4 top-bar border-b border-border">
+      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-xl font-bold text-foreground">Spending</h1>
+          <h1 className="text-2xl font-bold text-foreground">Spending</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Transactions, trends, and subscriptions</p>
         </div>
       </div>
 
-      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-6 max-w-3xl mx-auto">
+      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto">
         <SubNav tabs={SPENDING_TABS} active={tab} onChange={t => setTab(t as Tab)} />
 
         {/* ── TRANSACTIONS TAB ── */}
@@ -211,37 +224,38 @@ export default function Spending() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {Object.entries(grouped).map(([month, txs]) => (
-                      <div key={month}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{month}</p>
-                        <Card className="bg-card border-border">
-                          <CardContent className="p-0">
-                            {txs.map((tx, idx) => (
-                              <div key={tx.id} className={cn(
-                                'flex items-center gap-3 px-4 py-3',
-                                idx < txs.length - 1 && 'border-b border-border',
-                              )}>
-                                <div className={cn(
-                                  'w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0',
-                                  tx.amount < 0 ? 'bg-green/15' : 'bg-red/10',
+                    {Object.entries(grouped).map(([month, txs]) => {
+                      const monthTotal = txs.reduce((s, t) => s + (t.amount > 0 ? t.amount : 0), 0);
+                      return (
+                        <div key={month}>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-semibold text-foreground">{month}</p>
+                            {monthTotal > 0 && <p className="text-sm font-semibold text-muted-foreground">{fmtD(monthTotal)}</p>}
+                          </div>
+                          <Card className="bg-card border-border">
+                            <CardContent className="p-0">
+                              {txs.map((tx, idx) => (
+                                <div key={tx.id} className={cn(
+                                  'flex items-center gap-3 px-5 py-4',
+                                  idx < txs.length - 1 && 'border-b border-border',
                                 )}>
-                                  {tx.amount < 0 ? '✅' : '🛍️'}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
-                                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                    {accountMap[tx.account_id] || tx.category || ''}
+                                  <MerchantAvatar name={tx.description} isPayment={tx.amount < 0} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                                      {accountMap[tx.account_id] || tx.category || ''}
+                                    </p>
+                                  </div>
+                                  <p className={cn('text-sm font-bold tabular shrink-0', tx.amount < 0 ? 'text-green' : 'text-red')}>
+                                    {tx.amount < 0 ? '+' : ''}{fmtD(Math.abs(tx.amount))}
                                   </p>
                                 </div>
-                                <p className={cn('text-sm font-bold tabular shrink-0', tx.amount < 0 ? 'text-green' : 'text-red')}>
-                                  {tx.amount < 0 ? '+' : ''}{fmtD(Math.abs(tx.amount))}
-                                </p>
-                              </div>
-                            ))}
-                          </CardContent>
-                        </Card>
-                      </div>
-                    ))}
+                              ))}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -274,7 +288,7 @@ export default function Spending() {
               ) : (
                 <div className="space-y-4">
                   <Card className="bg-card border-border">
-                    <CardHeader className="pt-4 pb-2 px-4">
+                    <CardHeader className="pt-5 pb-2 px-5">
                       <CardTitle className="text-sm font-semibold">Monthly Spending by Category</CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
@@ -300,14 +314,14 @@ export default function Spending() {
                   </Card>
 
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Top Categories</p>
+                    <p className="text-sm font-semibold text-foreground mb-2">Top Categories</p>
                     <Card className="bg-card border-border">
                       <CardContent className="p-0">
                         {trends.categories.map((cat, i) => {
                           const total = trends.data.reduce((s, d) => s + (Number(d[cat]) || 0), 0);
                           return (
                             <div key={cat} className={cn(
-                              'flex items-center gap-3 px-4 py-3',
+                              'flex items-center gap-3 px-5 py-4',
                               i < trends.categories.length - 1 && 'border-b border-border',
                             )}>
                               <div className="w-2.5 h-2.5 rounded-sm shrink-0"
@@ -344,7 +358,7 @@ export default function Spending() {
               </div>
             )}
             {recurringState === 'content' && (
-              recurring.length === 0 ? (
+              sortedRecurring.length === 0 ? (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
                   <span className="text-4xl">🔄</span>
                   <p className="font-semibold">No recurring charges found</p>
@@ -353,23 +367,23 @@ export default function Spending() {
               ) : (
                 <div className="space-y-4">
                   <Card className="bg-card border-border">
-                    <CardContent className="p-4">
+                    <CardContent className="p-5">
                       <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Estimated Annual Subscriptions</p>
-                      <p className="text-3xl font-extrabold text-red mt-1 tabular">{fmtD(annualRecurring)}</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {fmtD(annualRecurring / 12)}/mo across {recurring.length} recurring charge{recurring.length !== 1 ? 's' : ''}
+                      <p className="text-[40px] font-extrabold text-red mt-1 tabular leading-none">{fmtD(annualRecurring)}</p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {fmtD(annualRecurring / 12)}/mo across {sortedRecurring.length} recurring charge{sortedRecurring.length !== 1 ? 's' : ''}
                       </p>
                     </CardContent>
                   </Card>
 
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Detected Recurring Charges</p>
+                    <p className="text-sm font-semibold text-foreground mb-2">Detected Recurring Charges</p>
                     <Card className="bg-card border-border">
                       <CardContent className="p-0">
-                        {recurring.map((r, i) => (
+                        {sortedRecurring.map((r, i) => (
                           <div key={i} className={cn(
-                            'flex items-center justify-between gap-3 px-4 py-3',
-                            i < recurring.length - 1 && 'border-b border-border',
+                            'flex items-center justify-between gap-3 px-5 py-4',
+                            i < sortedRecurring.length - 1 && 'border-b border-border',
                           )}>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-semibold text-foreground truncate">{r.description}</p>

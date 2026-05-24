@@ -308,10 +308,10 @@ export default function Dashboard() {
       case 'interest_cost':
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Flame size={14} className="text-muted-foreground shrink-0" />Monthly Interest</CardTitle>
             </CardHeader>
-            <CardContent className="px-5 pb-5">
+            <CardContent className="px-6 pb-6">
               <div className="text-3xl font-extrabold tabular text-red mt-1">{fmtD(data.monthlyInterest)}</div>
               <p className="text-xs text-muted-foreground mt-1">cost of carrying debt</p>
             </CardContent>
@@ -321,10 +321,10 @@ export default function Dashboard() {
       case 'savings_rate':
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Wallet size={14} className="text-muted-foreground shrink-0" />Monthly Surplus</CardTitle>
             </CardHeader>
-            <CardContent className="px-5 pb-5">
+            <CardContent className="px-6 pb-6">
               <div className={cn('text-3xl font-extrabold tabular mt-1', data.surplus >= 0 ? 'text-green' : 'text-red')}>
                 {fmt(data.surplus)}
               </div>
@@ -337,7 +337,7 @@ export default function Dashboard() {
         if (chartData.length <= 2) return null;
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><TrendingDown size={14} className="text-muted-foreground shrink-0" />Payoff Projection</CardTitle>
             </CardHeader>
             <CardContent className="px-3 pb-4">
@@ -361,12 +361,12 @@ export default function Dashboard() {
       case 'priority_attack':
         return (
           <Card className="h-full border-[var(--primary)]/30 bg-violet-dim/5">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Zap size={14} className="text-violet-light shrink-0" />Priority Attack
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-5 pb-5">
+            <CardContent className="px-6 pb-6">
               {data.priorityCard ? (
                 <>
                   <div className="text-sm font-bold text-foreground mb-1">{data.priorityCard.name}</div>
@@ -390,10 +390,10 @@ export default function Dashboard() {
         if (!data.alerts || data.alerts.length === 0) return null;
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Bell size={14} className="text-muted-foreground shrink-0" />Alerts</CardTitle>
             </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-3">
+            <CardContent className="px-6 pb-6 space-y-3">
               {data.alerts.map((a, i) => (
                 <div key={i} className="flex gap-3 p-3 rounded-lg bg-amber-dim border border-amber/20">
                   <span className="text-base shrink-0 mt-0.5">{a.severity === 'danger' ? '🔴' : '⚠️'}</span>
@@ -414,7 +414,7 @@ export default function Dashboard() {
         const DeltaIcon = delta >= 0 ? TrendingUp : TrendingDown;
         return (
           <Card className="h-full bg-card border-border cursor-pointer group" onClick={() => setSheet({ open: true, type: 'networth', payload: latest })}>
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <div className="flex justify-between items-start">
                 <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><BarChart2 size={14} className="text-muted-foreground shrink-0" />Net Worth</CardTitle>
                 <ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />
@@ -450,7 +450,7 @@ export default function Dashboard() {
         const COLORS = ['var(--primary)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><ShoppingCart size={14} className="text-muted-foreground shrink-0" />Spending by Category</CardTitle>
             </CardHeader>
             <CardContent className="px-3 pb-4">
@@ -482,7 +482,7 @@ export default function Dashboard() {
         if (!goals.length) return null;
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Target size={14} className="text-muted-foreground shrink-0" />Goals</CardTitle>
                 <Link to="/plan?tab=goals" className="text-xs text-violet-light font-semibold no-underline flex items-center gap-0.5 hover:opacity-80">
@@ -490,7 +490,7 @@ export default function Dashboard() {
                 </Link>
               </div>
             </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-3">
+            <CardContent className="px-6 pb-6 space-y-3">
               {goals.slice(0, 3).map(g => {
                 const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
                 return (
@@ -513,10 +513,10 @@ export default function Dashboard() {
       case 'ai_insights':
         return (
           <Card className="h-full bg-card border-border">
-            <CardHeader className="pb-2 pt-5 px-5">
+            <CardHeader className="pb-2 pt-6 px-6">
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Sparkles size={14} className="text-muted-foreground shrink-0" />AI Insights</CardTitle>
             </CardHeader>
-            <CardContent className="px-5 pb-5">
+            <CardContent className="px-6 pb-6">
               {aiState === 'loading' && (
                 <div className="flex flex-col items-center py-4 gap-2">
                   <div className="spinner" />
@@ -692,7 +692,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-dvh">
       {/* Top bar */}
-      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 top-bar border-b border-border">
+      <div className="sticky top-0 z-10 px-4 lg:px-8 py-5 top-bar border-b border-border">
         <div className="max-w-5xl mx-auto flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
@@ -713,7 +713,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+32px)] md:pb-10 pt-6 max-w-5xl mx-auto">
+      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+32px)] md:pb-10 pt-8 max-w-5xl mx-auto">
         {/* Loading */}
         {state === 'loading' && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -740,11 +740,12 @@ export default function Dashboard() {
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Total Debt</p>
-                    <div className="text-[48px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
+                    <div className="text-[64px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
                     {data.debtFreeDate && (
-                      <p className="text-sm text-muted-foreground mt-2.5">
-                        Debt-free by <span className="font-bold text-violet-light">{data.debtFreeDate}</span>
-                      </p>
+                      <div className="mt-4">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Debt-Free Date</p>
+                        <p className="text-xl font-extrabold text-violet-light">{data.debtFreeDate}</p>
+                      </div>
                     )}
                   </div>
                   <div className="text-right shrink-0">

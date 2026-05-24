@@ -13,7 +13,7 @@ const NAV = [
 export default function BottomNav() {
   return (
     <nav className={cn(
-      'md:hidden fixed bottom-0 left-0 right-0 z-50 h-[60px]',
+      'md:hidden fixed bottom-0 left-0 right-0 z-50 h-[64px]',
       'bottom-nav border-t border-border',
       'flex items-center justify-around px-1',
     )}>
@@ -23,13 +23,20 @@ export default function BottomNav() {
           to={to}
           end={end}
           className={({ isActive }) => cn(
-            'flex flex-col items-center gap-0.5 px-3 py-2 flex-1',
+            'relative flex flex-col items-center gap-0.5 px-3 py-2 flex-1',
             'text-[9px] font-medium no-underline transition-colors',
             isActive ? 'text-violet-light' : 'text-muted-foreground',
           )}
         >
-          <Icon size={20} strokeWidth={1.75} />
-          <span>{label}</span>
+          {({ isActive }: { isActive: boolean }) => (
+            <>
+              {isActive && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full bg-violet-light" />
+              )}
+              <Icon size={20} strokeWidth={1.75} />
+              <span>{label}</span>
+            </>
+          )}
         </NavLink>
       ))}
     </nav>

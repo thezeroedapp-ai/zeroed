@@ -185,14 +185,14 @@ export default function Plan() {
 
   return (
     <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-4 top-bar border-b border-border">
+      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-xl font-bold text-foreground">Plan</h1>
+          <h1 className="text-2xl font-bold text-foreground">Plan</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Your debt-free roadmap</p>
         </div>
       </div>
 
-      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-6 max-w-3xl mx-auto">
+      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto">
         <SubNav tabs={PLAN_TABS} active={tab} onChange={t => setTab(t as PlanTab)} />
 
         {/* ── STRATEGY TAB ── */}
@@ -212,23 +212,23 @@ export default function Plan() {
               </div>
             )}
             {planState === 'content' && plan && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {/* Strategy selector */}
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Strategy</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-3">Strategy</p>
                   <div className="grid grid-cols-2 gap-2">
                     {STRATEGIES.map(s => (
                       <button
                         key={s.id}
                         onClick={() => selectStrategy(s.id)}
                         className={cn(
-                          'flex flex-col gap-1 p-3 rounded-xl border text-left transition-all cursor-pointer font-[inherit]',
+                          'flex flex-col gap-1.5 p-5 rounded-xl border text-left transition-all cursor-pointer font-[inherit]',
                           strategy === s.id
                             ? 'border-[var(--primary)]/50 bg-violet-dim/30 ring-1 ring-[var(--primary)]/20'
                             : 'border-border bg-card hover:border-border/60',
                         )}
                       >
-                        <span className="text-xl">{s.icon}</span>
+                        <span className="text-2xl">{s.icon}</span>
                         <span className="text-sm font-bold text-foreground">{s.name}</span>
                         <span className="text-xs text-muted-foreground">{s.sub}</span>
                         <Badge variant="outline" className={cn('text-[10px] w-fit mt-0.5', strategy === s.id ? 'border-[var(--primary)]/40 text-violet-light' : 'border-border text-muted-foreground')}>
@@ -241,10 +241,10 @@ export default function Plan() {
 
                 {/* Debt-free summary */}
                 <Card className="bg-card border-border">
-                  <CardContent className="p-4">
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Debt-Free Date</p>
-                    <p className="text-3xl font-extrabold text-foreground">{plan.debtFreeDate}</p>
-                    <div className="flex flex-wrap gap-3 mt-2">
+                  <CardContent className="p-6">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Debt-Free Date</p>
+                    <p className="text-4xl font-extrabold text-foreground">{plan.debtFreeDate}</p>
+                    <div className="flex flex-wrap gap-3 mt-3">
                       <span className="text-xs text-muted-foreground">{plan.months} months</span>
                       <span className="text-xs text-red">{fmtD(plan.totalInterest)} total interest</span>
                       <span className="text-xs text-green">{fmtD(plan.surplus)}/mo surplus</span>
@@ -255,7 +255,7 @@ export default function Plan() {
                 {/* Scenarios */}
                 {plan.scenarios && plan.scenarios.length > 0 && (
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Pay More Scenarios</p>
+                    <p className="text-sm font-semibold text-muted-foreground mb-3">Pay More Scenarios</p>
                     <div className="grid grid-cols-3 gap-2">
                       {plan.scenarios.map((sc, i) => (
                         <Card key={i} className="bg-surface-2 border-border text-center">
@@ -273,11 +273,11 @@ export default function Plan() {
 
                 {/* Attack order */}
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Attack Order</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-3">Attack Order</p>
                   <Card className="bg-card border-border">
                     <CardContent className="p-0">
                       {plan.cards.map((c, i) => (
-                        <div key={i} className={cn('flex items-center gap-3 px-4 py-3', i < plan.cards.length - 1 && 'border-b border-border')}>
+                        <div key={i} className={cn('flex items-center gap-3 px-5 py-4', i < plan.cards.length - 1 && 'border-b border-border')}>
                           <div className="w-7 h-7 rounded-full bg-violet-dim border border-[var(--primary)]/30 text-violet-light text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
@@ -295,10 +295,10 @@ export default function Plan() {
 
                 {/* Lump-sum */}
                 <Card className="bg-card border-border">
-                  <CardHeader className="pb-2 pt-4 px-4">
+                  <CardHeader className="pb-2 pt-5 px-5">
                     <CardTitle className="text-sm font-semibold text-foreground">💰 Lump-Sum Simulator</CardTitle>
                   </CardHeader>
-                  <CardContent className="px-4 pb-4 space-y-3">
+                  <CardContent className="px-5 pb-5 space-y-3">
                     <div className="flex gap-2">
                       <Input
                         type="number" min="1" placeholder="$ extra payment"
@@ -321,11 +321,11 @@ export default function Plan() {
 
                 {/* Required payment */}
                 <Card className="bg-card border-border">
-                  <CardHeader className="pb-2 pt-4 px-4">
+                  <CardHeader className="pb-2 pt-5 px-5">
                     <CardTitle className="text-sm font-semibold text-foreground">📅 Required Payment Calculator</CardTitle>
                     <p className="text-xs text-muted-foreground">How much extra/mo to be debt-free by a target date?</p>
                   </CardHeader>
-                  <CardContent className="px-4 pb-4 space-y-3">
+                  <CardContent className="px-5 pb-5 space-y-3">
                     <div className="flex gap-2">
                       <Input
                         type="date" value={reqDate}
@@ -382,7 +382,7 @@ export default function Plan() {
 
                 {goals.map(g => (
                   <Card key={g.id} className={cn('bg-card border-border border-l-4', g.onTrack ? 'border-l-green' : 'border-l-amber')}>
-                    <CardContent className="p-4">
+                    <CardContent className="p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{g.goal_type.replace(/_/g, ' ')}</p>
@@ -434,10 +434,10 @@ export default function Plan() {
 
                 {showForm && (
                   <Card className="bg-card border-border">
-                    <CardHeader className="pt-4 pb-2 px-4">
+                    <CardHeader className="pt-5 pb-2 px-5">
                       <CardTitle className="text-base font-semibold">New Goal</CardTitle>
                     </CardHeader>
-                    <CardContent className="px-4 pb-4 space-y-3">
+                    <CardContent className="px-5 pb-5 space-y-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Type</Label>
                         <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
@@ -504,7 +504,7 @@ export default function Plan() {
             {insightState === 'content' && insightData && (
               <div className="space-y-4">
                 <Card className="bg-card border-border">
-                  <CardHeader className="pt-4 pb-3 px-4">
+                  <CardHeader className="pt-5 pb-3 px-5">
                     <div className="flex items-start justify-between">
                       <div>
                         <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Spending Analysis</CardTitle>
@@ -517,7 +517,7 @@ export default function Plan() {
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="px-4 pb-4">
+                  <CardContent className="px-5 pb-5">
                     {insightData.insight ? (
                       <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{insightData.insight.insight}</p>
                     ) : (

@@ -116,7 +116,7 @@
   --chart-5: oklch(0.46 0.22 22);
 
   --font-mono: 'Menlo', 'Consolas', 'Monaco', monospace;
-  --nav-h: 60px;
+  --nav-h: 64px;
 }
 
 /* ── Dark theme ── */
@@ -299,7 +299,7 @@ body {
 .widget-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 18px;
+  gap: 24px;
 }
 @media (min-width: 768px) {
   .widget-grid { grid-template-columns: 1fr 1fr; }
