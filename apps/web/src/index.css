@@ -64,7 +64,7 @@
   --popover:      oklch(1 0 0);
   --popover-foreground: oklch(0.11 0.020 264);
   --surface-2:    oklch(0.93 0.006 255);   /* light gray-blue */
-  --nav-bg:       oklch(0.99 0.004 255 / 94%);
+  --nav-bg:       oklch(1 0 0);
 
   /* Primary — violet (same across both themes) */
   --primary:           oklch(0.49 0.21 290);
@@ -106,7 +106,7 @@
   --shadow-card:     0 1px 3px oklch(0 0 0 / 7%), 0 4px 16px oklch(0 0 0 / 5%), 0 0 0 1px oklch(0 0 0 / 6%);
   --shadow-elevated: 0 4px 20px oklch(0 0 0 / 9%), 0 12px 40px oklch(0 0 0 / 6%), 0 0 0 1px oklch(0 0 0 / 6%);
   --shadow-hero:     0 2px 16px oklch(0.49 0.21 290 / 16%), 0 8px 32px oklch(0 0 0 / 7%), 0 0 0 1px oklch(0.49 0.21 290 / 12%);
-  --shadow-nav:      2px 0 20px oklch(0 0 0 / 7%), 1px 0 0 oklch(0 0 0 / 8%);
+  --shadow-nav:      4px 0 24px oklch(0 0 0 / 10%), 1px 0 0 oklch(0 0 0 / 10%);
 
   /* Chart palette */
   --chart-1: oklch(0.49 0.21 290);
@@ -128,7 +128,7 @@ html.dark {
   --popover:      oklch(0.140 0.024 258);
   --popover-foreground: oklch(0.930 0.012 255);
   --surface-2:    oklch(0.180 0.026 255);   /* was 0.135 — secondary surfaces */
-  --nav-bg:       oklch(0.088 0.018 262 / 95%);
+  --nav-bg:       oklch(0.115 0.022 262);
 
   --primary:           oklch(0.49 0.21 290);
   --primary-foreground: oklch(0.985 0 0);
@@ -224,10 +224,12 @@ body {
   box-shadow: var(--shadow-elevated);
 }
 
-/* ── Side nav — glass panel ── */
+/* ── Side nav — solid panel with shadow ── */
 .side-nav {
   background: var(--nav-bg);
   box-shadow: var(--shadow-nav);
+}
+html.dark .side-nav {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
@@ -290,8 +292,8 @@ body {
 }
 @media (min-width: 1024px) {
   .app-main {
-    margin-left: 220px;
-    width: calc(100% - 220px);
+    margin-left: 224px;
+    width: calc(100% - 224px);
   }
 }
 
@@ -299,10 +301,13 @@ body {
 .widget-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 24px;
+  gap: 20px;
 }
 @media (min-width: 768px) {
-  .widget-grid { grid-template-columns: 1fr 1fr; }
+  .widget-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
+}
+@media (min-width: 1280px) {
+  .widget-grid { gap: 24px; }
 }
 
 /* ── Pills / subtab filter row ── */
@@ -314,13 +319,16 @@ body {
 
 /* ── Nav active state (light/dark aware) ── */
 .nav-active {
-  background: oklch(0 0 0 / 7%);
+  background: var(--surface-2);
   color: var(--foreground);
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 8%);
 }
 html.dark .nav-active {
-  background: var(--violet-dim);
+  background: oklch(0.49 0.21 290 / 22%);
   color: var(--violet-light);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px oklch(0.49 0.21 290 / 30%);
 }
 
 /* ── Suppress violet gradient bloom in light mode ── */

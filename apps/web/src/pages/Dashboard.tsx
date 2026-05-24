@@ -458,7 +458,7 @@ export default function Dashboard() {
                 <BarChart
                   data={top5}
                   layout="vertical"
-                  margin={{ top: 0, right: 8, bottom: 0, left: -4 }}
+                  margin={{ top: 0, right: 8, bottom: 0, left: 4 }}
                   barSize={10}
                   onClick={(d: any) => { if (d?.activePayload?.[0]) setSheet({ open: true, type: 'spending', payload: d.activePayload[0].payload as SpendingCategory }); }}
                 >
@@ -692,8 +692,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-dvh">
       {/* Top bar */}
-      <div className="sticky top-0 z-10 px-4 lg:px-8 py-5 top-bar border-b border-border">
-        <div className="max-w-5xl mx-auto flex items-start justify-between">
+      <div className="sticky top-0 z-10 px-6 lg:px-10 py-5 top-bar border-b border-border">
+        <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
               {data ? greeting(data.user?.name || 'there') : 'Welcome back'}
@@ -713,7 +713,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+32px)] md:pb-10 pt-8 max-w-5xl mx-auto">
+      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+32px)] md:pb-12 pt-8">
         {/* Loading */}
         {state === 'loading' && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -735,8 +735,8 @@ export default function Dashboard() {
         {state === 'content' && data && (
           <>
             {/* ── Hero card ── */}
-            <Card className="mb-6 card-hero bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-[var(--primary)]/20 overflow-hidden">
-              <CardContent className="p-6">
+            <Card className="mb-8 card-hero bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-[var(--primary)]/20 overflow-hidden">
+              <CardContent className="p-8">
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Total Debt</p>
@@ -755,7 +755,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-5 mt-5 pt-5 border-t border-border">
+                <div className="grid grid-cols-3 gap-8 mt-8 pt-6 border-t border-border">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Minimums</p>
                     <p className="text-base font-bold tabular text-foreground">{fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
