@@ -10,7 +10,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, X, Plus, Pencil, Check, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { GripVertical, X, Plus, Pencil, Check, TrendingUp, TrendingDown, ArrowRight, BarChart2, ShoppingCart, Target, Zap, Sparkles, Bell, Flame, Wallet } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -309,7 +309,7 @@ export default function Dashboard() {
         return (
           <Card className="h-full bg-card border-border">
             <CardHeader className="pb-2 pt-5 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Monthly Interest</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Flame size={14} className="text-muted-foreground shrink-0" />Monthly Interest</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5">
               <div className="text-3xl font-extrabold tabular text-red mt-1">{fmtD(data.monthlyInterest)}</div>
@@ -322,7 +322,7 @@ export default function Dashboard() {
         return (
           <Card className="h-full bg-card border-border">
             <CardHeader className="pb-2 pt-5 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Monthly Surplus</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Wallet size={14} className="text-muted-foreground shrink-0" />Monthly Surplus</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5">
               <div className={cn('text-3xl font-extrabold tabular mt-1', data.surplus >= 0 ? 'text-green' : 'text-red')}>
@@ -338,7 +338,7 @@ export default function Dashboard() {
         return (
           <Card className="h-full bg-card border-border">
             <CardHeader className="pb-2 pt-5 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Payoff Projection</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><TrendingDown size={14} className="text-muted-foreground shrink-0" />Payoff Projection</CardTitle>
             </CardHeader>
             <CardContent className="px-3 pb-4">
               <ChartContainer config={debtChartConfig} className="h-[150px] w-full">
@@ -362,8 +362,8 @@ export default function Dashboard() {
         return (
           <Card className="h-full border-[var(--primary)]/30 bg-violet-dim/5">
             <CardHeader className="pb-2 pt-5 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-violet-light flex items-center gap-1.5">
-                ⚡ Priority Attack
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Zap size={14} className="text-violet-light shrink-0" />Priority Attack
               </CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5">
@@ -391,7 +391,7 @@ export default function Dashboard() {
         return (
           <Card className="h-full bg-card border-border">
             <CardHeader className="pb-2 pt-5 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Alerts</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Bell size={14} className="text-muted-foreground shrink-0" />Alerts</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5 space-y-3">
               {data.alerts.map((a, i) => (
@@ -416,7 +416,7 @@ export default function Dashboard() {
           <Card className="h-full bg-card border-border cursor-pointer group" onClick={() => setSheet({ open: true, type: 'networth', payload: latest })}>
             <CardHeader className="pb-2 pt-5 px-5">
               <div className="flex justify-between items-start">
-                <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Net Worth</CardTitle>
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><BarChart2 size={14} className="text-muted-foreground shrink-0" />Net Worth</CardTitle>
                 <ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />
               </div>
               <div className="flex items-end gap-3 mt-1">
@@ -451,7 +451,7 @@ export default function Dashboard() {
         return (
           <Card className="h-full bg-card border-border">
             <CardHeader className="pb-2 pt-5 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Spending by Category</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><ShoppingCart size={14} className="text-muted-foreground shrink-0" />Spending by Category</CardTitle>
             </CardHeader>
             <CardContent className="px-3 pb-4">
               <ChartContainer config={spendingChartConfig} className="h-[160px] w-full">
@@ -484,7 +484,7 @@ export default function Dashboard() {
           <Card className="h-full bg-card border-border">
             <CardHeader className="pb-2 pt-5 px-5">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Goals</CardTitle>
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Target size={14} className="text-muted-foreground shrink-0" />Goals</CardTitle>
                 <Link to="/plan?tab=goals" className="text-xs text-violet-light font-semibold no-underline flex items-center gap-0.5 hover:opacity-80">
                   All <ArrowRight size={11} />
                 </Link>
@@ -514,7 +514,7 @@ export default function Dashboard() {
         return (
           <Card className="h-full bg-card border-border">
             <CardHeader className="pb-2 pt-5 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Insights</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><Sparkles size={14} className="text-muted-foreground shrink-0" />AI Insights</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5">
               {aiState === 'loading' && (
@@ -695,7 +695,7 @@ export default function Dashboard() {
       <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 top-bar border-b border-border">
         <div className="max-w-5xl mx-auto flex items-start justify-between">
           <div>
-            <h1 className="text-[17px] font-bold text-foreground">
+            <h1 className="text-2xl font-bold text-foreground">
               {data ? greeting(data.user?.name || 'there') : 'Welcome back'}
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">{dateStr}</p>

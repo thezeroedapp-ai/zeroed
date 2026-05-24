@@ -312,6 +312,22 @@ body {
 }
 .pills::-webkit-scrollbar { display: none; }
 
+/* ── Nav active state (light/dark aware) ── */
+.nav-active {
+  background: oklch(0 0 0 / 7%);
+  color: var(--foreground);
+  font-weight: 600;
+}
+html.dark .nav-active {
+  background: var(--violet-dim);
+  color: var(--violet-light);
+}
+
+/* ── Suppress violet gradient bloom in light mode ── */
+html:not(.dark) body {
+  background-image: none;
+}
+
 /* ── Recharts tooltip override ── */
 .recharts-tooltip-wrapper { outline: none !important; }
 

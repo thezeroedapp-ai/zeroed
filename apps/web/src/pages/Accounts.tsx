@@ -32,9 +32,6 @@ function accountGroup(type: string): string {
   if (type === 'loan' || type === 'mortgage')        return 'Loans';
   return 'Other';
 }
-const GROUP_ICONS: Record<string, string> = {
-  'Credit Cards': '💳', 'Cash & Savings': '🏦', 'Investments': '📈', 'Loans': '🏠', 'Other': '📋',
-};
 
 interface Budget { id: string; category: string; monthly_limit: number; spent: number; remaining: number; pct: number; }
 const PRESET_CATEGORIES = ['Food and Drink', 'Groceries', 'Restaurants', 'Travel', 'Shops', 'Recreation', 'Entertainment', 'Healthcare', 'Gas Stations', 'Personal Care', 'Service', 'Bank Fees', 'Other'];
@@ -44,6 +41,17 @@ interface Recommendation { rank: number; accountName: string; effectiveRate: num
 interface RewardResult { recommendations: Recommendation[]; unmatchedAccounts: string[]; profilesLastUpdated?: string; }
 
 function rankLabel(rank: number) { return rank === 1 ? '🥇 Best' : rank === 2 ? '🥈 2nd' : rank === 3 ? '🥉 3rd' : `#${rank}`; }
+
+function AvatarCircle({ name, size = 36 }: { name: string; size?: number }) {
+  const PALETTE = ['#3b82f6', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#f97316', '#8b5cf6'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: PALETTE[Math.abs(h) % PALETTE.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: Math.round(size * 0.40), color: 'white', flexShrink: 0, letterSpacing: '-0.01em' }}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
 
 const ACCOUNT_TABS = [
   { id: 'accounts', label: 'Accounts' },
@@ -190,16 +198,16 @@ export default function Accounts() {
               ) : (
                 <div className="space-y-4">
                   {/* Net worth strip */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-3 mb-1">
                     {[
-                      { label: 'Assets',      value: fmt(totalAssets), color: 'text-green' },
-                      { label: 'Liabilities', value: fmt(totalDebt),   color: 'text-red'   },
-                      { label: 'Net Worth',   value: (netWorth < 0 ? '−' : '') + fmt(Math.abs(netWorth)), color: netWorth >= 0 ? 'text-green' : 'text-red' },
-                    ].map(({ label, value, color }) => (
-                      <Card key={label} className="bg-card border-border text-center">
+                      { label: 'Assets',      value: fmt(totalAssets), color: 'text-foreground', accent: '#10b981' },
+                      { label: 'Liabilities', value: fmt(totalDebt),   color: 'text-red',        accent: '#ef4444' },
+                      { label: 'Net Worth',   value: (netWorth < 0 ? '−' : '') + fmt(Math.abs(netWorth)), color: netWorth >= 0 ? 'text-foreground' : 'text-red', accent: '#7c3aed' },
+                    ].map(({ label, value, color, accent }) => (
+                      <Card key={label} className="bg-card border-border" style={{ borderLeft: `3px solid ${accent}` }}>
                         <CardContent className="p-3">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-                          <p className={cn('text-base font-extrabold tabular mt-1', color)}>{value}</p>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+                          <p className={cn('text-lg font-extrabold tabular mt-1 leading-tight', color)}>{value}</p>
                         </CardContent>
                       </Card>
                     ))}
@@ -210,73 +218,79 @@ export default function Accounts() {
                     const sorted = [...accs].sort((a, b) => GROUP_ORDER.indexOf(accountGroup(a.type)) - GROUP_ORDER.indexOf(accountGroup(b.type)));
                     return (
                       <Card key={bank} className="bg-card border-border">
-                        <CardHeader className="pt-4 pb-2 px-4">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-base font-bold text-foreground">{bank}</CardTitle>
-                            <span className="text-xs text-muted-foreground">{accs.length} account{accs.length !== 1 ? 's' : ''}</span>
+                        <CardHeader className="pt-4 pb-3 px-5 border-b border-border">
+                          <div className="flex items-center gap-3">
+                            <AvatarCircle name={bank} size={34} />
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-base font-bold text-foreground">{bank}</CardTitle>
+                              <p className="text-xs text-muted-foreground">{accs.length} account{accs.length !== 1 ? 's' : ''}</p>
+                            </div>
                           </div>
                         </CardHeader>
-                        <CardContent className="px-4 pb-4 space-y-0">
+                        <CardContent className="px-5 pb-4 space-y-0">
                           {sorted.map((acc, idx) => {
                             const isCredit = acc.type === 'credit';
                             const isAsset  = ASSET_TYPES.includes(acc.type);
                             const group    = accountGroup(acc.type);
                             return (
-                              <div key={acc.id} className={cn('py-3', idx < sorted.length - 1 && 'border-b border-border')}>
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-foreground truncate">{acc.name}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{GROUP_ICONS[group]} {group}{acc.subtype ? ` · ${acc.subtype}` : ''}</p>
-                                  </div>
-                                  <p className={cn('text-base font-bold tabular shrink-0', isCredit ? 'text-red' : 'text-green')}>
+                              <div key={acc.id} className={cn('py-4 flex items-start gap-3', idx < sorted.length - 1 && 'border-b border-border')}>
+                                <AvatarCircle name={bank} size={36} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-foreground truncate">{acc.name}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {acc.subtype ? acc.subtype.charAt(0).toUpperCase() + acc.subtype.slice(1) : group}
+                                  </p>
+                                  {isCredit && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                      {acc.apr != null
+                                        ? <span className={cn('text-[11px] font-medium px-1.5 py-0.5 rounded-md', acc.apr >= 20 ? 'bg-amber-dim text-amber' : 'bg-surface-2 text-muted-foreground')}>{acc.apr}% APR</span>
+                                        : <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-amber-dim text-amber">APR missing</span>}
+                                      {acc.minimum_payment != null && <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-surface-2 text-muted-foreground">{fmtD(acc.minimum_payment)} min</span>}
+                                      {acc.credit_limit && <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-surface-2 text-muted-foreground">{fmtD(acc.credit_limit)} limit</span>}
+                                      {acc.payment_due_date && (() => {
+                                        const d = new Date(acc.payment_due_date + 'T12:00');
+                                        const daysLeft = Math.ceil((d.getTime() - Date.now()) / 86400000);
+                                        return <span className={cn('text-[11px] px-1.5 py-0.5 rounded-md font-medium', daysLeft <= 7 ? 'bg-red-dim text-red' : 'bg-surface-2 text-muted-foreground')}>Due {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>;
+                                      })()}
+                                    </div>
+                                  )}
+                                  {isAsset && acc.balance_available != null && (
+                                    <p className="text-xs text-muted-foreground mt-1">{fmtD(acc.balance_available)} available</p>
+                                  )}
+                                  {isCredit && (
+                                    editing[acc.id] ? (
+                                      <div className="mt-3 flex flex-wrap gap-2 items-end">
+                                        <div className="flex-1 min-w-[100px] space-y-1">
+                                          <Label className="text-[10px] text-muted-foreground">APR %</Label>
+                                          <Input type="number" step="0.01" placeholder="e.g. 24.99" value={editing[acc.id].apr}
+                                            onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], apr: e.target.value } }))}
+                                            className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+                                        </div>
+                                        <div className="flex-1 min-w-[100px] space-y-1">
+                                          <Label className="text-[10px] text-muted-foreground">Min Payment $</Label>
+                                          <Input type="number" step="0.01" placeholder="e.g. 35.00" value={editing[acc.id].minimum}
+                                            onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], minimum: e.target.value } }))}
+                                            className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <Button size="sm" onClick={() => saveEdit(acc.id)} disabled={editing[acc.id].saving} className="h-8 bg-primary hover:bg-primary/90">
+                                            {editing[acc.id].saving ? '…' : 'Save'}
+                                          </Button>
+                                          <Button size="sm" variant="outline" onClick={() => cancelEdit(acc.id)} className="h-8 border-border text-muted-foreground">Cancel</Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => startEdit(acc)} className="mt-2 text-[11px] text-muted-foreground hover:text-violet-light transition-colors font-medium">
+                                        Edit APR / Min →
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className={cn('text-base font-bold tabular', isCredit ? 'text-red' : 'text-foreground')}>
                                     {fmtD(acc.balance_current)}
                                   </p>
                                 </div>
-
-                                {isCredit && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {acc.apr != null
-                                      ? <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{acc.apr}% APR</Badge>
-                                      : <Badge variant="outline" className="text-[10px] border-amber/30 text-amber">⚠️ APR missing</Badge>}
-                                    {acc.minimum_payment != null
-                                      ? <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{fmtD(acc.minimum_payment)} min</Badge>
-                                      : <Badge variant="outline" className="text-[10px] border-amber/30 text-amber">⚠️ Min missing</Badge>}
-                                    {acc.credit_limit && <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{fmtD(acc.credit_limit)} limit</Badge>}
-                                    {acc.payment_due_date && <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">Due {new Date(acc.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Badge>}
-                                  </div>
-                                )}
-                                {isAsset && acc.balance_available != null && (
-                                  <p className="text-xs text-muted-foreground mt-1">{fmtD(acc.balance_available)} available</p>
-                                )}
-
-                                {isCredit && (
-                                  editing[acc.id] ? (
-                                    <div className="mt-3 flex flex-wrap gap-2 items-end">
-                                      <div className="flex-1 min-w-[100px] space-y-1">
-                                        <Label className="text-[10px] text-muted-foreground">APR %</Label>
-                                        <Input type="number" step="0.01" placeholder="e.g. 24.99" value={editing[acc.id].apr}
-                                          onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], apr: e.target.value } }))}
-                                          className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
-                                      </div>
-                                      <div className="flex-1 min-w-[100px] space-y-1">
-                                        <Label className="text-[10px] text-muted-foreground">Min Payment $</Label>
-                                        <Input type="number" step="0.01" placeholder="e.g. 35.00" value={editing[acc.id].minimum}
-                                          onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], minimum: e.target.value } }))}
-                                          className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
-                                      </div>
-                                      <div className="flex gap-2">
-                                        <Button size="sm" onClick={() => saveEdit(acc.id)} disabled={editing[acc.id].saving} className="h-8 bg-primary hover:bg-primary/90">
-                                          {editing[acc.id].saving ? '…' : 'Save'}
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={() => cancelEdit(acc.id)} className="h-8 border-border text-muted-foreground">Cancel</Button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <Button variant="outline" size="sm" onClick={() => startEdit(acc)} className="mt-2 h-7 text-xs border-border text-muted-foreground hover:text-foreground">
-                                      Edit APR / Min
-                                    </Button>
-                                  )
-                                )}
                               </div>
                             );
                           })}
