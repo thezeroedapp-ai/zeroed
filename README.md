@@ -12,11 +12,13 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v5.3 — Glass UI design system + dark/light theme toggle.** *(2026-05-23)*
+**v5.4 — UI fixes: gradient unblocked on all pages, card contrast, typography.** *(2026-05-23)*
 
 Live at: **[https://zeroed-3331d.web.app](https://zeroed-3331d.web.app)**
 
-Full Firebase stack live with a premium UI supporting dark and light modes:
+⚠️ **Full UI redesign is in progress (v6.0 target).** See [UI Redesign Backlog](#ui-redesign-backlog-v60) in the Roadmap for the complete task list. The current UI has all the right structural foundations but needs a fundamental visual overhaul to match the quality of Monarch Money / Origin. Pick up from that section on the next session.
+
+Full Firebase stack live with dark/light toggle:
 
 - **Auth:** Firebase Authentication (email/password + Google OAuth)
 - **Database:** Firestore — subcollections under `users/{uid}/`
@@ -39,6 +41,7 @@ All screens working (5-tab structure):
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v5.4 | 2026-05-23 | UI patch: removed `bg-background` from all 4 inner pages (Plan, Accounts, Spending, Settings) so body gradient is visible; replaced `bg-background/85 backdrop-blur-xl` with `top-bar` CSS class for glass blur to work; dark mode card lightness `0.105→0.140`, surface-2 `0.135→0.180`, border opacity `10%→14%`, card shadow ring `7%→12%` — cards now clearly visible; light mode background shifted to warmer off-white; page titles `text-[17px]→text-xl`; Settings `space-y-6→space-y-8`; deployed to Firebase |
 | v5.3 | 2026-05-23 | Glass UI design system + dark/light theme toggle: `ThemeContext` with `localStorage` persistence (`zeroed-theme` key), `html.dark` CSS class strategy, inline script in `index.html` prevents flash; full light theme (separate oklch palette — near-white surfaces, darker status colors for contrast); frosted glass SideNav, BottomNav, Dashboard top bar via `backdrop-filter: blur(20px)`; hero card violet glow (`card-hero` box-shadow with oklch ambient glow in dark mode); elevation shadow system (`--shadow-card`/`--shadow-elevated`/`--shadow-hero` CSS vars override Tailwind `shadow-sm`/`shadow-md`); violet radial gradient page background gives glass depth; Sun/Moon toggle at sidebar bottom; smooth `theme-transitioning` CSS class animates colors on toggle |
 | v5.2 | 2026-05-23 | shadcn/ui + Tailwind v4 migration: replaced hand-rolled CSS with shadcn/ui component library (Card, Button, Badge, Input, Select, Progress, Sheet, ChartContainer, Tooltip — 15 components); Tailwind CSS v4 via `@tailwindcss/vite`, CSS-first `@theme inline` config with oklch color palette; lucide-react icons; all pages rewritten (Dashboard, Plan, Accounts, Spending, Settings, Login, Signup); drill-down `Sheet` panels on dashboard (spending category → full list, net worth → assets/liabilities, goals → details); fixed sidebar layout bug (flex + fixed = content overlap; switched to margin-left approach); improved hero card (two-column debt+interest layout, 3-stat strip); taller charts; collapsed sidebar shows icon-only at md breakpoint |
 | v5.1 | 2026-05-23 | Drag-and-drop dashboard: replaced ↑/↓ reorder buttons with dnd-kit (`@dnd-kit/core`, `@dnd-kit/sortable`) — `PointerSensor` (8px) + `TouchSensor` (200ms/8px) for desktop+mobile, `DragOverlay` ghost card, debounced 600ms auto-save to Firestore; `SortableWidgetShell` with dedicated `⠿` drag handle + `×` remove; uniform `.widget-grid` (2-col tablet/desktop); comprehensive demo seed (`scripts/seed-demo.js`) — 10 accounts, 201 transactions, 6 months Dec 2025–May 2026, 6 net worth snapshots, 3 goals, 7 budgets, 3 sinking funds |
@@ -518,7 +521,88 @@ The Dashboard is the first screen every user sees. Nail this before adding featu
 - [x] **shadcn/ui + Tailwind v4 migration** — complete rewrite of all pages and components; 15 shadcn components, oklch color system, lucide-react icons, drill-down Sheet panels, fixed sidebar layout, improved hero card *(v5.2, 2026-05-23)*
 - [x] **`index.html` title** — changed from "Vite + React + TS" to "Zeroed"
 - [x] **Glass UI + dark/light theme toggle** — `ThemeContext`, `html.dark` CSS class strategy, `localStorage` persistence, no-flash init script; full light oklch palette; frosted glass nav + hero card; elevation shadow system; violet page background gradient *(v5.3, 2026-05-23)*
+- [x] **UI patch — gradient + card contrast** — removed `bg-background` blocking gradient on all inner pages; fixed top-bar glass class; improved dark mode card contrast and border visibility; bumped page title size and padding *(v5.4, 2026-05-23)*
+- [ ] **Full UI redesign (v6.0)** — see [UI Redesign Backlog](#ui-redesign-backlog-v60) above — this is the next priority before any Phase 2 features
 - [ ] **Promo APR expiry date** — wire up the field Plaid already returns (currently hardcoded `null`); expose in Accounts inline edit
+
+### UI Redesign Backlog (v6.0) 🎨
+
+> **Pick up here on next session.** The current UI has the right structural foundations (shadcn/ui, oklch tokens, dark/light toggle, glass nav) but the visual quality does not match the reference apps (Monarch Money, Origin). This is a full visual redesign — not a feature build. Reference screenshots are in the DEVLOG entry for 2026-05-23 (v5.4 session).
+>
+> **Estimated scope:** ~4–6 hours of focused work across all 5 pages + CSS.
+
+#### 1. Design Tokens & Global CSS (`apps/web/src/index.css`)
+
+- [ ] **Switch default theme to light** — light mode should be primary; dark is the toggle option. Update `ThemeContext` default and `index.html` inline script. Light mode looks like Monarch/Origin; dark mode stays as the premium alternative.
+- [ ] **Typography scale** — define and use consistently: page titles `28–32px bold`, section headers `16px semibold`, card titles `14px semibold uppercase tracking-wide`, body `15px`, caption `13px`, micro labels `11–12px`. Currently all headers are `text-[17px]` — no real hierarchy.
+- [ ] **Spacing system** — standardize: page horizontal padding `px-6 lg:px-12`, section vertical gap `space-y-8`, card internal padding `p-6` (24px) everywhere. Currently cards mix `p-3`, `p-4`, `p-5`.
+- [ ] **Light mode background** — use `oklch(0.97 0.003 250)` (near-white, barely warm) for page background; `oklch(1 0 0)` white for cards. Currently slightly tinted, should be cleaner.
+- [ ] **Dark mode card contrast** — increase card to `oklch(0.155 0.024 258)` (was 0.140) for an even more visible separation from `oklch(0.060)` background.
+- [ ] **Border system** — light mode: `oklch(0 0 0 / 10%)` for card edges (clean definition like Monarch). Dark mode: `oklch(1 0 0 / 16%)`.
+- [ ] **Section label style** — replace `text-[11px] font-bold uppercase tracking-widest text-muted-foreground` with a more readable `text-xs font-semibold text-muted-foreground` — current all-caps micro labels are hard to read.
+- [ ] **Remove all page-level gradient** — body radial gradient is a design choice for dark mode only. In light mode it competes with the clean white card aesthetic; suppress it via `html:not(.dark) body { background-image: none; }`.
+
+#### 2. Sidebar (`apps/web/src/components/SideNav.tsx`)
+
+- [ ] **Active state redesign** — replace colored text (`text-violet-light bg-violet-dim`) with a full-width highlight pill (white pill on dark / light gray pill on light), like Monarch. Active item should feel selected, not just colored.
+- [ ] **Logo area** — increase logo size to `text-3xl`, add more bottom margin. Add a subtle divider line between logo and nav items.
+- [ ] **Nav item sizing** — increase `py-2.5` to `py-3` for each item; `text-[13px]` → `text-sm (14px)`.
+- [ ] **User profile at bottom** — above the theme toggle, show the logged-in user's email/name in a small `text-xs` row (like Monarch's "Melanie Smith" footer). Pull from `useAuth().user.email`.
+- [ ] **Collapsed sidebar (md breakpoint)** — keep icon-only mode but center icons with 52px width (currently 40px squares feel too small).
+- [ ] **Right border** — increase border visibility: `border-r border-border` → explicit `border-r-2 border-border` or use the `border-strong` var.
+
+#### 3. Dashboard / Home (`apps/web/src/pages/Dashboard.tsx`)
+
+- [ ] **Hero card redesign** — the hero card is the #1 most important element. Currently: small "TOTAL DEBT" label, large number, stats strip. Needs: remove the `Card` wrapper entirely — the hero should be a bare section directly on the page background with a subtle gradient fade. Large `$XX,XXX` number at `56–64px`, debt-free date very prominent (`text-2xl bold`), 3-stat strip with icons.
+- [ ] **Page greeting** — "Good evening, Venkat" should be `text-2xl font-bold` not `text-[17px]`. Date should be `text-sm text-muted-foreground`. More vertical space between greeting and hero.
+- [ ] **Widget card header** — all widget `CardHeader` sections should be: `CardTitle` at `text-sm font-semibold text-foreground` (not uppercase micro text), with a lucide icon left of the title, and a "View →" link right-aligned where applicable. Consistent height: `pt-5 px-5 pb-3`.
+- [ ] **Widget grid gap** — increase from `18px` to `24px`.
+- [ ] **Empty widget states** — when a widget has no data (e.g., AI Insights before first generation), show a proper empty state: centered icon + 1-line description + CTA button. No blank white cards.
+- [ ] **Payoff projection chart** — add a subtle area fill gradient and a "Debt-free [date]" annotation at the end of the line.
+- [ ] **Priority attack widget** — add a thin progress bar showing `balance / credit_limit` utilization below the card name. Make the "Extra dollars here save the most interest" copy bold violet, not plain muted.
+
+#### 4. Plan page (`apps/web/src/pages/Plan.tsx`)
+
+- [ ] **Page header** — `text-xl` is still too small; bump to `text-2xl font-bold`. Add a "Your debt payoff roadmap" subtitle at `text-sm text-muted-foreground`.
+- [ ] **Strategy card redesign** — 2×2 grid cards are OK structurally but need: larger emoji (`text-2xl`), strategy name at `text-base font-bold`, description at `text-sm text-muted-foreground`, selected state with full card background tint + checkmark icon (top-right) + violet border. Unselected cards should look clearly "inactive."
+- [ ] **Debt-free date card** — make the date `text-4xl font-extrabold`, move the summary stats (months, total interest, surplus) into a small row below. This is the most important output of the plan engine — it deserves more visual weight.
+- [ ] **Attack order list** — add a thin progress bar per card showing balance paid vs. original (once we have historical data). Add card type icon (e.g., Visa/MC/Amex initial) in the numbered circle.
+- [ ] **Pay more scenarios** — currently 3 plain `Card` items in a grid. Redesign as a comparison table: Base / +$300 / +$500 columns, highlighting the months and interest saved more dramatically.
+- [ ] **Section separators** — add subtle `<Separator />` between strategy selector, debt-free date, scenarios, attack order, and calculators. Currently they all run together with only `space-y-4` gap.
+
+#### 5. Accounts page (`apps/web/src/pages/Accounts.tsx`)
+
+- [ ] **Institution header** — give each institution `Card` a slightly heavier header: institution name at `text-base font-bold`, account count badge right-aligned, and a subtle `bg-surface-2` tint on the `CardHeader`. Currently institution names float above the card.
+- [ ] **Account rows** — increase row padding from `py-3` to `py-4`. Add a 2-letter avatar circle (institution initial) left of account name. Balance at `text-lg font-bold` (currently `text-base`).
+- [ ] **Net worth strip** — the 3 cards (Assets/Liabilities/Net Worth) need more visual weight. Use `text-xl font-extrabold` for values (currently `text-base`). Add a subtle colored left border: green for Assets, red for Liabilities.
+- [ ] **APR badges on credit cards** — the small `Badge` row is easy to miss. Make APR the most prominent credit card detail: `text-sm font-semibold text-amber` if high (>20%), `text-sm text-muted-foreground` if normal. Due date in red if within 7 days.
+- [ ] **Budget tab** — budget progress bars are functional but need more breathing room. Increase card padding to `p-5`, add the budget category icon left of the category name, make over-budget state more dramatic (full red card tint not just red text).
+
+#### 6. Spending page (`apps/web/src/pages/Spending.tsx`)
+
+- [ ] **Transaction row height** — increase from `py-3` to `py-4`. The dense list is the first thing users see and it feels cramped.
+- [ ] **Transaction icon** — replace `🛍️` / `✅` emojis with proper rounded avatars: a colored circle with the first letter of the merchant name (e.g., "S" for Starbucks in green). This is the single biggest visual improvement to the transactions list.
+- [ ] **Month group header** — make month label `text-sm font-bold text-foreground` + show the month's total spend right-aligned (`text-sm tabular text-muted-foreground`). Currently just small caps with no total.
+- [ ] **"Using the right card?" banner** — increase height, add a credit card icon left of the text, make the gradient more visible. Currently it reads like an afterthought.
+- [ ] **Trends chart** — add a "You spent X% more/less than last month" callout above the chart. Currently the chart has no narrative context.
+- [ ] **Recurring tab** — sort by `annualEstimate` descending (highest cost first). Add a "Cancel" link placeholder per item (non-functional for now but signals the feature direction). Annual estimate should be `text-2xl font-extrabold text-red` in the hero card.
+
+#### 7. Settings page (`apps/web/src/pages/Settings.tsx`)
+
+- [ ] **Section header redesign** — move section labels *inside* the Card as a `CardHeader` with `CardTitle` (`text-base font-semibold`) and a `CardDescription`. Currently they're small uppercase labels floating above cards — they don't look like section titles.
+- [ ] **Sinking funds list** — each fund row needs `py-4` padding and the category icon (car 🚗, home 🏠, travel ✈️, etc.) left of the name. Currently just text rows.
+- [ ] **Connected banks list** — show each bank as a Card with the institution initial avatar (colored circle, first letter), institution name `text-base font-semibold`, last synced relative time ("2 min ago", "Yesterday", not raw date).
+- [ ] **Form fields** — input labels should be `text-sm font-medium text-foreground` (not `text-xs text-muted-foreground` — too dim). Helper text below inputs at `text-xs text-muted-foreground`.
+- [ ] **Sign out** — move to bottom of page with a red-bordered card. Currently sits between Connected Banks and nothing.
+- [ ] **Version number** — update "Zeroed v4.4" to current version dynamically or at least update the string.
+
+#### 8. Bottom Nav (`apps/web/src/components/BottomNav.tsx`)
+
+- [ ] **Active tab indicator** — add a small `2px` top border (violet) on the active tab, not just colored icon/text.
+- [ ] **Height** — increase from `--nav-h: 60px` to `64px` for better thumb tap targets on mobile.
+- [ ] **Labels** — show labels under icons on mobile (currently some mobile views hide them). Ensure all 5 labels are visible at all times.
+
+---
 
 ### Phase 2 — Feature Parity with Monarch/Origin 📋
 Build these features using the locked design system.

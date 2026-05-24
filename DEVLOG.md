@@ -6,6 +6,80 @@
 
 ## 2026-05-23
 
+### v5.4 — UI Audit + Incremental Fixes + Full Redesign Plan
+
+**Why:** User reviewed live app at zeroed-3331d.web.app, shared screenshots of all 5 pages alongside reference apps (Monarch Money, Origin, Copilot Money, Brightly). Said "I need you to take all these screenshots into account — it needs to be this clean and intuitive." Before making changes, we audited the code and identified root causes across all pages.
+
+---
+
+**Audit findings (root causes, not symptoms):**
+
+**Issue 1 — Critical: `bg-background` blocked gradient on 4 of 5 pages**
+All inner pages (Plan, Accounts, Spending, Settings) had `className="min-h-dvh bg-background"` on their root div. This solid opaque color sat on top of the body `background-image` gradient, making it invisible. The glass `backdrop-filter` blur on the sidebar also had nothing to blur through on those pages. Dashboard had already been fixed in v5.3; the other 4 pages were missed.
+
+**Issue 2: Top bar used unreliable Tailwind oklch opacity modifier**
+All 4 inner pages used `bg-background/85 backdrop-blur-xl` on their sticky header. The `/85` Tailwind opacity modifier on an oklch CSS variable is unreliable across browsers — it can fall back to fully opaque. The correct approach (already used on Dashboard) is the `top-bar` CSS class, which uses `color-mix(in oklch, var(--background) 88%, transparent)` — a direct CSS function that always works.
+
+**Issue 3: Dark mode card-to-background contrast too low**
+`--card: oklch(0.105 0.024 258)` vs `--background: oklch(0.065 0.015 264)` — only ~4% lightness delta. Cards were nearly indistinguishable from the page background, making everything look flat. Shadow ring at 7% white opacity was also too subtle.
+
+**Issue 4: Typography hierarchy too weak**
+All page headers used `text-[17px]` — same size as body text. No visual weight difference between "Settings" as a page title and a card paragraph. Section labels at `text-[11px] font-bold uppercase` were near-invisible against dark backgrounds.
+
+**Issue 5: Spacing too tight on inner pages**
+`px-4 pt-4` for page padding vs Dashboard's `px-5 pt-6`. Cumulative effect: every inner page felt more cramped than the Dashboard.
+
+**Issue 6: Sidebar glass invisible on inner pages**
+Glass blur requires visual content behind the blurring element. Since inner pages had solid `bg-background`, the sidebar's `backdrop-filter: blur(20px)` had nothing to blur through — it appeared as a plain flat dark panel.
+
+---
+
+**What changed (v5.4 commit `60dfe93`):**
+
+**`apps/web/src/index.css`:**
+- Light mode: background shifted to warmer `oklch(0.96 0.006 255)`, muted-foreground darkened `0.44→0.40` for better section label contrast, card shadow includes 1px border ring for clean card definition on white backgrounds
+- Dark mode: `--card` `0.105→0.140`, `--surface-2` `0.135→0.180`, `--border` `10%→14%`, card shadow ring `7%→12%`, nav-bg slightly lighter, muted-foreground slightly lighter for readability
+
+**`apps/web/src/pages/Plan.tsx`, `Accounts.tsx`, `Spending.tsx`, `Settings.tsx` (same pattern on all 4):**
+- Root div: removed `bg-background`
+- Sticky header: `bg-background/85 backdrop-blur-xl` → `top-bar` class
+- Page title: `text-[17px]` → `text-xl`
+- Page padding: `px-4 lg:px-8 pt-4` → `px-5 lg:px-10 pt-6`
+- Bottom padding: `md:pb-8` → `md:pb-10`
+
+**`apps/web/src/pages/Settings.tsx` extra:**
+- Section spacing: `space-y-6` → `space-y-8`
+- Section labels: `text-[11px] font-bold` → `text-xs font-semibold` (more readable, less "shouting")
+- Income card padding: `p-4` → `p-5`
+
+---
+
+**Why these fixes weren't enough:**
+
+After deploying v5.4 and reviewing screenshots, user confirmed the UI still looked essentially the same. This is expected — the fixes were structural (unblocking the gradient, fixing glass) and incremental (CSS variable tweaks). They are necessary corrections but they don't change the *design*. 
+
+The reference apps (Monarch, Origin) have a fundamentally different visual language:
+- Default **light mode** with white cards on gray background (our dark mode was the primary experience)
+- **48-64px** hero numbers vs our 48px (same, but surrounded by much more breathing room)
+- **Section headers** at 16px semibold (our `text-[11px]` caps labels are nearly invisible)
+- **24-32px** card padding throughout (we're at 16-20px)
+- **Sidebar** with full-width active state pill, user profile at bottom, clear visual separation
+- **Transaction rows** with merchant avatar circles, more padding, cleaner typography
+- **Page titles** at 24-28px bold (we're at 20px)
+
+The conclusion: structural code is correct. Visual design needs a full overhaul. See the **UI Redesign Backlog (v6.0)** section in the README for the complete task list.
+
+---
+
+**Decisions made:**
+
+- **Do the full redesign before Phase 2 features.** Consumer fintech lives on first impressions. Adding credit score monitoring to a UI that doesn't feel premium is the wrong order of operations. The redesign is the next priority.
+- **Light mode first.** All reference apps the user showed are light-mode-first. User has been using dark mode but the design intent is shifting. v6.0 should default to light and make dark the toggle.
+- **No partial redesigns.** Touching one page at a time creates inconsistency. The v6.0 redesign will cover all 5 pages + sidebar + CSS tokens in one session.
+- **README is the source of truth.** Full redesign TODO is documented in README `UI Redesign Backlog (v6.0)` section so it can be picked up from any machine.
+
+---
+
 ### v5.3 — Glass UI Design System + Dark/Light Theme Toggle
 
 **Why:** The UI was always-dark with no toggle, no elevation system, and flat opaque nav bars. User requested glass UI / material design aesthetic with consistent spacing and a dark/light toggle. Goal: look like a premium consumer fintech product, not a developer side project.
