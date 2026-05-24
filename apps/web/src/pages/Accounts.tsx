@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertTriangle, CreditCard, LayoutList, RefreshCw, Medal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
@@ -41,7 +42,7 @@ interface Category { id: string; icon: string; label: string; }
 interface Recommendation { rank: number; accountName: string; effectiveRate: number; multiplier: number; programName: string; rewardType: string; notes: string; penalized: boolean; earnedDollars: number | null; }
 interface RewardResult { recommendations: Recommendation[]; unmatchedAccounts: string[]; profilesLastUpdated?: string; }
 
-function rankLabel(rank: number) { return rank === 1 ? '🥇 Best' : rank === 2 ? '🥈 2nd' : rank === 3 ? '🥉 3rd' : `#${rank}`; }
+function rankLabel(rank: number) { return rank === 1 ? 'Best' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `#${rank}`; }
 
 const ACCOUNT_TABS = [
   { id: 'accounts', label: 'Accounts' },
@@ -178,7 +179,8 @@ export default function Accounts() {
             {acctState === 'loading' && <div className="flex flex-col items-center py-16 gap-3"><div className="spinner" /><p className="text-sm text-muted-foreground">Loading accounts…</p></div>}
             {acctState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span><p className="font-semibold">Could not load accounts</p>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
+                <p className="font-semibold">Could not load accounts</p>
                 <p className="text-sm text-muted-foreground">{acctError}</p>
                 <Button onClick={loadAccounts} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
@@ -186,7 +188,7 @@ export default function Accounts() {
             {acctState === 'content' && (
               accounts.length === 0 ? (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
-                  <span className="text-4xl">💳</span>
+                  <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center"><CreditCard size={22} className="text-muted-foreground" /></div>
                   <p className="font-semibold">No accounts connected</p>
                   <p className="text-sm text-muted-foreground">Connect your bank in Settings to get started.</p>
                 </div>
@@ -305,7 +307,8 @@ export default function Accounts() {
             {budgetState === 'loading' && <div className="flex flex-col items-center py-16 gap-3"><div className="spinner" /><p className="text-sm text-muted-foreground">Loading budgets…</p></div>}
             {budgetState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span><p className="font-semibold">Could not load budgets</p>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
+                <p className="font-semibold">Could not load budgets</p>
                 <p className="text-sm text-muted-foreground">{budgetError}</p>
                 <Button onClick={loadBudgets} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
@@ -394,7 +397,8 @@ export default function Accounts() {
             {rewardsState === 'loading' && <div className="flex flex-col items-center py-16 gap-3"><div className="spinner" /><p className="text-sm text-muted-foreground">Loading reward profiles…</p></div>}
             {rewardsState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span><p className="font-semibold">Could not load reward profiles</p>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
+                <p className="font-semibold">Could not load reward profiles</p>
                 <Button onClick={loadRewardsCategories} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
             )}
@@ -424,7 +428,7 @@ export default function Accounts() {
                 {rewardResults && (
                   rewardResults.recommendations.length === 0 ? (
                     <div className="flex flex-col items-center py-12 gap-3 text-center">
-                      <span className="text-4xl">🃏</span>
+                      <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center"><CreditCard size={22} className="text-muted-foreground" /></div>
                       <p className="text-sm text-muted-foreground">No connected cards matched a reward profile.</p>
                     </div>
                   ) : (
@@ -438,7 +442,7 @@ export default function Accounts() {
                                 {rankLabel(r.rank)}
                               </Badge>
                             </div>
-                            {r.penalized && <Badge variant="outline" className="text-[10px] border-amber/30 text-amber mb-2">⚠️ Active balance — ranked lower</Badge>}
+                            {r.penalized && <Badge variant="outline" className="text-[10px] border-amber/30 text-amber mb-2 flex items-center gap-1 w-fit"><AlertTriangle size={10} />Active balance — ranked lower</Badge>}
                             <p className="text-2xl font-extrabold text-violet-light">{r.effectiveRate}%<span className="text-sm font-normal text-muted-foreground ml-1">effective back</span></p>
                             <p className="text-xs text-muted-foreground mt-1">
                               {r.rewardType === 'cashback' ? `${r.effectiveRate}% cash back` : `${r.multiplier}x ${r.programName} (${r.effectiveRate}% value)`}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { AlertTriangle, Target, DollarSign, CalendarDays, Flame, Layers, Shuffle, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
@@ -16,11 +17,11 @@ import SubNav from '../components/SubNav';
 type PlanTab = 'strategy' | 'goals' | 'insights';
 type Strategy = 'avalanche' | 'snowball' | 'hybrid' | 'cashflow';
 
-const STRATEGIES: { id: Strategy; name: string; sub: string; best: string; icon: string }[] = [
-  { id: 'avalanche', name: 'Avalanche',  sub: 'Highest APR first',       best: 'Min total interest',     icon: '🔥' },
-  { id: 'snowball',  name: 'Snowball',   sub: 'Smallest balance first',   best: 'Fast wins, motivation',  icon: '❄️' },
-  { id: 'hybrid',    name: 'Hybrid',     sub: 'APR + balance weighted',   best: 'Balanced approach',      icon: '⚖️' },
-  { id: 'cashflow',  name: 'Cash Flow',  sub: 'Free up minimums fastest', best: 'Maximize monthly cash',  icon: '💸' },
+const STRATEGIES: { id: Strategy; name: string; sub: string; best: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  { id: 'avalanche', name: 'Avalanche',  sub: 'Highest APR first',       best: 'Min total interest',     Icon: Flame      },
+  { id: 'snowball',  name: 'Snowball',   sub: 'Smallest balance first',   best: 'Fast wins, motivation',  Icon: Layers     },
+  { id: 'hybrid',    name: 'Hybrid',     sub: 'APR + balance weighted',   best: 'Balanced approach',      Icon: Shuffle    },
+  { id: 'cashflow',  name: 'Cash Flow',  sub: 'Free up minimums fastest', best: 'Maximize monthly cash',  Icon: TrendingUp },
 ];
 
 interface PlanCard { name: string; balance_current: number; apr: number; minimum_payment: number; payoffMonth?: number; payoffDate?: string; }
@@ -211,7 +212,7 @@ export default function Plan() {
             )}
             {planState === 'error' && (
               <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
                 <p className="font-semibold">Could not load plan</p>
                 <p className="text-sm text-muted-foreground">{planError}</p>
                 <Button onClick={() => loadPlan()} className="bg-primary hover:bg-primary/90">Try Again</Button>
@@ -234,7 +235,7 @@ export default function Plan() {
                             : 'border-border bg-card hover:border-border/60',
                         )}
                       >
-                        <span className="text-2xl">{s.icon}</span>
+                        <s.Icon size={20} className={strategy === s.id ? 'text-violet-light' : 'text-muted-foreground'} />
                         <span className="text-sm font-bold text-foreground">{s.name}</span>
                         <span className="text-xs text-muted-foreground">{s.sub}</span>
                         <Badge variant="outline" className={cn('text-[10px] w-fit mt-0.5', strategy === s.id ? 'border-[var(--primary)]/40 text-violet-light' : 'border-border text-muted-foreground')}>
@@ -302,7 +303,7 @@ export default function Plan() {
                 {/* Lump-sum */}
                 <Card className="bg-card border-border">
                   <CardHeader className="pb-2 pt-5 px-5">
-                    <CardTitle className="text-sm font-semibold text-foreground">💰 Lump-Sum Simulator</CardTitle>
+                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><DollarSign size={14} className="text-muted-foreground shrink-0" />Lump-Sum Simulator</CardTitle>
                   </CardHeader>
                   <CardContent className="px-5 pb-5 space-y-3">
                     <div className="flex gap-2">
@@ -328,7 +329,7 @@ export default function Plan() {
                 {/* Required payment */}
                 <Card className="bg-card border-border">
                   <CardHeader className="pb-2 pt-5 px-5">
-                    <CardTitle className="text-sm font-semibold text-foreground">📅 Required Payment Calculator</CardTitle>
+                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><CalendarDays size={14} className="text-muted-foreground shrink-0" />Required Payment Calculator</CardTitle>
                     <p className="text-xs text-muted-foreground">How much extra/mo to be debt-free by a target date?</p>
                   </CardHeader>
                   <CardContent className="px-5 pb-5 space-y-3">
@@ -370,7 +371,7 @@ export default function Plan() {
             )}
             {goalsState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
                 <p className="font-semibold">Could not load goals</p>
                 <p className="text-sm text-muted-foreground">{goalsError}</p>
                 <Button onClick={loadGoals} className="bg-primary hover:bg-primary/90">Try Again</Button>
@@ -380,7 +381,7 @@ export default function Plan() {
               <div className="space-y-3">
                 {goals.length === 0 && !showForm && (
                   <div className="flex flex-col items-center py-16 gap-3 text-center">
-                    <span className="text-4xl">🎯</span>
+                    <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center"><Target size={22} className="text-muted-foreground" /></div>
                     <p className="font-semibold">No goals yet</p>
                     <p className="text-sm text-muted-foreground">Add a goal to track your path to debt freedom.</p>
                   </div>
@@ -398,7 +399,7 @@ export default function Plan() {
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0">
                           <Badge variant="outline" className={cn('text-xs', g.onTrack ? 'bg-green-dim text-green border-green/20' : 'bg-amber-dim text-amber border-amber/20')}>
-                            {g.onTrack ? '✅ On track' : '⚠️ Off track'}
+                            {g.onTrack ? 'On track' : 'Off track'}
                           </Badge>
                           {confirmDeleteId === g.id ? (
                             <div className="flex items-center gap-1.5">
@@ -510,7 +511,7 @@ export default function Plan() {
             )}
             {insightState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
                 <p className="font-semibold">Could not load insights</p>
                 <Button onClick={loadInsights} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>

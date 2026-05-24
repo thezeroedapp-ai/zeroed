@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmtD } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -282,7 +283,7 @@ export default function Settings() {
                   <CardContent className="p-4">
                     {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
                       <div className="flex items-center gap-2 bg-red/10 border border-red/25 rounded-lg px-3 py-2 mb-3">
-                        <span className="text-sm">⚠️</span>
+                        <AlertTriangle size={14} className="text-red shrink-0" />
                         <p className="text-xs text-red">Bank connection expired — please reconnect to resume syncing.</p>
                       </div>
                     )}

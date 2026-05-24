@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { AlertTriangle, CreditCard, ClipboardList, BarChart3, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
@@ -169,7 +170,7 @@ export default function Spending() {
             )}
             {txState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
                 <p className="font-semibold">Could not load transactions</p>
                 <p className="text-sm text-muted-foreground">{txError}</p>
                 <Button onClick={loadTransactions} className="bg-primary hover:bg-primary/90">Try Again</Button>
@@ -196,7 +197,7 @@ export default function Spending() {
                   <Card className="mb-4 border-[var(--primary)]/25 bg-gradient-to-r from-[var(--primary)]/10 to-blue/8">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-foreground">💳 Using the right card?</p>
+                        <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><CreditCard size={14} className="shrink-0" />Using the right card?</p>
                         <p className="text-xs text-muted-foreground mt-0.5">See which cards earn the most on your top categories.</p>
                       </div>
                       <Link to="/accounts?tab=rewards"
@@ -209,7 +210,7 @@ export default function Spending() {
 
                 {filtered.length === 0 ? (
                   <div className="flex flex-col items-center py-16 gap-3 text-center">
-                    <span className="text-4xl">📋</span>
+                    <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center"><ClipboardList size={22} className="text-muted-foreground" /></div>
                     <p className="font-semibold">No transactions</p>
                     <p className="text-sm text-muted-foreground">Transactions appear here after syncing in Settings.</p>
                   </div>
@@ -264,7 +265,7 @@ export default function Spending() {
             )}
             {trendsState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
                 <p className="font-semibold">Could not load trends</p>
                 <Button onClick={loadTrends} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
@@ -272,7 +273,7 @@ export default function Spending() {
             {trendsState === 'content' && trends && (
               trends.data.length === 0 ? (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
-                  <span className="text-4xl">📊</span>
+                  <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center"><BarChart3 size={22} className="text-muted-foreground" /></div>
                   <p className="font-semibold">Not enough data yet</p>
                   <p className="text-sm text-muted-foreground">Sync your accounts and come back after a few months of transactions.</p>
                 </div>
@@ -343,7 +344,7 @@ export default function Spending() {
             )}
             {recurringState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <span className="text-3xl">⚠️</span>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
                 <p className="font-semibold">Could not detect recurring charges</p>
                 <Button onClick={loadRecurring} className="bg-primary hover:bg-primary/90">Try Again</Button>
               </div>
@@ -351,7 +352,7 @@ export default function Spending() {
             {recurringState === 'content' && (
               sortedRecurring.length === 0 ? (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
-                  <span className="text-4xl">🔄</span>
+                  <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center"><RefreshCw size={22} className="text-muted-foreground" /></div>
                   <p className="font-semibold">No recurring charges found</p>
                   <p className="text-sm text-muted-foreground">Sync more transaction history to detect subscriptions and bills.</p>
                 </div>

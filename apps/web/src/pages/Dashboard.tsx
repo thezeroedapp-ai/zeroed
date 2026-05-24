@@ -10,7 +10,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, X, Plus, Pencil, Check, TrendingUp, TrendingDown, ArrowRight, BarChart2, ShoppingCart, Target, Zap, Sparkles, Bell, Flame, Wallet } from 'lucide-react';
+import { GripVertical, X, Plus, Pencil, Check, TrendingUp, TrendingDown, ArrowRight, BarChart2, ShoppingCart, Target, Zap, Sparkles, Bell, Flame, Wallet, AlertTriangle, AlertCircle, Lock, Brain } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -341,7 +341,7 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><TrendingDown size={14} className="text-muted-foreground shrink-0" />Payoff Projection</CardTitle>
             </CardHeader>
             <CardContent className="px-3 pb-4">
-              <ChartContainer config={debtChartConfig} className="h-[150px] w-full">
+              <ChartContainer config={debtChartConfig} className="h-[200px] w-full">
                 <AreaChart data={chartData} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
                   <defs>
                     <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
@@ -396,7 +396,11 @@ export default function Dashboard() {
             <CardContent className="px-6 pb-6 space-y-3">
               {data.alerts.map((a, i) => (
                 <div key={i} className="flex gap-3 p-3 rounded-lg bg-amber-dim border border-amber/20">
-                  <span className="text-base shrink-0 mt-0.5">{a.severity === 'danger' ? '🔴' : '⚠️'}</span>
+                  <span className="shrink-0 mt-0.5">
+                    {a.severity === 'danger'
+                      ? <AlertCircle size={15} className="text-red" />
+                      : <AlertTriangle size={15} className="text-amber" />}
+                  </span>
                   <div>
                     <div className="text-sm font-semibold text-amber">{a.title}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">{a.description}</div>
@@ -430,7 +434,7 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="px-3 pb-4">
-              <ChartContainer config={netWorthChartConfig} className="h-[120px] w-full">
+              <ChartContainer config={netWorthChartConfig} className="h-[180px] w-full">
                 <LineChart data={netWorthHistory} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 5))} />
                   <YAxis hide domain={['auto', 'auto']} />
@@ -454,7 +458,7 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><ShoppingCart size={14} className="text-muted-foreground shrink-0" />Spending by Category</CardTitle>
             </CardHeader>
             <CardContent className="px-3 pb-4">
-              <ChartContainer config={spendingChartConfig} className="h-[160px] w-full">
+              <ChartContainer config={spendingChartConfig} className="h-[200px] w-full">
                 <BarChart
                   data={top5}
                   layout="vertical"
@@ -528,7 +532,9 @@ export default function Dashboard() {
               )}
               {aiState === 'empty' && (
                 <div className="flex flex-col items-center text-center py-3 gap-2">
-                  <span className="text-3xl">🧠</span>
+                  <div className="w-10 h-10 rounded-full bg-violet-dim border border-[var(--primary)]/20 flex items-center justify-center">
+                    <Brain size={18} className="text-violet-light" />
+                  </div>
                   <p className="text-sm font-semibold">Get AI insights</p>
                   <p className="text-xs text-muted-foreground leading-relaxed">3 actions to get debt-free faster.</p>
                   <Button size="sm" className="w-full mt-1 bg-primary hover:bg-primary/90" onClick={generateInsight}>Generate</Button>
@@ -558,7 +564,9 @@ export default function Dashboard() {
               )}
               {aiState === 'limit' && (
                 <div className="flex flex-col items-center text-center py-3 gap-2">
-                  <span className="text-2xl">🔒</span>
+                  <div className="w-10 h-10 rounded-full bg-surface-2 border border-border flex items-center justify-center">
+                    <Lock size={16} className="text-muted-foreground" />
+                  </div>
                   <p className="text-sm font-semibold">Limit reached</p>
                   <p className="text-xs text-muted-foreground">10 free uses/month. Resets on the 1st.</p>
                 </div>
@@ -693,45 +701,65 @@ export default function Dashboard() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-dvh">
-      {/* Top bar */}
-      <div className="sticky top-0 z-10 px-6 lg:px-10 py-5 top-bar border-b border-border">
-        <div className="flex items-start justify-between">
+    <div className="min-h-dvh flex flex-col">
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 top-bar border-b border-border px-8 lg:px-12 py-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {data ? greeting(data.user?.name || 'there') : 'Welcome back'}
+            <h1 className="text-[22px] font-bold text-foreground leading-tight">
+              {data ? greeting(data.user?.name || 'there') : 'Dashboard'}
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">{dateStr}</p>
+            <p className="text-[12px] text-muted-foreground mt-0.5">{dateStr}</p>
           </div>
           {state === 'content' && (
             <Button
               size="sm"
               variant={editMode ? 'default' : 'outline'}
-              className={cn('mt-0.5', editMode ? 'bg-primary hover:bg-primary/90 text-white' : 'border-border text-muted-foreground hover:text-foreground')}
+              className={cn(editMode ? 'bg-primary text-white' : 'border-border text-muted-foreground hover:text-foreground')}
               onClick={() => setEditMode(e => !e)}
             >
-              {editMode ? <><Check size={13} className="mr-1" />Done</> : <><Pencil size={13} className="mr-1" />Edit</>}
+              {editMode ? <><Check size={13} className="mr-1.5" />Done</> : <><Pencil size={13} className="mr-1.5" />Customise</>}
             </Button>
           )}
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+32px)] md:pb-12 pt-8">
-        {/* Loading */}
+      {/* ── Page body ───────────────────────────────────────────────────── */}
+      <div className="flex-1 px-8 lg:px-12 pb-[calc(var(--nav-h)+32px)] md:pb-12 pt-8 page-content">
+        {/* Loading — skeleton layout */}
         {state === 'loading' && (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <div className="spinner" />
-            <p className="text-sm text-muted-foreground">Loading your dashboard…</p>
+          <div>
+            {/* Hero skeleton */}
+            <div className="mb-8 rounded-xl border border-border bg-card p-8">
+              <div className="skeleton h-3 w-20 mb-3" />
+              <div className="skeleton h-14 w-56 mb-3" />
+              <div className="skeleton h-4 w-36" />
+              <div className="grid grid-cols-4 gap-6 mt-8 pt-6 border-t border-border">
+                {[1,2,3,4].map(i => <div key={i}><div className="skeleton h-2.5 w-16 mb-2" /><div className="skeleton h-4 w-20" /></div>)}
+              </div>
+            </div>
+            {/* Widget skeletons */}
+            <div className="widget-grid">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="rounded-xl border border-border bg-card p-6 space-y-3">
+                  <div className="skeleton h-3 w-28" />
+                  <div className="skeleton h-8 w-40" />
+                  <div className="skeleton h-[120px] w-full mt-2" />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Error */}
         {state === 'error' && (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-            <span className="text-4xl">⚠️</span>
-            <p className="text-base font-semibold">Could not load dashboard</p>
+          <div className="flex flex-col items-center justify-center py-32 gap-3 text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center">
+              <AlertTriangle size={22} className="text-amber" />
+            </div>
+            <p className="text-base font-semibold text-foreground mt-1">Could not load dashboard</p>
             <p className="text-sm text-muted-foreground">{error}</p>
-            <Button onClick={load} className="bg-primary hover:bg-primary/90">Try Again</Button>
+            <Button onClick={load} className="mt-1 bg-primary hover:bg-primary/90 text-white">Try again</Button>
           </div>
         )}
 
@@ -740,46 +768,44 @@ export default function Dashboard() {
             {/* ── Hero card ── */}
             <Card className="mb-8 bg-card border-border overflow-hidden">
               <CardContent className="p-8">
-                <div className="flex items-start justify-between gap-6">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Total Debt</p>
-                    <div className="text-[64px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
-                    {data.debtFreeDate && (
-                      <div className="mt-4">
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Debt-Free Date</p>
-                        <p className="text-xl font-extrabold text-violet-light">{data.debtFreeDate}</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Monthly Interest</p>
-                    <div className="text-2xl font-extrabold tabular text-red leading-none">{fmtD(data.monthlyInterest)}</div>
-                    <p className="text-xs text-muted-foreground mt-1.5">cost of debt</p>
-                  </div>
-                </div>
+                {/* Primary stat */}
+                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Total Debt</p>
+                <div className="text-[64px] font-extrabold tabular text-red leading-none tracking-tight">{fmt(data.totalDebt)}</div>
 
-                <div className="grid grid-cols-3 gap-8 mt-8 pt-6 border-t border-border">
+                {/* Debt-free date — secondary, clearly subordinate */}
+                {data.debtFreeDate && (
+                  <p className="text-sm font-semibold text-violet-light mt-3">
+                    Debt-free by <span className="text-base">{data.debtFreeDate}</span>
+                  </p>
+                )}
+
+                {/* Supporting stats strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-8 pt-6 border-t border-border">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Minimums</p>
-                    <p className="text-base font-bold tabular text-foreground">{fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Monthly Interest</p>
+                    <p className="text-sm font-bold tabular text-red">{fmtD(data.monthlyInterest)}</p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Surplus</p>
-                    <p className={cn('text-base font-bold tabular', data.surplus >= 0 ? 'text-green' : 'text-red')}>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Minimums</p>
+                    <p className="text-sm font-bold tabular text-foreground">{fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Surplus</p>
+                    <p className={cn('text-sm font-bold tabular', data.surplus >= 0 ? 'text-green' : 'text-red')}>
                       {data.surplus >= 0 ? '+' : ''}{fmt(data.surplus)}
                     </p>
                   </div>
                   {data.netWorth != null ? (
                     <div>
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Net Worth</p>
-                      <p className={cn('text-base font-bold tabular', data.netWorth >= 0 ? 'text-green' : 'text-red')}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Net Worth</p>
+                      <p className={cn('text-sm font-bold tabular', data.netWorth >= 0 ? 'text-green' : 'text-red')}>
                         {data.netWorth < 0 ? '−' : ''}{fmt(Math.abs(data.netWorth))}
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Cards</p>
-                      <p className="text-base font-bold tabular text-foreground">{data.accountCount}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Accounts</p>
+                      <p className="text-sm font-bold tabular text-foreground">{data.accountCount}</p>
                     </div>
                   )}
                 </div>
@@ -839,7 +865,7 @@ export default function Dashboard() {
             )}
           </>
         )}
-      </div>
+      </div>{/* end page body */}
 
       {/* ── Drill-down Sheet ── */}
       <Sheet open={sheet.open} onOpenChange={(open) => setSheet(s => ({ ...s, open }))}>

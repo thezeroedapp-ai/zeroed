@@ -1,16 +1,15 @@
 import { ReactNode } from 'react';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import SideNav from './SideNav';
 import BottomNav from './BottomNav';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <TooltipProvider delayDuration={300}>
+    <>
       <SideNav />
       <main className="app-main min-h-dvh">
         {children}
       </main>
       <BottomNav />
-    </TooltipProvider>
+    </>
   );
 }

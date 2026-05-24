@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { mantineTheme, cssVariablesResolver } from './theme';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -10,6 +13,20 @@ import Plan from './pages/Plan';
 import Spending from './pages/Spending';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
+
+function MantineThemeBridge({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+  return (
+    <MantineProvider
+      theme={mantineTheme}
+      cssVariablesResolver={cssVariablesResolver}
+      forceColorScheme={theme === 'dark' ? 'dark' : 'light'}
+    >
+      <Notifications position="top-right" />
+      {children}
+    </MantineProvider>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -37,6 +54,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <ThemeProvider>
+    <MantineThemeBridge>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -55,6 +73,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </MantineThemeBridge>
     </ThemeProvider>
   );
 }
