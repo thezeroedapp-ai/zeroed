@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
+import AvatarCircle from '@/components/ui/avatar-circle';
 
 type AccountTab = 'accounts' | 'budget' | 'rewards';
 
@@ -42,17 +43,6 @@ interface RewardResult { recommendations: Recommendation[]; unmatchedAccounts: s
 
 function rankLabel(rank: number) { return rank === 1 ? '🥇 Best' : rank === 2 ? '🥈 2nd' : rank === 3 ? '🥉 3rd' : `#${rank}`; }
 
-function AvatarCircle({ name, size = 36 }: { name: string; size?: number }) {
-  const PALETTE = ['#3b82f6', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#f97316', '#8b5cf6'];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: PALETTE[Math.abs(h) % PALETTE.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: Math.round(size * 0.40), color: 'white', flexShrink: 0, letterSpacing: '-0.01em' }}>
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
-
 const ACCOUNT_TABS = [
   { id: 'accounts', label: 'Accounts' },
   { id: 'budget',   label: 'Budget'   },
@@ -68,6 +58,8 @@ export default function Accounts() {
   const [accounts, setAccounts]   = useState<Account[]>([]);
   const [acctError, setAcctError] = useState('');
   const [editing, setEditing]     = useState<Record<string, EditState>>({});
+
+  const [confirmBudgetId, setConfirmBudgetId] = useState<string | null>(null);
 
   const [budgetState, setBudgetState]   = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
   const [budgets, setBudgets]           = useState<Budget[]>([]);
@@ -111,9 +103,12 @@ export default function Accounts() {
   function cancelEdit(id: string)  { setEditing(p => { const n = { ...p }; delete n[id]; return n; }); }
   async function saveEdit(id: string) {
     const e = editing[id];
+    const apr = parseFloat(e.apr);
+    const minimum = parseFloat(e.minimum);
+    if (isNaN(apr) || apr < 0 || isNaN(minimum) || minimum < 0) return;
     setEditing(p => ({ ...p, [id]: { ...p[id], saving: true } }));
     try {
-      const r = await apiFetch(`/api/plaid/accounts/${id}/credit-details`, { method: 'PUT', body: JSON.stringify({ apr: parseFloat(e.apr), minimum_payment: parseFloat(e.minimum) }) });
+      const r = await apiFetch(`/api/plaid/accounts/${id}/credit-details`, { method: 'PUT', body: JSON.stringify({ apr, minimum_payment: minimum }) });
       if (!r.ok) throw new Error('Save failed');
       cancelEdit(id); loadAccounts();
     } catch { setEditing(p => ({ ...p, [id]: { ...p[id], saving: false } })); }
@@ -141,7 +136,7 @@ export default function Accounts() {
     try { await apiFetch('/api/budgets', { method: 'POST', body: JSON.stringify({ category: budgetForm.category, monthly_limit: parseFloat(budgetForm.limit) }) }); setBudgetForm({ category: 'Food and Drink', limit: '' }); loadBudgets(); }
     finally { setBudgetSaving(false); }
   }
-  async function deleteBudget(id: string) { if (!confirm('Remove this budget?')) return; await apiFetch(`/api/budgets/${id}`, { method: 'DELETE' }); loadBudgets(); }
+  async function deleteBudget(id: string) { await apiFetch(`/api/budgets/${id}`, { method: 'DELETE' }); setConfirmBudgetId(null); loadBudgets(); }
 
   const totalBudgeted = budgets.reduce((s, b) => s + b.monthly_limit, 0);
   const totalSpent    = budgets.reduce((s, b) => s + b.spent, 0);
@@ -234,7 +229,7 @@ export default function Accounts() {
                             const group    = accountGroup(acc.type);
                             return (
                               <div key={acc.id} className={cn('py-5 flex items-start gap-3', idx < sorted.length - 1 && 'border-b border-border')}>
-                                <AvatarCircle name={bank} size={36} />
+                                <AvatarCircle name={acc.name} size={36} />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-semibold text-foreground truncate">{acc.name}</p>
                                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -340,7 +335,15 @@ export default function Accounts() {
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between mb-2">
                               <p className="text-sm font-semibold text-foreground">{b.category}</p>
-                              <Button variant="outline" size="sm" onClick={() => deleteBudget(b.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Remove</Button>
+                              {confirmBudgetId === b.id ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-muted-foreground">Remove?</span>
+                                  <Button variant="outline" size="sm" onClick={() => deleteBudget(b.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Yes</Button>
+                                  <Button variant="outline" size="sm" onClick={() => setConfirmBudgetId(null)} className="h-7 text-xs border-border text-muted-foreground">No</Button>
+                                </div>
+                              ) : (
+                                <Button variant="outline" size="sm" onClick={() => setConfirmBudgetId(b.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Remove</Button>
+                              )}
                             </div>
                             <Progress value={Math.min(100, b.pct)} className={cn('h-1.5', b.pct >= 100 ? '[&>div]:bg-red' : b.pct >= 80 ? '[&>div]:bg-amber' : '[&>div]:bg-green')} />
                             <div className="flex justify-between text-xs text-muted-foreground mt-1.5">

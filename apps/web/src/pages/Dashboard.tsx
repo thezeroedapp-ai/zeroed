@@ -191,7 +191,7 @@ export default function Dashboard() {
   const [dragActiveId, setDragActiveId]     = useState<string | null>(null);
   const [error, setError]                   = useState('');
   const [aiState, setAiState]               = useState<'loading' | 'empty' | 'content' | 'limit' | 'error'>('loading');
-  const [insight, setInsight]               = useState<InsightData | null>(null);
+  const [insightPayload, setInsightPayload] = useState<InsightData | null>(null);
   const [aiError, setAiError]               = useState('');
 
   // Drill-down sheet state
@@ -240,7 +240,7 @@ export default function Dashboard() {
     try {
       const r = await apiFetch('/api/insights/latest');
       const d: InsightData = await r.json();
-      setInsight(d);
+      setInsightPayload(d);
       setAiState(!d.insight ? (d.remaining === 0 && !d.isPro ? 'limit' : 'empty') : 'content');
     } catch { setAiState('empty'); }
   }
@@ -252,7 +252,7 @@ export default function Dashboard() {
       const d: InsightData = await r.json();
       if (r.status === 429) { setAiState('limit'); return; }
       if (!r.ok) throw new Error((d as { error?: string }).error || 'Generation failed');
-      setInsight(d);
+      setInsightPayload(d);
       setAiState('content');
     } catch (e) {
       setAiError(e instanceof Error ? e.message : 'Could not generate insight');
@@ -342,7 +342,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="px-3 pb-4">
               <ChartContainer config={debtChartConfig} className="h-[150px] w-full">
-                <AreaChart data={chartData} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
+                <AreaChart data={chartData} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
                   <defs>
                     <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
@@ -434,7 +434,7 @@ export default function Dashboard() {
                 <LineChart data={netWorthHistory} margin={{ top: 8, right: 4, bottom: 0, left: -8 }}>
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 5))} />
                   <YAxis hide domain={['auto', 'auto']} />
-                  <ReferenceLine y={0} stroke="oklch(1 0 0 / 10%)" strokeDasharray="3 3" />
+                  <ReferenceLine y={0} stroke="var(--border)" strokeDasharray="3 3" />
                   <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']} />} />
                   <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: 'var(--violet-light)', strokeWidth: 0 }} />
                 </LineChart>
@@ -464,8 +464,11 @@ export default function Dashboard() {
                 >
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="category"
-                    tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} width={76}
-                    tickFormatter={(v: string) => v.replace(/_/g, ' ').replace(/AND /g, '& ').slice(0, 14)}
+                    tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} width={90}
+                    tickFormatter={(v: string) => {
+                      const s = v.replace(/_/g, ' ').replace(/AND /gi, '& ');
+                      return s.length > 13 ? s.slice(0, 12) + '…' : s;
+                    }}
                   />
                   <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Spent']} />} />
                   <Bar dataKey="total" radius={[0, 4, 4, 0]} cursor="pointer">
@@ -531,10 +534,10 @@ export default function Dashboard() {
                   <Button size="sm" className="w-full mt-1 bg-primary hover:bg-primary/90" onClick={generateInsight}>Generate</Button>
                 </div>
               )}
-              {aiState === 'content' && insight?.insight && (
+              {aiState === 'content' && insightPayload?.insight && (
                 <>
                   <div className="space-y-2 flex-1">
-                    {insight.insight.insight.split('\n').filter(l => l.trim()).slice(0, 3).map((line, i) => {
+                    {insightPayload.insight.insight.split('\n').filter(l => l.trim()).slice(0, 3).map((line, i) => {
                       const m = line.trim().match(/^(\d+)\.\s*(.*)/s);
                       if (m) return (
                         <div key={i} className="flex gap-2">
@@ -546,8 +549,8 @@ export default function Dashboard() {
                     })}
                   </div>
                   <div className="flex items-center justify-between pt-3 mt-2 border-t border-border">
-                    <span className="text-[11px] text-muted-foreground">{insight.isPro ? 'Unlimited' : `${insight.used}/${insight.limit}`}</span>
-                    {(insight.isPro || (insight.remaining ?? 0) > 0) && (
+                    <span className="text-[11px] text-muted-foreground">{insightPayload.isPro ? 'Unlimited' : `${insightPayload.used}/${insightPayload.limit}`}</span>
+                    {(insightPayload.isPro || (insightPayload.remaining ?? 0) > 0) && (
                       <Button variant="outline" size="sm" onClick={generateInsight} className="text-xs h-7 border-border text-muted-foreground hover:text-foreground">Refresh</Button>
                     )}
                   </div>
@@ -642,10 +645,10 @@ export default function Dashboard() {
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">6-Month Trend</p>
               <ChartContainer config={netWorthChartConfig} className="h-[160px] w-full">
                 <LineChart data={netWorthHistory} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 6%)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                  <ReferenceLine y={0} stroke="oklch(1 0 0 / 15%)" strokeDasharray="3 3" />
+                  <ReferenceLine y={0} stroke="var(--border)" strokeDasharray="3 3" />
                   <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']} />} />
                   <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--violet-light)', strokeWidth: 0 }} activeDot={{ r: 5 }} />
                 </LineChart>
@@ -735,7 +738,7 @@ export default function Dashboard() {
         {state === 'content' && data && (
           <>
             {/* ── Hero card ── */}
-            <Card className="mb-8 card-hero bg-gradient-to-br from-card via-card to-[var(--primary)]/5 border-[var(--primary)]/20 overflow-hidden">
+            <Card className="mb-8 bg-card border-border overflow-hidden">
               <CardContent className="p-8">
                 <div className="flex items-start justify-between gap-6">
                   <div className="flex-1 min-w-0">

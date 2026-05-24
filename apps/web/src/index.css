@@ -47,9 +47,6 @@
   --color-violet-light:         var(--violet-light);
   --color-violet-dim:           var(--violet-dim);
 
-  /* Elevation shadows — override Tailwind defaults */
-  --shadow-sm: var(--shadow-card);
-  --shadow-md: var(--shadow-elevated);
 }
 
 /* ── Light theme (default) ── */
@@ -101,12 +98,6 @@
   --amber-dim: oklch(0.46 0.17 82 / 12%);
   --blue:      oklch(0.42 0.18 264);
   --blue-dim:  oklch(0.42 0.18 264 / 10%);
-
-  /* Elevation — light mode uses border ring for definition */
-  --shadow-card:     0 1px 3px oklch(0 0 0 / 7%), 0 4px 16px oklch(0 0 0 / 5%), 0 0 0 1px oklch(0 0 0 / 6%);
-  --shadow-elevated: 0 4px 20px oklch(0 0 0 / 9%), 0 12px 40px oklch(0 0 0 / 6%), 0 0 0 1px oklch(0 0 0 / 6%);
-  --shadow-hero:     0 2px 16px oklch(0.49 0.21 290 / 16%), 0 8px 32px oklch(0 0 0 / 7%), 0 0 0 1px oklch(0.49 0.21 290 / 12%);
-  --shadow-nav:      4px 0 24px oklch(0 0 0 / 10%), 1px 0 0 oklch(0 0 0 / 10%);
 
   /* Chart palette */
   --chart-1: oklch(0.49 0.21 290);
@@ -160,11 +151,6 @@ html.dark {
   --blue:      oklch(0.62 0.20 264);
   --blue-dim:  oklch(0.62 0.20 264 / 10%);
 
-  --shadow-card:     0 2px 8px oklch(0 0 0 / 50%), 0 0 0 1px oklch(1 0 0 / 12%);  /* stronger ring */
-  --shadow-elevated: 0 8px 40px oklch(0 0 0 / 60%), 0 0 0 1px oklch(1 0 0 / 14%);
-  --shadow-hero:     0 4px 32px oklch(0 0 0 / 55%), 0 0 0 1px oklch(1 0 0 / 12%), 0 0 80px oklch(0.49 0.21 290 / 28%);
-  --shadow-nav:      2px 0 24px oklch(0 0 0 / 45%), 1px 0 0 oklch(1 0 0 / 12%);
-
   --chart-1: oklch(0.49 0.21 290);
   --chart-2: oklch(0.70 0.16 162);
   --chart-3: oklch(0.78 0.19 82);
@@ -190,11 +176,6 @@ html.theme-transitioning *::after {
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   background-color: var(--background);
-  /* Violet bloom: centered top (covers full width incl. sidebar) + left-edge accent */
-  background-image:
-    radial-gradient(ellipse 90% 50% at 50% -5%, oklch(0.49 0.21 290 / 12%) 0%, transparent 60%),
-    radial-gradient(ellipse 35% 55% at 0% 30%, oklch(0.49 0.21 290 / 6%) 0%, transparent 55%);
-  background-repeat: no-repeat;
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -208,44 +189,19 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: oklch(0.5 0 0 / 18%); border-radius: 999px; }
 
-/* ── Glass utility — apply backdrop-filter where needed ── */
-.glass {
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-}
-
-/* ── Hero card — elevated + violet glow ── */
-.card-hero {
-  box-shadow: var(--shadow-hero);
-}
-
-/* ── Elevated card (used on key widgets) ── */
-.card-elevated {
-  box-shadow: var(--shadow-elevated);
-}
-
-/* ── Side nav — solid panel with shadow ── */
+/* ── Side nav ── */
 .side-nav {
   background: var(--nav-bg);
-  box-shadow: var(--shadow-nav);
-}
-html.dark .side-nav {
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
-/* ── Bottom nav — glass bar ── */
+/* ── Bottom nav ── */
 .bottom-nav {
   background: var(--nav-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
-/* ── Top bar — glass header ── */
+/* ── Top bar ── */
 .top-bar {
-  background: color-mix(in oklch, var(--background) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: var(--background);
 }
 
 /* ── Spinner ── */
@@ -331,13 +287,17 @@ html.dark .nav-active {
   box-shadow: inset 0 0 0 1px oklch(0.49 0.21 290 / 30%);
 }
 
-/* ── Suppress violet gradient bloom in light mode ── */
-html:not(.dark) body {
-  background-image: none;
-}
-
 /* ── Recharts tooltip override ── */
 .recharts-tooltip-wrapper { outline: none !important; }
+
+/* ── Full-screen loading state (used during auth checks) ── */
+.loading-state {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
 
 /* ── Auth page ── */
 .auth-page {
@@ -371,7 +331,6 @@ html:not(.dark) body {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 28px 24px;
-  box-shadow: var(--shadow-elevated);
 }
 .auth-title {
   font-size: 18px;

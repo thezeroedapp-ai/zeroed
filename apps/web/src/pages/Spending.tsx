@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis,
 } from 'recharts';
@@ -11,6 +11,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { cn } from '@/lib/utils';
 import { apiFetch, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
+import AvatarCircle from '@/components/ui/avatar-circle';
 
 type Tab = 'transactions' | 'trends' | 'recurring';
 
@@ -47,18 +48,6 @@ function monthKey(date: string) {
   return new Date(date + 'T12:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
-function MerchantAvatar({ name, isPayment }: { name: string; isPayment: boolean }) {
-  const PALETTE = ['#3b82f6', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#f97316', '#8b5cf6'];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  const bg = isPayment ? '#10b981' : PALETTE[Math.abs(h) % PALETTE.length];
-  return (
-    <div style={{ width: 36, height: 36, borderRadius: '50%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: 'white', flexShrink: 0 }}>
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
-
 const CHART_PALETTE = [
   'var(--primary)', 'var(--violet-light)', 'var(--blue)',
   'var(--green)', 'var(--amber)', 'var(--red)',
@@ -72,7 +61,9 @@ const SPENDING_TABS = [
 ];
 
 export default function Spending() {
-  const [tab, setTab] = useState<Tab>('transactions');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = (searchParams.get('tab') || 'transactions') as Tab;
+  function setTab(t: Tab) { t === 'transactions' ? setSearchParams({}) : setSearchParams({ tab: t }); }
 
   const [txState, setTxState]             = useState<'loading' | 'error' | 'content'>('loading');
   const [transactions, setTransactions]   = useState<Transaction[]>([]);
@@ -133,7 +124,7 @@ export default function Spending() {
     if (tab === 'trends'    && trendsState    === 'idle') loadTrends();
     if (tab === 'recurring' && recurringState === 'idle') loadRecurring();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, searchParams]);
 
   const filtered = transactions.filter(t => {
     if (filter === 'expenses') return t.amount > 0;
@@ -201,7 +192,7 @@ export default function Spending() {
                   ))}
                 </div>
 
-                {filtered.length > 0 && (
+                {filtered.length > 0 && filter !== 'payments' && (
                   <Card className="mb-4 border-[var(--primary)]/25 bg-gradient-to-r from-[var(--primary)]/10 to-blue/8">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div>
@@ -239,7 +230,7 @@ export default function Spending() {
                                   'flex items-center gap-3 px-5 py-4',
                                   idx < txs.length - 1 && 'border-b border-border',
                                 )}>
-                                  <MerchantAvatar name={tx.description} isPayment={tx.amount < 0} />
+                                  <AvatarCircle name={tx.description} size={36} color={tx.amount < 0 ? '#10b981' : undefined} />
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5 truncate">

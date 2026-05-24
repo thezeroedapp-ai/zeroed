@@ -78,6 +78,8 @@ export default function Plan() {
   const [insightState, setInsightState] = useState<'idle' | 'loading' | 'error' | 'content'>('idle');
   const [insightData, setInsightData]   = useState<InsightData | null>(null);
   const [generating, setGenerating]     = useState(false);
+  const [insightError, setInsightError] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => { loadPlan(); }, []);
   useEffect(() => {
@@ -150,8 +152,8 @@ export default function Plan() {
   }
 
   async function deleteGoal(id: string) {
-    if (!confirm('Delete this goal?')) return;
     await apiFetch(`/api/goals/${id}`, { method: 'DELETE' });
+    setConfirmDeleteId(null);
     loadGoals();
   }
 
@@ -174,10 +176,14 @@ export default function Plan() {
 
   async function generateInsight() {
     setGenerating(true);
+    setInsightError('');
     try {
       const r = await apiFetch('/api/insights/generate', { method: 'POST' });
       const d = await r.json();
-      if (r.status === 429) { alert(d.error); return; }
+      if (r.status === 429) {
+        setInsightError(d.error || 'Monthly limit reached. Resets next month.');
+        return;
+      }
       setInsightData(d);
       setInsightState('content');
     } finally { setGenerating(false); }
@@ -394,7 +400,15 @@ export default function Plan() {
                           <Badge variant="outline" className={cn('text-xs', g.onTrack ? 'bg-green-dim text-green border-green/20' : 'bg-amber-dim text-amber border-amber/20')}>
                             {g.onTrack ? '✅ On track' : '⚠️ Off track'}
                           </Badge>
-                          <Button variant="outline" size="sm" onClick={() => deleteGoal(g.id)} className="text-xs h-7 border-red/30 text-red hover:bg-red-dim">Delete</Button>
+                          {confirmDeleteId === g.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground">Delete?</span>
+                              <Button variant="outline" size="sm" onClick={() => deleteGoal(g.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Yes</Button>
+                              <Button variant="outline" size="sm" onClick={() => setConfirmDeleteId(null)} className="h-7 text-xs border-border text-muted-foreground">No</Button>
+                            </div>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => setConfirmDeleteId(g.id)} className="text-xs h-7 border-red/30 text-red hover:bg-red-dim">Delete</Button>
+                          )}
                         </div>
                       </div>
 
@@ -534,7 +548,10 @@ export default function Plan() {
                   {generating ? 'Analyzing…' : insightData.insight ? 'Refresh Analysis' : 'Generate Analysis'}
                 </Button>
 
-                {!insightData.isPro && insightData.remaining === 0 && (
+                {insightError && (
+                  <p className="text-xs text-red text-center">{insightError}</p>
+                )}
+                {!insightError && !insightData.isPro && insightData.remaining === 0 && (
                   <p className="text-xs text-muted-foreground text-center">Monthly limit reached. Resets next month.</p>
                 )}
               </div>

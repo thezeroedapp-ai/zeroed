@@ -9,22 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { apiFetch, fmtD } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import AvatarCircle from '@/components/ui/avatar-circle';
 
 const SINKING_CATEGORIES = ['car', 'home', 'medical', 'travel', 'education', 'holiday', 'tax', 'other'];
 
 interface SinkingFund { id: string; category: string; monthly_amount: number; label?: string; }
 interface PlaidItem { item_id: string; institution_name: string; last_synced?: string; error_status?: string | null; }
-
-function AvatarCircle({ name, size = 36 }: { name: string; size?: number }) {
-  const PALETTE = ['#3b82f6', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#f97316', '#8b5cf6'];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: PALETTE[Math.abs(h) % PALETTE.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: Math.round(size * 0.40), color: 'white', flexShrink: 0 }}>
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
 
 function relativeTime(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -43,6 +33,8 @@ export default function Settings() {
   const [income, setIncome]           = useState('');
   const [incomeLoading, setIncomeLoading] = useState(false);
   const [incomeSaved, setIncomeSaved] = useState(false);
+  const [confirmDisconnectId, setConfirmDisconnectId] = useState<string | null>(null);
+  const [confirmFundId, setConfirmFundId] = useState<string | null>(null);
   const [sinkingFunds, setSinkingFunds]   = useState<SinkingFund[]>([]);
   const [plaidItems, setPlaidItems]       = useState<PlaidItem[]>([]);
   const [sfForm, setSfForm]   = useState({ category: 'car', amount: '', label: '' });
@@ -98,8 +90,8 @@ export default function Settings() {
   }
 
   async function disconnectItem(itemId: string) {
-    if (!confirm('Disconnect this bank? All accounts and transactions from this bank will be removed.')) return;
     await apiFetch(`/api/plaid/items/${itemId}`, { method: 'DELETE' });
+    setConfirmDisconnectId(null);
     loadSettings();
   }
 
@@ -150,8 +142,8 @@ export default function Settings() {
   }
 
   async function deleteFund(id: string) {
-    if (!confirm('Delete this sinking fund?')) return;
     await apiFetch(`/api/sinking-funds/${id}`, { method: 'DELETE' });
+    setConfirmFundId(null);
     loadSettings();
   }
 
@@ -223,8 +215,15 @@ export default function Settings() {
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">{fmtD(f.monthly_amount)}/mo</p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => deleteFund(f.id)}
-                      className="h-7 text-xs border-red/30 text-red hover:bg-red/10">Delete</Button>
+                    {confirmFundId === f.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Delete?</span>
+                        <Button variant="outline" size="sm" onClick={() => deleteFund(f.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Yes</Button>
+                        <Button variant="outline" size="sm" onClick={() => setConfirmFundId(null)} className="h-7 text-xs border-border text-muted-foreground">No</Button>
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => setConfirmFundId(f.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red/10">Delete</Button>
+                    )}
                   </div>
                 ))}
               </CardContent>
@@ -299,13 +298,21 @@ export default function Settings() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+                      <div className="flex gap-2 shrink-0 items-center">
                         {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
                           <Button size="sm" onClick={() => reconnectItem(item.item_id)} disabled={plaidLoading}
                             className="h-8 bg-primary hover:bg-primary/90">Reconnect</Button>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => disconnectItem(item.item_id)}
-                          className="h-8 border-red/30 text-red hover:bg-red/10">Disconnect</Button>
+                        {confirmDisconnectId === item.item_id ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">Disconnect?</span>
+                            <Button size="sm" onClick={() => disconnectItem(item.item_id)} className="h-8 border-red/30 text-red hover:bg-red-dim" variant="outline">Yes</Button>
+                            <Button size="sm" variant="outline" onClick={() => setConfirmDisconnectId(null)} className="h-8 border-border text-muted-foreground">No</Button>
+                          </div>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => setConfirmDisconnectId(item.item_id)}
+                            className="h-8 border-red/30 text-red hover:bg-red/10">Disconnect</Button>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -339,7 +346,7 @@ export default function Settings() {
           </Card>
         </section>
 
-        <p className="text-center text-xs text-muted-foreground pb-2">Zeroed v4.5</p>
+        <p className="text-center text-xs text-muted-foreground pb-2">Zeroed v6.1</p>
       </div>
     </div>
   );
