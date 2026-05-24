@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { AlertTriangle, Target, DollarSign, CalendarDays, Flame, Layers, Shuffle, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Target, DollarSign, CalendarDays, Flame, Layers, Shuffle, TrendingUp, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
@@ -17,7 +17,7 @@ import SubNav from '../components/SubNav';
 type PlanTab = 'strategy' | 'goals' | 'insights';
 type Strategy = 'avalanche' | 'snowball' | 'hybrid' | 'cashflow';
 
-const STRATEGIES: { id: Strategy; name: string; sub: string; best: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+const STRATEGIES: { id: Strategy; name: string; sub: string; best: string; Icon: LucideIcon }[] = [
   { id: 'avalanche', name: 'Avalanche',  sub: 'Highest APR first',       best: 'Min total interest',     Icon: Flame      },
   { id: 'snowball',  name: 'Snowball',   sub: 'Smallest balance first',   best: 'Fast wins, motivation',  Icon: Layers     },
   { id: 'hybrid',    name: 'Hybrid',     sub: 'APR + balance weighted',   best: 'Balanced approach',      Icon: Shuffle    },

@@ -27,11 +27,11 @@ export function Select({
 }
 
 // SelectTrigger and SelectValue are invisible — SelectContent renders the actual <select>
-export function SelectTrigger({ className, children }: { className?: string; children?: React.ReactNode }) {
+export function SelectTrigger({ children }: { className?: string; children?: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export function SelectValue({ placeholder }: { placeholder?: string }) {
+export function SelectValue(_props: { placeholder?: string }) {
   return null;
 }
 

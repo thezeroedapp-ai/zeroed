@@ -15,7 +15,7 @@ export function TooltipTrigger({ children, asChild, className, ...props }: React
   return <span className={cn(className)} {...props}>{children}</span>;
 }
 
-export function TooltipContent({ children, className, ...props }: React.ComponentProps<'div'>) {
+export function TooltipContent(_props: React.ComponentProps<'div'>) {
   return null;
 }
 
