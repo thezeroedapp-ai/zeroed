@@ -141,21 +141,21 @@ export default function Settings() {
   const totalSinking = sinkingFunds.reduce((s, f) => s + f.monthly_amount, 0);
 
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+    <div className="min-h-dvh">
+      <div className="sticky top-0 z-10 px-5 lg:px-10 py-4 top-bar border-b border-border">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-[17px] font-bold text-foreground">Settings</h1>
+          <h1 className="text-xl font-bold text-foreground">Settings</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Preferences, banks, and account</p>
         </div>
       </div>
 
-      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-3xl mx-auto space-y-6">
+      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-6 max-w-3xl mx-auto space-y-8">
 
         {/* Monthly Income */}
         <section>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Monthly Income</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Monthly Income</p>
           <Card className="bg-card border-border">
-            <CardContent className="p-4 space-y-3">
+            <CardContent className="p-5 space-y-3">
               <div className="flex gap-2 items-end">
                 <div className="flex-1 space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Take-home pay (after tax)</Label>
@@ -177,8 +177,8 @@ export default function Settings() {
 
         {/* Sinking Funds */}
         <section>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Sinking Funds</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Sinking Funds</p>
             {totalSinking > 0 && (
               <span className="text-xs text-muted-foreground">{fmtD(totalSinking)}/mo reserved</span>
             )}
@@ -246,7 +246,7 @@ export default function Settings() {
 
         {/* Connected Banks */}
         <section>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Connected Banks</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Connected Banks</p>
 
           {plaidItems.length === 0 ? (
             <Card className="bg-card border-border mb-3">
@@ -304,7 +304,7 @@ export default function Settings() {
 
         {/* Account */}
         <section>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Account</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Account</p>
           <Card className="bg-card border-border">
             <CardContent className="p-4">
               <Button variant="outline" onClick={handleSignOut}

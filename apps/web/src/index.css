@@ -57,14 +57,14 @@
   --radius: 0.75rem;
 
   /* Surfaces */
-  --background:   oklch(0.97 0.007 264);   /* #f3f5fb */
+  --background:   oklch(0.96 0.006 255);   /* warm off-white — like Monarch/Origin */
   --foreground:   oklch(0.11 0.020 264);   /* near-black */
   --card:         oklch(1 0 0);            /* white */
   --card-foreground: oklch(0.11 0.020 264);
   --popover:      oklch(1 0 0);
   --popover-foreground: oklch(0.11 0.020 264);
-  --surface-2:    oklch(0.94 0.007 264);   /* light gray-blue */
-  --nav-bg:       oklch(0.98 0.005 264 / 92%);
+  --surface-2:    oklch(0.93 0.006 255);   /* light gray-blue */
+  --nav-bg:       oklch(0.99 0.004 255 / 94%);
 
   /* Primary — violet (same across both themes) */
   --primary:           oklch(0.49 0.21 290);
@@ -74,10 +74,10 @@
   --gradient-to:       oklch(0.62 0.19 310);   /* violet-pink for gradient stops */
 
   /* Secondary / muted */
-  --secondary:           oklch(0.94 0.007 264);
+  --secondary:           oklch(0.93 0.006 255);
   --secondary-foreground: oklch(0.11 0.020 264);
-  --muted:               oklch(0.94 0.007 264);
-  --muted-foreground:    oklch(0.44 0.018 264);
+  --muted:               oklch(0.93 0.006 255);
+  --muted-foreground:    oklch(0.40 0.018 264);  /* darker → section labels visible on light bg */
 
   /* Accent */
   --accent:          oklch(0.49 0.21 290);
@@ -87,9 +87,9 @@
   --destructive:     oklch(0.46 0.22 22);
 
   /* Borders / inputs */
-  --border:        oklch(0 0 0 / 8%);
-  --border-strong: oklch(0 0 0 / 14%);
-  --input:         oklch(0.96 0.006 264);
+  --border:        oklch(0 0 0 / 9%);
+  --border-strong: oklch(0 0 0 / 16%);
+  --input:         oklch(0.98 0.004 255);
   --ring:          oklch(0.49 0.21 290);
 
   /* Status colors — darker for readability on light bg */
@@ -102,11 +102,11 @@
   --blue:      oklch(0.42 0.18 264);
   --blue-dim:  oklch(0.42 0.18 264 / 10%);
 
-  /* Elevation */
-  --shadow-card:     0 1px 3px oklch(0 0 0 / 6%), 0 4px 16px oklch(0 0 0 / 4%);
-  --shadow-elevated: 0 4px 20px oklch(0 0 0 / 8%), 0 12px 40px oklch(0 0 0 / 5%);
-  --shadow-hero:     0 2px 16px oklch(0.49 0.21 290 / 14%), 0 8px 32px oklch(0 0 0 / 6%);
-  --shadow-nav:      2px 0 20px oklch(0 0 0 / 6%), 1px 0 0 oklch(0 0 0 / 6%);
+  /* Elevation — light mode uses border ring for definition */
+  --shadow-card:     0 1px 3px oklch(0 0 0 / 7%), 0 4px 16px oklch(0 0 0 / 5%), 0 0 0 1px oklch(0 0 0 / 6%);
+  --shadow-elevated: 0 4px 20px oklch(0 0 0 / 9%), 0 12px 40px oklch(0 0 0 / 6%), 0 0 0 1px oklch(0 0 0 / 6%);
+  --shadow-hero:     0 2px 16px oklch(0.49 0.21 290 / 16%), 0 8px 32px oklch(0 0 0 / 7%), 0 0 0 1px oklch(0.49 0.21 290 / 12%);
+  --shadow-nav:      2px 0 20px oklch(0 0 0 / 7%), 1px 0 0 oklch(0 0 0 / 8%);
 
   /* Chart palette */
   --chart-1: oklch(0.49 0.21 290);
@@ -121,14 +121,14 @@
 
 /* ── Dark theme ── */
 html.dark {
-  --background:   oklch(0.065 0.015 264);
-  --foreground:   oklch(0.925 0.012 255);
-  --card:         oklch(0.105 0.024 258);
-  --card-foreground: oklch(0.925 0.012 255);
-  --popover:      oklch(0.105 0.024 258);
-  --popover-foreground: oklch(0.925 0.012 255);
-  --surface-2:    oklch(0.135 0.028 255);
-  --nav-bg:       oklch(0.075 0.018 262 / 92%);
+  --background:   oklch(0.060 0.014 264);
+  --foreground:   oklch(0.930 0.012 255);
+  --card:         oklch(0.140 0.024 258);   /* was 0.105 — +3.5% = cards clearly visible */
+  --card-foreground: oklch(0.930 0.012 255);
+  --popover:      oklch(0.140 0.024 258);
+  --popover-foreground: oklch(0.930 0.012 255);
+  --surface-2:    oklch(0.180 0.026 255);   /* was 0.135 — secondary surfaces */
+  --nav-bg:       oklch(0.088 0.018 262 / 95%);
 
   --primary:           oklch(0.49 0.21 290);
   --primary-foreground: oklch(0.985 0 0);
@@ -136,19 +136,19 @@ html.dark {
   --violet-dim:        oklch(0.49 0.21 290 / 14%);
   --gradient-to:       oklch(0.82 0.12 310);
 
-  --secondary:           oklch(0.135 0.028 255);
-  --secondary-foreground: oklch(0.925 0.012 255);
-  --muted:               oklch(0.135 0.028 255);
-  --muted-foreground:    oklch(0.525 0.02 255);
+  --secondary:           oklch(0.180 0.026 255);
+  --secondary-foreground: oklch(0.930 0.012 255);
+  --muted:               oklch(0.180 0.026 255);
+  --muted-foreground:    oklch(0.560 0.020 255);  /* slightly lighter — section labels readable */
 
   --accent:          oklch(0.49 0.21 290);
   --accent-foreground: oklch(0.985 0 0);
 
   --destructive:     oklch(0.64 0.22 22);
 
-  --border:        oklch(1 0 0 / 10%);
-  --border-strong: oklch(1 0 0 / 16%);
-  --input:         oklch(0.08 0.02 260);
+  --border:        oklch(1 0 0 / 14%);   /* was 10% — more visible card edges */
+  --border-strong: oklch(1 0 0 / 22%);
+  --input:         oklch(0.100 0.020 260);
   --ring:          oklch(0.49 0.21 290);
 
   --green:     oklch(0.70 0.16 162);
@@ -160,10 +160,10 @@ html.dark {
   --blue:      oklch(0.62 0.20 264);
   --blue-dim:  oklch(0.62 0.20 264 / 10%);
 
-  --shadow-card:     0 2px 8px oklch(0 0 0 / 40%), 0 0 0 1px oklch(1 0 0 / 7%);
-  --shadow-elevated: 0 8px 40px oklch(0 0 0 / 55%), 0 0 0 1px oklch(1 0 0 / 8%);
-  --shadow-hero:     0 4px 32px oklch(0 0 0 / 50%), 0 0 0 1px oklch(1 0 0 / 8%), 0 0 80px oklch(0.49 0.21 290 / 22%);
-  --shadow-nav:      2px 0 24px oklch(0 0 0 / 40%), 1px 0 0 oklch(1 0 0 / 10%);
+  --shadow-card:     0 2px 8px oklch(0 0 0 / 50%), 0 0 0 1px oklch(1 0 0 / 12%);  /* stronger ring */
+  --shadow-elevated: 0 8px 40px oklch(0 0 0 / 60%), 0 0 0 1px oklch(1 0 0 / 14%);
+  --shadow-hero:     0 4px 32px oklch(0 0 0 / 55%), 0 0 0 1px oklch(1 0 0 / 12%), 0 0 80px oklch(0.49 0.21 290 / 28%);
+  --shadow-nav:      2px 0 24px oklch(0 0 0 / 45%), 1px 0 0 oklch(1 0 0 / 12%);
 
   --chart-1: oklch(0.49 0.21 290);
   --chart-2: oklch(0.70 0.16 162);
@@ -192,8 +192,8 @@ body {
   background-color: var(--background);
   /* Violet bloom: centered top (covers full width incl. sidebar) + left-edge accent */
   background-image:
-    radial-gradient(ellipse 90% 55% at 50% -8%, oklch(0.49 0.21 290 / 14%) 0%, transparent 65%),
-    radial-gradient(ellipse 30% 50% at 0% 35%, oklch(0.49 0.21 290 / 7%) 0%, transparent 55%);
+    radial-gradient(ellipse 90% 50% at 50% -5%, oklch(0.49 0.21 290 / 12%) 0%, transparent 60%),
+    radial-gradient(ellipse 35% 55% at 0% 30%, oklch(0.49 0.21 290 / 6%) 0%, transparent 55%);
   background-repeat: no-repeat;
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;

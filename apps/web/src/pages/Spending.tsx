@@ -144,15 +144,15 @@ export default function Spending() {
   }
 
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="sticky top-0 z-10 px-4 lg:px-8 py-4 backdrop-blur-xl border-b border-border bg-background/85">
+    <div className="min-h-dvh">
+      <div className="sticky top-0 z-10 px-5 lg:px-10 py-4 top-bar border-b border-border">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-[17px] font-bold text-foreground">Spending</h1>
+          <h1 className="text-xl font-bold text-foreground">Spending</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Transactions, trends, and subscriptions</p>
         </div>
       </div>
 
-      <div className="px-4 lg:px-8 pb-[calc(var(--nav-h)+24px)] md:pb-8 pt-4 max-w-3xl mx-auto">
+      <div className="px-5 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-6 max-w-3xl mx-auto">
         <SubNav tabs={SPENDING_TABS} active={tab} onChange={t => setTab(t as Tab)} />
 
         {/* ── TRANSACTIONS TAB ── */}
