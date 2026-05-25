@@ -14,12 +14,11 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v8.0 — Institution logos, credit card chips, investment holdings, Stocks & Bonds Plaid connect** *(2026-05-25)*
+**v8.1 — CSS card art system with per-product gradients and network badges** *(2026-05-25)*
 
-- **Institution logos:** Every account row, settings bank list, and Dashboard priority card now shows a circular logo resolved at runtime from the institution name. Covers 70+ institutions (banks, credit cards, brokerages, auto loans, mortgages). Logo.dev provides high-quality PNGs; `AvatarCircle` with brand-color fill is the fallback. Requires `VITE_LOGO_DEV_TOKEN` in `apps/web/.env.local`.
-- **Credit card chips:** Credit card rows in Accounts and the Dashboard Priority Attack widget render a CSS-only miniature card chip — brand gradient, EMV chip decoration, white-filtered institution logo. No external card art dependencies.
-- **Investments / Stocks & Bonds:** Plaid `Products.Investments` enabled. Holdings synced via `investmentsHoldingsGet` and stored in `investment_holdings` subcollection. Stocks & Bonds section shows two connect CTAs (Plaid or manual). Reconnect banner retitled "Connect with Plaid".
-- **`GET /api/plaid/holdings`** endpoint added.
+- **Card art registry:** `card-designs.ts` contains ~80 entries covering every major US credit card product — Amex (Platinum, Gold, Green, Delta, Hilton, Marriott, Blue Cash), Chase (Sapphire Reserve/Preferred, Freedom family, Ink family, United, Southwest, Hyatt), Citi (Double Cash, Custom Cash, Premier, Prestige), Capital One (Venture X, Venture, Quicksilver, Savor, Spark), BofA, Wells Fargo, Discover, US Bank, PNC, TD, Truist, Navy Federal, USAA, Apple Card, Bilt, Amazon, Target, Costco, PayPal, Walmart, and more. First keyword match wins; returns `null` for unknowns so brand-color fallback still works.
+- **Network badges:** Inline Visa/Mastercard/Amex/Discover logos — Mastercard as two overlapping SVG circles in exact brand colors, others as styled text. Zero CDN dependencies, scales cleanly at any chip size.
+- **Updated chip:** `CreditCardChip` now uses the registry — matched cards get product-specific gradient + shimmer type (`glossy` or `brushed` metal texture) + network badge. Unmatched cards fall back to brand-color chip + logo.dev institution logo (no regression). Apple Card renders with dark decorations on its white titanium surface.
 
 ---
 
@@ -27,6 +26,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v8.1 | 2026-05-25 | CSS card art system: ~80-entry card design registry with per-product gradients; inline network badges (Visa/Mastercard/Amex/Discover); brushed-metal shimmer for premium cards; Apple Card white/titanium with dark decorations; graceful fallback chain for unknown cards |
 | v8.0 | 2026-05-25 | Institution logos via logo.dev (70+ institutions, brand-color fallback); CreditCardChip CSS mini-card on all credit account rows + Dashboard priority card; Plaid Investments product enabled, holdings sync + /api/plaid/holdings endpoint, investment_holdings Firestore subcollection; Stocks & Bonds dual connect CTAs (Plaid + manual); Settings bank list upgraded from initials to InstitutionLogo |
 | v7.0 | 2026-05-25 | Mantine purge complete (Sheet → Radix Dialog, Notifications → Sonner, tooltip stub); fixed critical Tailwind v4 CSS layer bug (unlayered `*{padding:0}` was killing every spacing utility); Dashboard col-1 Net Worth chart upgraded to 3-line (assets + liabilities + net worth), Allocation upgraded to 4-slice donut with legend; both navigate to /accounts on click; /api/dashboard returns assetsByCategory + liabilitiesByCategory; Accounts page redesigned to category-first layout with utilization bars; CLAUDE.md added with architecture and coding rules |
 | v6.3 | 2026-05-25 | TypeScript build error fixes from v6.3 changes |
