@@ -280,11 +280,10 @@ async function recordNetWorthSnapshot(uid, accounts) {
 }
 
 async function getNetWorthHistory(uid, limit = 12) {
-  const snap = await userRef(uid).collection('net_worth_history')
-    .orderBy(admin.firestore.FieldPath.documentId(), 'desc')
-    .limit(limit)
-    .get();
-  return snap.docs.map(d => ({ month: d.id, ...toObj(d) })).reverse();
+  const snap = await userRef(uid).collection('net_worth_history').get();
+  const docs = snap.docs.map(d => ({ month: d.id, ...toObj(d) }));
+  docs.sort((a, b) => a.month.localeCompare(b.month));
+  return docs.slice(-limit);
 }
 
 // --- Admin ---

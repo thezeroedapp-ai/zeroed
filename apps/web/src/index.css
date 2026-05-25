@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* ── Map shadcn tokens → Tailwind color utilities ── */
 @theme inline {
@@ -123,7 +123,6 @@
     #8B3500 100%
   );
 
-  --nav-h: 64px;
 }
 
 /* ── Charcoal theme ── */
@@ -188,7 +187,8 @@ html.dark {
 }
 
 /* ── Reset ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* box-sizing, margin, and padding resets are handled by Tailwind's preflight inside @layer base.
+   An unlayered * { padding: 0 } here would override all @layer utilities, killing every pt-* / pb-* / p-* class. */
 
 /* ── Smooth theme transition (only active during toggle) ── */
 html.theme-transitioning *,
@@ -227,11 +227,6 @@ body {
 /* ── Bottom nav ── */
 .bottom-nav {
   background: var(--nav-bg);
-}
-
-/* ── Top bar ── */
-.top-bar {
-  background: var(--background);
 }
 
 /* ── Spinner ── */
@@ -304,13 +299,11 @@ h1, h2, h3, h4, h5 {
 @media (min-width: 1280px) {
   .widget-grid { grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
 }
-
-/* ── Page content max-width ── */
-.page-content {
-  max-width: 1400px;
-  margin-left: auto;
-  margin-right: auto;
+/* ADD THIS: 4 columns for ultra-wide monitors */
+@media (min-width: 1600px) {
+  .widget-grid { grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px; }
 }
+
 
 /* ── Pills / subtab filter row ── */
 .pills {

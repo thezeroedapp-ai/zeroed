@@ -1,9 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ThemeProvider, useTheme } from './context/ThemeContext';
-import { mantineTheme, cssVariablesResolver } from './theme';
+import { ThemeProvider } from './context/ThemeContext';
+import { Toaster } from './components/ui/sonner';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -13,20 +11,6 @@ import Plan from './pages/Plan';
 import Spending from './pages/Spending';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
-
-function MantineThemeBridge({ children }: { children: React.ReactNode }) {
-  const { theme } = useTheme();
-  return (
-    <MantineProvider
-      theme={mantineTheme}
-      cssVariablesResolver={cssVariablesResolver}
-      forceColorScheme={theme === 'dark' ? 'dark' : 'light'}
-    >
-      <Notifications position="top-right" />
-      {children}
-    </MantineProvider>
-  );
-}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -54,26 +38,24 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <ThemeProvider>
-    <MantineThemeBridge>
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/signup"   element={<PublicRoute><Signup /></PublicRoute>} />
-          <Route path="/"         element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
-          <Route path="/plan"     element={<ProtectedRoute><Plan /></ProtectedRoute>} />
-          <Route path="/spending" element={<ProtectedRoute><Spending /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/admin"    element={<AdminRoute><Admin /></AdminRoute>} />
-          {/* Legacy redirects for deep links that used to be standalone pages */}
-          <Route path="/goals"    element={<Navigate to="/plan?tab=goals" replace />} />
-          <Route path="/budget"   element={<Navigate to="/accounts?tab=budget" replace />} />
-          <Route path="/rewards"  element={<Navigate to="/accounts?tab=rewards" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-    </MantineThemeBridge>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/signup"   element={<PublicRoute><Signup /></PublicRoute>} />
+            <Route path="/"         element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
+            <Route path="/plan"     element={<ProtectedRoute><Plan /></ProtectedRoute>} />
+            <Route path="/spending" element={<ProtectedRoute><Spending /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/admin"    element={<AdminRoute><Admin /></AdminRoute>} />
+            <Route path="/goals"    element={<Navigate to="/plan?tab=goals" replace />} />
+            <Route path="/budget"   element={<Navigate to="/accounts?tab=budget" replace />} />
+            <Route path="/rewards"  element={<Navigate to="/accounts?tab=rewards" replace />} />
+          </Routes>
+          <Toaster />
+        </BrowserRouter>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, CreditCard } from 'lucide-react';
+import { AlertTriangle, Building2, CreditCard, Landmark, LineChart, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
@@ -26,14 +26,22 @@ interface EditState { apr: string; minimum: string; saving: boolean; }
 
 const ASSET_TYPES     = ['depository', 'investment', 'brokerage'];
 const LIABILITY_TYPES = ['credit', 'loan', 'mortgage'];
-const GROUP_ORDER     = ['Credit Cards', 'Cash & Savings', 'Investments', 'Loans', 'Other'];
-function accountGroup(type: string): string {
-  if (type === 'credit')                             return 'Credit Cards';
-  if (type === 'depository')                         return 'Cash & Savings';
-  if (type === 'investment' || type === 'brokerage') return 'Investments';
-  if (type === 'loan' || type === 'mortgage')        return 'Loans';
-  return 'Other';
+
+interface AccountCategory {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  types: string[];
+  isLiability: boolean;
+  accentColor: string;
 }
+
+const ACCOUNT_CATEGORIES: AccountCategory[] = [
+  { key: 'cash',        label: 'Cash & Savings',    icon: <Wallet size={14} />,     types: ['depository'],              isLiability: false, accentColor: 'var(--chart-2)' },
+  { key: 'investments', label: 'Investments',        icon: <LineChart size={14} />,  types: ['investment', 'brokerage'], isLiability: false, accentColor: 'var(--chart-4)' },
+  { key: 'credit',      label: 'Credit Cards',       icon: <CreditCard size={14} />, types: ['credit'],                  isLiability: true,  accentColor: 'var(--chart-3)' },
+  { key: 'loans',       label: 'Loans & Mortgages',  icon: <Landmark size={14} />,   types: ['loan', 'mortgage'],        isLiability: true,  accentColor: 'var(--chart-5)' },
+];
 
 interface Budget { id: string; category: string; monthly_limit: number; spent: number; remaining: number; pct: number; }
 const PRESET_CATEGORIES = ['Food and Drink', 'Groceries', 'Restaurants', 'Travel', 'Shops', 'Recreation', 'Entertainment', 'Healthcare', 'Gas Stations', 'Personal Care', 'Service', 'Bank Fees', 'Other'];
@@ -118,9 +126,6 @@ export default function Accounts() {
   const totalAssets = accounts.filter(a => ASSET_TYPES.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
   const totalDebt   = accounts.filter(a => LIABILITY_TYPES.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
   const netWorth    = totalAssets - totalDebt;
-  const byInstitution = accounts.reduce<Record<string, Account[]>>((acc, a) => {
-    const key = a.institution_name || 'Unknown Bank'; (acc[key] = acc[key] || []).push(a); return acc;
-  }, {});
 
   async function loadBudgets() {
     setBudgetState('loading');
@@ -162,24 +167,33 @@ export default function Accounts() {
   }
 
   return (
-    <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
-        <div className="max-w-3xl mx-auto">
+    <div className="flex flex-col min-h-dvh bg-background text-foreground w-full">
+
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-10 w-full border-b border-border bg-background">
+        <div className="max-w-3xl mx-auto px-6 lg:px-10 py-5">
           <h1 className="text-2xl font-bold text-foreground">Accounts</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Balances, budgets, and rewards</p>
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto w-full px-6 lg:px-10 pt-8 pb-20 md:pb-10">
         <SubNav tabs={ACCOUNT_TABS} active={tab} onChange={t => setTab(t as AccountTab)} />
 
         {/* ── ACCOUNTS TAB ── */}
         {tab === 'accounts' && (
           <>
-            {acctState === 'loading' && <div className="flex flex-col items-center py-16 gap-3"><div className="spinner" /><p className="text-sm text-muted-foreground">Loading accounts…</p></div>}
+            {acctState === 'loading' && (
+              <div className="flex flex-col items-center py-16 gap-3">
+                <div className="spinner" />
+                <p className="text-sm text-muted-foreground">Loading accounts…</p>
+              </div>
+            )}
             {acctState === 'error' && (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
-                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center"><AlertTriangle size={22} className="text-amber" /></div>
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center">
+                  <AlertTriangle size={22} className="text-amber" />
+                </div>
                 <p className="font-semibold">Could not load accounts</p>
                 <p className="text-sm text-muted-foreground">{acctError}</p>
                 <Button onClick={loadAccounts} className="bg-primary hover:bg-primary/90">Try Again</Button>
@@ -188,113 +202,194 @@ export default function Accounts() {
             {acctState === 'content' && (
               accounts.length === 0 ? (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
-                  <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center"><CreditCard size={22} className="text-muted-foreground" /></div>
+                  <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center">
+                    <CreditCard size={22} className="text-muted-foreground" />
+                  </div>
                   <p className="font-semibold">No accounts connected</p>
                   <p className="text-sm text-muted-foreground">Connect your bank in Settings to get started.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Net worth strip */}
-                  <div className="grid grid-cols-3 gap-3 mb-1">
+                <div className="space-y-6">
+
+                  {/* ── Net worth summary strip ── */}
+                  <div className="grid grid-cols-3 gap-3">
                     {[
-                      { label: 'Assets',      value: fmt(totalAssets), color: 'text-foreground', accent: '#10b981' },
-                      { label: 'Liabilities', value: fmt(totalDebt),   color: 'text-red',        accent: '#ef4444' },
-                      { label: 'Net Worth',   value: (netWorth < 0 ? '−' : '') + fmt(Math.abs(netWorth)), color: netWorth >= 0 ? 'text-foreground' : 'text-red', accent: '#7c3aed' },
-                    ].map(({ label, value, color, accent }) => (
-                      <Card key={label} className="bg-card border-border" style={{ borderLeft: `3px solid ${accent}` }}>
+                      { label: 'Assets',      value: fmt(totalAssets), color: 'text-green',      delta: null },
+                      { label: 'Liabilities', value: fmt(totalDebt),   color: 'text-foreground', delta: null },
+                      { label: 'Net Worth',   value: (netWorth < 0 ? '−' : '') + fmt(Math.abs(netWorth)), color: netWorth >= 0 ? 'text-green' : 'text-foreground', delta: netWorth >= 0 },
+                    ].map(({ label, value, color, delta }) => (
+                      <Card key={label} className="bg-card border-border">
                         <CardContent className="p-4">
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
-                          <p className={cn('text-2xl font-extrabold tabular mt-1 leading-tight', color)}>{value}</p>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
+                          <p className={cn('text-xl font-extrabold tabular leading-tight', color)}>{value}</p>
+                          {delta !== null && (
+                            <div className={cn('flex items-center gap-0.5 mt-1', delta ? 'text-green' : 'text-muted-foreground')}>
+                              {delta ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                              <span className="text-[10px] font-medium">{delta ? 'Positive' : 'Negative'}</span>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
                   </div>
 
-                  {/* Accounts by institution */}
-                  {Object.entries(byInstitution).map(([bank, accs]) => {
-                    const sorted = [...accs].sort((a, b) => GROUP_ORDER.indexOf(accountGroup(a.type)) - GROUP_ORDER.indexOf(accountGroup(b.type)));
+                  {/* ── Category sections ── */}
+                  {ACCOUNT_CATEGORIES.map(cat => {
+                    const catAccounts = accounts.filter(a => cat.types.includes(a.type));
+                    if (catAccounts.length === 0) return null;
+                    const catTotal = catAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
+
                     return (
-                      <Card key={bank} className="bg-card border-border">
-                        <CardHeader className="pt-5 pb-4 px-6 border-b border-border">
-                          <div className="flex items-center gap-3">
-                            <AvatarCircle name={bank} size={34} />
-                            <div className="flex-1 min-w-0">
-                              <CardTitle className="text-base font-bold text-foreground">{bank}</CardTitle>
-                              <p className="text-xs text-muted-foreground">{accs.length} account{accs.length !== 1 ? 's' : ''}</p>
+                      <div key={cat.key}>
+                        {/* Section header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: cat.accentColor + '22', color: cat.accentColor }}>
+                              {cat.icon}
                             </div>
+                            <span className="text-sm font-bold text-foreground">{cat.label}</span>
+                            <Badge variant="outline" className="text-[10px] border-border text-muted-foreground px-1.5 py-0">
+                              {catAccounts.length}
+                            </Badge>
                           </div>
-                        </CardHeader>
-                        <CardContent className="px-6 pb-5 space-y-0">
-                          {sorted.map((acc, idx) => {
-                            const isCredit = acc.type === 'credit';
-                            const isAsset  = ASSET_TYPES.includes(acc.type);
-                            const group    = accountGroup(acc.type);
-                            return (
-                              <div key={acc.id} className={cn('py-5 flex items-start gap-3', idx < sorted.length - 1 && 'border-b border-border')}>
-                                <AvatarCircle name={acc.name} size={36} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-foreground truncate">{acc.name}</p>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {acc.subtype ? acc.subtype.charAt(0).toUpperCase() + acc.subtype.slice(1) : group}
-                                  </p>
-                                  {isCredit && (
-                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                      {acc.apr != null
-                                        ? <span className={cn('text-[11px] font-medium px-1.5 py-0.5 rounded-md', acc.apr >= 20 ? 'bg-amber-dim text-amber' : 'bg-surface-2 text-muted-foreground')}>{acc.apr}% APR</span>
-                                        : <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-amber-dim text-amber">APR missing</span>}
-                                      {acc.minimum_payment != null && <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-surface-2 text-muted-foreground">{fmtD(acc.minimum_payment)} min</span>}
-                                      {acc.credit_limit && <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-surface-2 text-muted-foreground">{fmtD(acc.credit_limit)} limit</span>}
-                                      {acc.payment_due_date && (() => {
-                                        const d = new Date(acc.payment_due_date + 'T12:00');
-                                        const daysLeft = Math.ceil((d.getTime() - Date.now()) / 86400000);
-                                        return <span className={cn('text-[11px] px-1.5 py-0.5 rounded-md font-medium', daysLeft <= 7 ? 'bg-red-dim text-red' : 'bg-surface-2 text-muted-foreground')}>Due {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>;
-                                      })()}
-                                    </div>
-                                  )}
-                                  {isAsset && acc.balance_available != null && (
-                                    <p className="text-xs text-muted-foreground mt-1">{fmtD(acc.balance_available)} available</p>
-                                  )}
-                                  {isCredit && (
-                                    editing[acc.id] ? (
-                                      <div className="mt-3 flex flex-wrap gap-2 items-end">
-                                        <div className="flex-1 min-w-[100px] space-y-1">
-                                          <Label className="text-[10px] text-muted-foreground">APR %</Label>
-                                          <Input type="number" step="0.01" placeholder="e.g. 24.99" value={editing[acc.id].apr}
-                                            onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], apr: e.target.value } }))}
-                                            className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
-                                        </div>
-                                        <div className="flex-1 min-w-[100px] space-y-1">
-                                          <Label className="text-[10px] text-muted-foreground">Min Payment $</Label>
-                                          <Input type="number" step="0.01" placeholder="e.g. 35.00" value={editing[acc.id].minimum}
-                                            onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], minimum: e.target.value } }))}
-                                            className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
-                                        </div>
-                                        <div className="flex gap-2">
-                                          <Button size="sm" onClick={() => saveEdit(acc.id)} disabled={editing[acc.id].saving} className="h-8 bg-primary hover:bg-primary/90">
-                                            {editing[acc.id].saving ? '…' : 'Save'}
-                                          </Button>
-                                          <Button size="sm" variant="outline" onClick={() => cancelEdit(acc.id)} className="h-8 border-border text-muted-foreground">Cancel</Button>
-                                        </div>
+                          <span className="text-sm font-bold tabular text-foreground">{fmt(catTotal)}</span>
+                        </div>
+
+                        <Card className="bg-card border-border">
+                          <CardContent className="px-6 pb-2 pt-0 space-y-0">
+                            {catAccounts.map((acc, idx) => {
+                              const isCredit = acc.type === 'credit';
+                              const isAsset  = ASSET_TYPES.includes(acc.type);
+                              const utilPct  = isCredit && acc.credit_limit && acc.credit_limit > 0
+                                ? Math.min(100, Math.round((acc.balance_current / acc.credit_limit) * 100))
+                                : null;
+
+                              return (
+                                <div key={acc.id} className={cn('py-4 flex items-start gap-3', idx < catAccounts.length - 1 && 'border-b border-border')}>
+                                  {/* Institution avatar */}
+                                  <div className="shrink-0 mt-0.5">
+                                    <AvatarCircle name={acc.institution_name || acc.name} size={34} />
+                                  </div>
+
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-foreground truncate">{acc.name}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                          {acc.institution_name || '—'}
+                                          {acc.subtype && <span className="ml-1.5 capitalize">{acc.subtype}</span>}
+                                        </p>
                                       </div>
-                                    ) : (
-                                      <button onClick={() => startEdit(acc)} className="mt-2 text-[11px] text-muted-foreground hover:text-violet-light transition-colors font-medium">
-                                        Edit APR / Min →
-                                      </button>
-                                    )
-                                  )}
+                                      <div className="text-right shrink-0">
+                                        <p className="text-base font-bold tabular text-foreground">
+                                          {fmtD(acc.balance_current)}
+                                        </p>
+                                        {isAsset && acc.balance_available != null && (
+                                          <p className="text-[11px] text-muted-foreground mt-0.5">{fmtD(acc.balance_available)} avail.</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Credit card details */}
+                                    {isCredit && (
+                                      <>
+                                        {utilPct !== null && (
+                                          <div className="mt-2">
+                                            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                                              <span>{utilPct}% utilized</span>
+                                              {acc.credit_limit && <span>{fmtD(acc.credit_limit)} limit</span>}
+                                            </div>
+                                            <Progress
+                                              value={utilPct}
+                                              className={cn('h-1', utilPct >= 90 ? '[&>div]:bg-red' : utilPct >= 70 ? '[&>div]:bg-amber' : '[&>div]:bg-chart-2')}
+                                            />
+                                          </div>
+                                        )}
+                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                          {acc.apr != null
+                                            ? <span className={cn('text-[11px] font-medium px-1.5 py-0.5 rounded-md', acc.apr >= 20 ? 'bg-amber-dim text-amber' : 'bg-surface-2 text-muted-foreground')}>{acc.apr}% APR</span>
+                                            : <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-amber-dim text-amber">APR missing</span>
+                                          }
+                                          {acc.minimum_payment != null && (
+                                            <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-surface-2 text-muted-foreground">{fmtD(acc.minimum_payment)} min</span>
+                                          )}
+                                          {acc.payment_due_date && (() => {
+                                            const d = new Date(acc.payment_due_date + 'T12:00');
+                                            const daysLeft = Math.ceil((d.getTime() - Date.now()) / 86400000);
+                                            return (
+                                              <span className={cn('text-[11px] px-1.5 py-0.5 rounded-md font-medium', daysLeft <= 7 ? 'bg-red-dim text-red' : 'bg-surface-2 text-muted-foreground')}>
+                                                Due {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                {daysLeft <= 7 && ` · ${daysLeft}d`}
+                                              </span>
+                                            );
+                                          })()}
+                                        </div>
+                                        {editing[acc.id] ? (
+                                          <div className="mt-3 flex flex-wrap gap-2 items-end">
+                                            <div className="flex-1 min-w-[100px] space-y-1">
+                                              <Label className="text-[10px] text-muted-foreground">APR %</Label>
+                                              <Input type="number" step="0.01" placeholder="e.g. 24.99" value={editing[acc.id].apr}
+                                                onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], apr: e.target.value } }))}
+                                                className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+                                            </div>
+                                            <div className="flex-1 min-w-[100px] space-y-1">
+                                              <Label className="text-[10px] text-muted-foreground">Min Payment $</Label>
+                                              <Input type="number" step="0.01" placeholder="e.g. 35.00" value={editing[acc.id].minimum}
+                                                onChange={e => setEditing(p => ({ ...p, [acc.id]: { ...p[acc.id], minimum: e.target.value } }))}
+                                                className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
+                                            </div>
+                                            <div className="flex gap-2">
+                                              <Button size="sm" onClick={() => saveEdit(acc.id)} disabled={editing[acc.id].saving} className="h-8 bg-primary hover:bg-primary/90">
+                                                {editing[acc.id].saving ? '…' : 'Save'}
+                                              </Button>
+                                              <Button size="sm" variant="outline" onClick={() => cancelEdit(acc.id)} className="h-8 border-border text-muted-foreground">Cancel</Button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <button onClick={() => startEdit(acc)} className="mt-2 text-[11px] text-muted-foreground hover:text-violet-light transition-colors font-medium">
+                                            Edit APR / Min →
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="text-right shrink-0">
-                                  <p className={cn('text-base font-bold tabular', isCredit ? 'text-red' : 'text-foreground')}>
-                                    {fmtD(acc.balance_current)}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </CardContent>
-                      </Card>
+                              );
+                            })}
+                          </CardContent>
+                        </Card>
+                      </div>
                     );
                   })}
+
+                  {/* Institution summary — collapsed view at bottom */}
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">By Institution</p>
+                    <div className="space-y-2">
+                      {Object.entries(
+                        accounts.reduce<Record<string, Account[]>>((acc, a) => {
+                          const key = a.institution_name || 'Unknown Bank';
+                          (acc[key] = acc[key] || []).push(a);
+                          return acc;
+                        }, {})
+                      ).map(([bank, accs]) => (
+                        <div key={bank} className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-surface-2 border border-border">
+                          <AvatarCircle name={bank} size={30} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{bank}</p>
+                            <p className="text-xs text-muted-foreground">{accs.length} account{accs.length !== 1 ? 's' : ''}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {Array.from(new Set(accs.map(a => a.type))).map(t => (
+                              <div key={t} className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                            ))}
+                          </div>
+                          <Building2 size={13} className="text-muted-foreground shrink-0" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
               )
             )}

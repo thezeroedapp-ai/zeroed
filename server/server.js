@@ -68,6 +68,8 @@ app.get('/api/dashboard', async (req, res) => {
     const totalLoanDebt    = loanAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const totalLiabilities = totalDebt + totalLoanDebt;
     const totalAssets      = assetAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
+    const cashAssets       = allAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + (a.balance_current || 0), 0);
+    const investAssets     = allAccounts.filter(a => ['investment', 'brokerage'].includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
     const netWorth         = totalAssets - totalLiabilities;
 
     const monthlyInterest = creditAccounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
@@ -106,6 +108,14 @@ app.get('/api/dashboard', async (req, res) => {
       priorityCard,
       alerts:           payoffEngine.checkAlerts(creditAccounts),
       accountCount:     creditAccounts.length,
+      assetsByCategory: {
+        cash:        Math.round(cashAssets    * 100) / 100,
+        investments: Math.round(investAssets  * 100) / 100,
+      },
+      liabilitiesByCategory: {
+        creditCards: Math.round(totalDebt     * 100) / 100,
+        loans:       Math.round(totalLoanDebt * 100) / 100,
+      },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -137,6 +147,7 @@ app.get('/api/net-worth-history', async (req, res) => {
     const history = await db.getNetWorthHistory(req.user.uid);
     res.json({ history });
   } catch (err) {
+    console.error('[net-worth-history]', err);
     res.status(500).json({ error: err.message });
   }
 });

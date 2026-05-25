@@ -1,5 +1,4 @@
 import React from 'react';
-import { Tooltip as MantineTooltip } from '@mantine/core';
 import { cn } from '@/lib/utils';
 
 export function TooltipProvider({ children }: { children: React.ReactNode }) {
@@ -18,5 +17,3 @@ export function TooltipTrigger({ children, asChild, className, ...props }: React
 export function TooltipContent(_props: React.ComponentProps<'div'>) {
   return null;
 }
-
-export { MantineTooltip as MantineTooltipPrimitive };
