@@ -16,7 +16,7 @@ async function createLinkToken(uid) {
   const response = await client.linkTokenCreate({
     user: { client_user_id: uid },
     client_name:   'Zeroed',
-    products:      [Products.Transactions, Products.Liabilities],
+    products:      [Products.Transactions, Products.Liabilities, Products.Investments],
     country_codes: [CountryCode.Us],
     language:      'en',
   });
@@ -74,6 +74,23 @@ async function createUpdateLinkToken(uid, accessToken) {
 
 async function removeItem(accessToken) {
   await client.itemRemove({ access_token: accessToken });
+}
+
+async function getInvestmentHoldings(accessToken) {
+  try {
+    const response = await client.investmentsHoldingsGet({ access_token: accessToken });
+    return {
+      holdings:   response.data.holdings   || [],
+      securities: response.data.securities || [],
+    };
+  } catch (err) {
+    // Item was connected before Investments product was added — silently skip
+    const code = err.response?.data?.error_code;
+    if (['PRODUCTS_NOT_SUPPORTED', 'NO_INVESTMENT_ACCOUNTS', 'ITEM_NOT_FOUND'].includes(code)) {
+      return { holdings: [], securities: [] };
+    }
+    throw err;
+  }
 }
 
 // Cursor-based incremental sync — replaces old transactionsGet
@@ -139,6 +156,13 @@ async function syncAllAccounts(uid) {
       if (removedIds.length) await db.deleteTransactions(uid, removedIds);
       results.removed += removedIds.length;
 
+      // Sync holdings for investment/brokerage accounts
+      const hasInvestments = accounts.some(a => ['investment', 'brokerage'].includes(a.type));
+      if (hasInvestments) {
+        const { holdings, securities } = await getInvestmentHoldings(item.access_token);
+        if (holdings.length) await db.saveHoldings(uid, holdings, securities);
+      }
+
       await db.upsertPlaidItem(uid, item.id, {
         transactions_cursor: nextCursor,
         error_status:        null,
@@ -165,4 +189,4 @@ async function syncAllAccounts(uid) {
   return results;
 }
 
-module.exports = { createLinkToken, createUpdateLinkToken, removeItem, exchangePublicToken, getAccounts, syncAllAccounts };
+module.exports = { createLinkToken, createUpdateLinkToken, removeItem, exchangePublicToken, getAccounts, getInvestmentHoldings, syncAllAccounts };

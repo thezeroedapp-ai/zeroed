@@ -15,6 +15,7 @@ const insightsRoutes     = require('./routes/insights');
 const rewardsRoutes      = require('./routes/rewards');
 const budgetsRoutes      = require('./routes/budgets');
 const adminRoutes        = require('./routes/admin');
+const manualAssetsRoutes = require('./routes/manual-assets');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/insights',      insightsRoutes);
 app.use('/api/rewards',       rewardsRoutes);
 app.use('/api/budgets',       budgetsRoutes);
 app.use('/api/admin',         adminRoutes);
+app.use('/api/manual-assets', manualAssetsRoutes);
 
 app.get('/api/user', async (req, res) => {
   try {
@@ -56,10 +58,14 @@ app.get('/api/dashboard', async (req, res) => {
     const uid  = req.user.uid;
     const user = req.user;
 
-    const allAccounts    = await db.getAccountsByUser(uid);
+    const [allAccounts, manualAssets] = await Promise.all([
+      db.getAccountsByUser(uid),
+      db.getManualAssets(uid).catch(() => []),
+    ]);
     const creditAccounts = allAccounts.filter(a => a.type === 'credit');
     const assetAccounts  = allAccounts.filter(a => ['depository', 'investment', 'brokerage'].includes(a.type));
     const loanAccounts   = allAccounts.filter(a => ['loan', 'mortgage'].includes(a.type));
+    const manualAssetsTotal = manualAssets.reduce((s, a) => s + (a.current_value || 0), 0);
 
     const sinkingFunds = await db.getSinkingFunds(uid);
     const sinkingTotal = sinkingFunds.reduce((s, f) => s + (f.monthly_amount || 0), 0);
@@ -67,9 +73,14 @@ app.get('/api/dashboard', async (req, res) => {
     const totalDebt        = creditAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const totalLoanDebt    = loanAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
     const totalLiabilities = totalDebt + totalLoanDebt;
-    const totalAssets      = assetAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
+    const plaidAssets      = assetAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
+    const totalAssets      = plaidAssets + manualAssetsTotal;
     const cashAssets       = allAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + (a.balance_current || 0), 0);
     const investAssets     = allAccounts.filter(a => ['investment', 'brokerage'].includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
+    const manualStocksBonds = manualAssets.filter(a => a.asset_type === 'stocks_bonds').reduce((s, a) => s + (a.current_value || 0), 0);
+    const manualRealEstate  = manualAssets.filter(a => a.asset_type === 'real_estate').reduce((s, a) => s + (a.current_value || 0), 0);
+    const manualVehicles    = manualAssets.filter(a => a.asset_type === 'vehicle').reduce((s, a) => s + (a.current_value || 0), 0);
+    const manualOther       = manualAssets.filter(a => a.asset_type === 'other').reduce((s, a) => s + (a.current_value || 0), 0);
     const netWorth         = totalAssets - totalLiabilities;
 
     const monthlyInterest = creditAccounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
@@ -109,8 +120,12 @@ app.get('/api/dashboard', async (req, res) => {
       alerts:           payoffEngine.checkAlerts(creditAccounts),
       accountCount:     creditAccounts.length,
       assetsByCategory: {
-        cash:        Math.round(cashAssets    * 100) / 100,
-        investments: Math.round(investAssets  * 100) / 100,
+        cash:         Math.round(cashAssets       * 100) / 100,
+        investments:  Math.round(investAssets     * 100) / 100,
+        stocksBonds:  Math.round(manualStocksBonds * 100) / 100,
+        realEstate:   Math.round(manualRealEstate  * 100) / 100,
+        vehicles:     Math.round(manualVehicles    * 100) / 100,
+        other:        Math.round(manualOther       * 100) / 100,
       },
       liabilitiesByCategory: {
         creditCards: Math.round(totalDebt     * 100) / 100,

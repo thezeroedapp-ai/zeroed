@@ -126,6 +126,15 @@ router.delete('/items/:itemId', async (req, res) => {
   }
 });
 
+router.get('/holdings', async (req, res) => {
+  try {
+    const holdings = await db.getHoldings(req.user.uid);
+    res.json({ holdings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.put('/accounts/:id/credit-details', async (req, res) => {
   try {
     const uid       = req.user.uid;

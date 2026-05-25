@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/chart';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
+import CreditCardChip from '@/components/ui/credit-card-chip';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ interface DashboardData {
   debtFreeDate?: string;
   debtFreeMonths?: number;
   alerts?: { severity: string; title: string; description: string }[];
-  priorityCard?: { name: string; balance_current: number; apr: number; minimum_payment: number; payment_due_date?: string };
+  priorityCard?: { name: string; institution_name?: string; balance_current: number; apr: number; minimum_payment: number; payment_due_date?: string };
   assetsByCategory?: { cash: number; investments: number };
   liabilitiesByCategory?: { creditCards: number; loans: number };
 }
@@ -672,7 +673,14 @@ export default function Dashboard() {
                   <CardContent className="p-6">
                     {data.priorityCard ? (
                       <>
-                        <div className="text-sm font-bold text-foreground mb-1">{data.priorityCard.name}</div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <CreditCardChip
+                            cardName={data.priorityCard.name}
+                            institutionName={data.priorityCard.institution_name}
+                            size={36}
+                          />
+                          <div className="text-sm font-bold text-foreground leading-tight">{data.priorityCard.name}</div>
+                        </div>
                         <div className="text-3xl font-black tracking-tight tabular-nums text-foreground leading-none">
                           {fmtD(data.priorityCard.balance_current)}
                         </div>

@@ -10,7 +10,7 @@ import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmtD } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import AvatarCircle from '@/components/ui/avatar-circle';
+import InstitutionLogo from '@/components/ui/institution-logo';
 
 const SINKING_CATEGORIES = ['car', 'home', 'medical', 'travel', 'education', 'holiday', 'tax', 'other'];
 
@@ -289,7 +289,7 @@ export default function Settings() {
                     )}
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <AvatarCircle name={item.institution_name} size={36} />
+                        <InstitutionLogo name={item.institution_name} size={36} />
                         <div>
                           <p className="text-sm font-semibold text-foreground">{item.institution_name}</p>
                           {item.last_synced && (

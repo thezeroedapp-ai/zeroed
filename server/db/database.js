@@ -286,6 +286,67 @@ async function getNetWorthHistory(uid, limit = 12) {
   return docs.slice(-limit);
 }
 
+// --- Manual Assets ---
+
+async function getManualAssets(uid) {
+  const snap = await userRef(uid).collection('manual_assets').orderBy('created_at', 'desc').get();
+  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+}
+
+async function addManualAsset(uid, data) {
+  const ref = userRef(uid).collection('manual_assets').doc();
+  await ref.set({ ...data, created_at: FieldValue.serverTimestamp(), updated_at: FieldValue.serverTimestamp() });
+  return ref.id;
+}
+
+async function updateManualAsset(uid, id, data) {
+  await userRef(uid).collection('manual_assets').doc(id).update({ ...data, updated_at: FieldValue.serverTimestamp() });
+}
+
+async function deleteManualAsset(uid, id) {
+  await userRef(uid).collection('manual_assets').doc(id).delete();
+}
+
+// --- Investment Holdings ---
+
+async function saveHoldings(uid, holdings, securities) {
+  const secMap = {};
+  for (const s of securities) secMap[s.security_id] = s;
+
+  const docs = holdings.map(h => {
+    const sec = secMap[h.security_id] || {};
+    return {
+      id:                 `${h.account_id}_${h.security_id}`,
+      account_id:         h.account_id,
+      security_id:        h.security_id,
+      name:               sec.name               || 'Unknown',
+      ticker_symbol:      sec.ticker_symbol       || null,
+      security_type:      sec.type               || 'equity',
+      quantity:           h.quantity             ?? 0,
+      institution_value:  h.institution_value    ?? 0,
+      cost_basis:         h.cost_basis           ?? null,
+      close_price:        sec.close_price ?? h.institution_price ?? null,
+      iso_currency_code:  sec.iso_currency_code  || 'USD',
+      updated_at:         FieldValue.serverTimestamp(),
+    };
+  });
+
+  for (let i = 0; i < docs.length; i += 500) {
+    const batch = firestore.batch();
+    docs.slice(i, i + 500).forEach(d => {
+      const ref = userRef(uid).collection('investment_holdings').doc(d.id);
+      const { id, ...data } = d;
+      batch.set(ref, data, { merge: true });
+    });
+    await batch.commit();
+  }
+}
+
+async function getHoldings(uid) {
+  const snap = await userRef(uid).collection('investment_holdings').orderBy('institution_value', 'desc').get();
+  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+}
+
 // --- Admin ---
 
 async function getAllUsers() {
@@ -320,4 +381,6 @@ module.exports = {
   getBudgets, upsertBudget, deleteBudget,
   recordNetWorthSnapshot, getNetWorthHistory,
   getDashboardConfig, saveDashboardConfig,
+  getManualAssets, addManualAsset, updateManualAsset, deleteManualAsset,
+  saveHoldings, getHoldings,
 };

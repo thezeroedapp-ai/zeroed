@@ -14,12 +14,12 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v7.0 — Mantine purge, CSS layer fix, Dashboard column 1 chart upgrade, Accounts redesign** *(2026-05-25)*
+**v8.0 — Institution logos, credit card chips, investment holdings, Stocks & Bonds Plaid connect** *(2026-05-25)*
 
-- **CSS engine:** Tailwind v4 is the sole CSS engine. Mantine fully removed. The unlayered `* { padding: 0 }` reset that was silently overriding all Tailwind utilities has been deleted — all `pt-*`, `pb-*`, `p-*`, `gap-*` classes now work correctly.
-- **Dashboard col 1:** Net Worth card shows a 3-line chart (net worth + assets + liabilities). Allocation card upgraded to a 4-slice donut (Cash & Savings, Investments, Credit Cards, Loans) with per-slice legend. Both cards navigate to Accounts on click.
-- **Accounts page:** Redesigned from institution-grouped to category-first layout — four sections (Cash & Savings, Investments, Credit Cards, Loans & Mortgages) each with a colored icon header. Credit cards show utilization progress bars. Institution summary kept as a compact strip at the bottom.
-- **Server:** `/api/dashboard` now returns `assetsByCategory` and `liabilitiesByCategory` for granular chart data.
+- **Institution logos:** Every account row, settings bank list, and Dashboard priority card now shows a circular logo resolved at runtime from the institution name. Covers 70+ institutions (banks, credit cards, brokerages, auto loans, mortgages). Logo.dev provides high-quality PNGs; `AvatarCircle` with brand-color fill is the fallback. Requires `VITE_LOGO_DEV_TOKEN` in `apps/web/.env.local`.
+- **Credit card chips:** Credit card rows in Accounts and the Dashboard Priority Attack widget render a CSS-only miniature card chip — brand gradient, EMV chip decoration, white-filtered institution logo. No external card art dependencies.
+- **Investments / Stocks & Bonds:** Plaid `Products.Investments` enabled. Holdings synced via `investmentsHoldingsGet` and stored in `investment_holdings` subcollection. Stocks & Bonds section shows two connect CTAs (Plaid or manual). Reconnect banner retitled "Connect with Plaid".
+- **`GET /api/plaid/holdings`** endpoint added.
 
 ---
 
@@ -27,6 +27,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v8.0 | 2026-05-25 | Institution logos via logo.dev (70+ institutions, brand-color fallback); CreditCardChip CSS mini-card on all credit account rows + Dashboard priority card; Plaid Investments product enabled, holdings sync + /api/plaid/holdings endpoint, investment_holdings Firestore subcollection; Stocks & Bonds dual connect CTAs (Plaid + manual); Settings bank list upgraded from initials to InstitutionLogo |
 | v7.0 | 2026-05-25 | Mantine purge complete (Sheet → Radix Dialog, Notifications → Sonner, tooltip stub); fixed critical Tailwind v4 CSS layer bug (unlayered `*{padding:0}` was killing every spacing utility); Dashboard col-1 Net Worth chart upgraded to 3-line (assets + liabilities + net worth), Allocation upgraded to 4-slice donut with legend; both navigate to /accounts on click; /api/dashboard returns assetsByCategory + liabilitiesByCategory; Accounts page redesigned to category-first layout with utilization bars; CLAUDE.md added with architecture and coding rules |
 | v6.3 | 2026-05-25 | TypeScript build error fixes from v6.3 changes |
 | v6.2 | 2026-05-24 | Bug fixes + code quality + glass removal: shared `AvatarCircle` component; fixed `Content-Type` on GET requests; fixed hardcoded white chart colors in light mode; NaN guard on edit form; replaced all `alert()`/`confirm()` with inline confirmation; renamed `insightPayload`; fixed Spending URL-based tabs; removed all glass morphism, backdrop-filter, body gradient, shadow variable system |
@@ -139,6 +140,15 @@ PORT=3000
 
 `apps/web/.env.local` (Firebase client config) is committed to git — no manual setup needed. Firebase client config is not secret.
 
+Add a `VITE_LOGO_DEV_TOKEN` to `apps/web/.env.local` for institution logos:
+
+```
+# Logo.dev publishable key — safe to expose in frontend. Get from logo.dev dashboard.
+VITE_LOGO_DEV_TOKEN=pk_...
+```
+
+Without this token, all institution logos fall back to colored initial avatars — the app still works.
+
 ### 3. Start local development
 
 ```bash
@@ -199,7 +209,8 @@ zeroed/
 │   │   ├── App.tsx                 # Routes + providers (ThemeProvider, AuthProvider, Toaster)
 │   │   ├── lib/
 │   │   │   ├── firebase.ts         # Firebase client SDK init (Auth only)
-│   │   │   └── api.ts              # apiFetch — attaches Firebase ID token to every request
+│   │   │   ├── api.ts              # apiFetch — attaches Firebase ID token to every request
+│   │   │   └── institution-logos.ts # Runtime keyword→domain+brandColor map for 70+ institutions
 │   │   ├── context/
 │   │   │   ├── AuthContext.tsx     # onAuthStateChanged, user profile, signOut
 │   │   │   └── ThemeContext.tsx    # Dark/light toggle — localStorage, html.dark class
@@ -208,7 +219,7 @@ zeroed/
 │   │   │   ├── SideNav.tsx         # Desktop sidebar (5 tabs + theme toggle)
 │   │   │   ├── BottomNav.tsx       # Mobile bottom nav (5 tabs)
 │   │   │   ├── SubNav.tsx          # Reusable horizontal subtab bar
-│   │   │   └── ui/                 # shadcn/ui primitives (Card, Button, Badge, Sheet, etc.)
+│   │   │   └── ui/                 # shadcn/ui primitives + institution-logo.tsx, credit-card-chip.tsx, avatar-circle.tsx
 │   │   └── pages/
 │   │       ├── Dashboard.tsx       # Home — 3-column grid, net worth, allocation, payoff, cash flow, AI
 │   │       ├── Plan.tsx            # Strategy / Goals / AI Insights subtabs
@@ -218,6 +229,7 @@ zeroed/
 │   │       ├── Admin.tsx           # Admin-only user management
 │   │       ├── Login.tsx           # Email/password + Google sign-in
 │   │       └── Signup.tsx          # Registration
+│   ├── .env.local                  # VITE_LOGO_DEV_TOKEN + Firebase client config (gitignored for token)
 │   ├── index.html                  # Inline script prevents theme flash on load
 │   ├── vite.config.ts              # Tailwind v4 vite plugin, /api proxy to :3000
 │   └── tsconfig.app.json           # Strict TypeScript config
@@ -251,6 +263,7 @@ All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`.
 | DELETE | `/api/plaid/items/:itemId` | Disconnect bank — revokes Plaid token, deletes data |
 | PUT | `/api/plaid/accounts/:id/credit-details` | Set APR, min payment, due date |
 | DELETE | `/api/plaid/accounts/:id` | Remove single account |
+| GET | `/api/plaid/holdings` | Investment holdings with security metadata |
 | POST | `/api/plan/generate` | Run payoff engine + Claude insight, persist plan |
 | GET | `/api/plan/latest` | Last saved plan |
 | GET | `/api/plan/alerts` | Promo APR expiry + high utilization alerts |
@@ -295,6 +308,7 @@ All user data lives under `users/{uid}/`:
 | `payoff_plans` | auto | strategy, surplus, items (embedded array) |
 | `dashboard_config` | `default` | widgets (ordered string array) |
 | `net_worth_history` | `YYYY-MM` | total_assets, total_liabilities, net_worth, recorded_at |
+| `investment_holdings` | `{account_id}_{security_id}` | account_id, security_id, quantity, institution_value, name, ticker_symbol, type, institution_name |
 
 ---
 
@@ -353,12 +367,15 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 - [x] Mantine fully removed — Tailwind is sole CSS engine
 - [x] Dashboard col-1 charts: 3-line net worth, 4-slice allocation donut
 - [x] Accounts page: category-first layout (Cash/Investments/Credit/Loans)
+- [x] Institution logos — runtime keyword match, logo.dev delivery, brand-color fallback
+- [x] Credit card chip art on all credit rows and Dashboard priority card
+- [x] Investment holdings sync (Plaid Investments product, `investment_holdings` subcollection)
+- [x] Stocks & Bonds dual connect CTAs (Plaid + manual)
 
 ### Phase 2 — Feature Parity 📋
 - [ ] Credit score monitoring (Experian or Spinwheel VantageScore)
 - [ ] Manual account entry (no Plaid required — medical debt, personal loans)
 - [ ] Cash flow forecasting (3–6 month projection)
-- [ ] Investment tracking display (accounts already pulled, nothing shown yet)
 - [ ] Budget AI recommendations (Claude analyzes 3-month history, suggests limits)
 
 ### Phase 3 — Differentiation 📋

@@ -113,6 +113,19 @@ Read this file in full before writing any code. It defines the tech stack, file 
 
 ---
 
+### Institution Logos (`apps/web/src/lib/institution-logos.ts`)
+
+**What it does:** Pure runtime mapping from institution name → `{domain, brandColor}`. `getInstitutionDomain(name)` and `getInstitutionBrandColor(name)` do lowercase substring matching against 70+ institutions. `logoUrl(domain)` builds a logo.dev URL using `import.meta.env.VITE_LOGO_DEV_TOKEN`; returns `null` when the token is absent (safe — callers fall back to `AvatarCircle`).
+
+**Touch when:** Adding a new institution that isn't resolving, or fixing an incorrect brand color.
+
+**Rules:**
+- All keywords in `INSTITUTION_MAP` must be lowercase — the matching code lowercases the input but not the keywords
+- Add `VITE_LOGO_DEV_TOKEN=pk_...` to `apps/web/.env.local` (publishable key, safe for frontend, never commit the secret key)
+- Never call `logoUrl` with a null domain; always guard: `const url = domain ? logoUrl(domain) : null`
+
+---
+
 ### Layout & Nav (`apps/web/src/components/`)
 
 | File | What it does |
@@ -161,7 +174,9 @@ These are local copies — not node_modules. You can edit them.
 | `chart.tsx` | Active | ChartContainer + ChartTooltip + ChartTooltipContent |
 | `sonner.tsx` | Active | Uses project ThemeContext, not next-themes |
 | `tooltip.tsx` | Stub | `TooltipContent` returns null — non-functional but won't break builds |
-| `avatar-circle.tsx` | Active | Colored initial avatar, used in Accounts, Spending, Settings |
+| `avatar-circle.tsx` | Active | Colored initial avatar — fallback when logo unavailable |
+| `institution-logo.tsx` | Active | Circular logo via logo.dev; falls back to `AvatarCircle` with brand color. Used in Accounts, Settings, anywhere an institution name is displayed. |
+| `credit-card-chip.tsx` | Active | CSS-only mini credit card (1.586:1 ratio) — brand gradient, decorative EMV chip, white-filtered logo.dev icon. Used on all credit account rows and Dashboard priority card. |
 
 ---
 
