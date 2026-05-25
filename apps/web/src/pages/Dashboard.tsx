@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/chart';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
+import InstitutionLogo from '@/components/ui/institution-logo';
+import { getInstitutionBrandColor } from '@/lib/institution-logos';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -661,6 +663,43 @@ export default function Dashboard() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Priority Attack */}
+                <Card className="bg-card border-[var(--primary)]/30 shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
+                  <CardHeader className="pb-0 pt-6 px-6">
+                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Zap size={14} className="text-violet-light shrink-0" />Priority Attack
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {data.priorityCard ? (
+                      <>
+                        <div className="relative pl-3 flex items-center gap-3 mb-3">
+                          <div
+                            className="absolute left-0 inset-y-0 w-[3px] rounded-full"
+                            style={{ background: getInstitutionBrandColor(data.priorityCard.institution_name || data.priorityCard.name) ?? 'var(--violet-light)' }}
+                          />
+                          <InstitutionLogo name={data.priorityCard.institution_name || data.priorityCard.name} size={32} />
+                          <div className="text-sm font-bold text-foreground leading-tight">{data.priorityCard.name}</div>
+                        </div>
+                        <div className="text-3xl font-black tracking-tight tabular-nums text-foreground leading-none">
+                          {fmtD(data.priorityCard.balance_current)}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">
+                            {data.priorityCard.apr}% APR
+                          </Badge>
+                          {data.priorityCard.payment_due_date && (
+                            <span>Due {new Date(data.priorityCard.payment_due_date + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-violet-light mt-3 leading-relaxed">Extra dollars here save the most interest.</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No debt cards found.</p>
+                    )}
+                  </CardContent>
+                </Card>
 
                 {/* Monthly Interest */}
                 <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
