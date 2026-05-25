@@ -14,11 +14,11 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
-**v8.1 — CSS card art system with per-product gradients and network badges** *(2026-05-25)*
+**v8.2 — Removed card chip system; credit rows use institution logo + brand accent** *(2026-05-25)*
 
-- **Card art registry:** `card-designs.ts` contains ~80 entries covering every major US credit card product — Amex (Platinum, Gold, Green, Delta, Hilton, Marriott, Blue Cash), Chase (Sapphire Reserve/Preferred, Freedom family, Ink family, United, Southwest, Hyatt), Citi (Double Cash, Custom Cash, Premier, Prestige), Capital One (Venture X, Venture, Quicksilver, Savor, Spark), BofA, Wells Fargo, Discover, US Bank, PNC, TD, Truist, Navy Federal, USAA, Apple Card, Bilt, Amazon, Target, Costco, PayPal, Walmart, and more. First keyword match wins; returns `null` for unknowns so brand-color fallback still works.
-- **Network badges:** Inline Visa/Mastercard/Amex/Discover logos — Mastercard as two overlapping SVG circles in exact brand colors, others as styled text. Zero CDN dependencies, scales cleanly at any chip size.
-- **Updated chip:** `CreditCardChip` now uses the registry — matched cards get product-specific gradient + shimmer type (`glossy` or `brushed` metal texture) + network badge. Unmatched cards fall back to brand-color chip + logo.dev institution logo (no regression). Apple Card renders with dark decorations on its white titanium surface.
+- **Removed:** `credit-card-chip.tsx`, `card-network-badge.tsx`, `card-designs.ts` — CSS card art system removed pending a better implementation
+- **Removed:** Priority Attack widget from Dashboard — will be redesigned in a future pass
+- **Credit card rows** (Accounts page) now show the circular `InstitutionLogo` + a 3px brand-color left-border accent — same legible pattern at any screen size
 
 ---
 
@@ -26,6 +26,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v8.2 | 2026-05-25 | Removed card chip system (credit-card-chip, card-network-badge, card-designs); removed Priority Attack Dashboard widget; credit rows use InstitutionLogo + 3px brand-color accent |
 | v8.1 | 2026-05-25 | CSS card art system: ~80-entry card design registry with per-product gradients; inline network badges (Visa/Mastercard/Amex/Discover); brushed-metal shimmer for premium cards; Apple Card white/titanium with dark decorations; graceful fallback chain for unknown cards |
 | v8.0 | 2026-05-25 | Institution logos via logo.dev (70+ institutions, brand-color fallback); CreditCardChip CSS mini-card on all credit account rows + Dashboard priority card; Plaid Investments product enabled, holdings sync + /api/plaid/holdings endpoint, investment_holdings Firestore subcollection; Stocks & Bonds dual connect CTAs (Plaid + manual); Settings bank list upgraded from initials to InstitutionLogo |
 | v7.0 | 2026-05-25 | Mantine purge complete (Sheet → Radix Dialog, Notifications → Sonner, tooltip stub); fixed critical Tailwind v4 CSS layer bug (unlayered `*{padding:0}` was killing every spacing utility); Dashboard col-1 Net Worth chart upgraded to 3-line (assets + liabilities + net worth), Allocation upgraded to 4-slice donut with legend; both navigate to /accounts on click; /api/dashboard returns assetsByCategory + liabilitiesByCategory; Accounts page redesigned to category-first layout with utilization bars; CLAUDE.md added with architecture and coding rules |
@@ -219,7 +220,7 @@ zeroed/
 │   │   │   ├── SideNav.tsx         # Desktop sidebar (5 tabs + theme toggle)
 │   │   │   ├── BottomNav.tsx       # Mobile bottom nav (5 tabs)
 │   │   │   ├── SubNav.tsx          # Reusable horizontal subtab bar
-│   │   │   └── ui/                 # shadcn/ui primitives + institution-logo.tsx, credit-card-chip.tsx, avatar-circle.tsx
+│   │   │   └── ui/                 # shadcn/ui primitives + institution-logo.tsx, avatar-circle.tsx
 │   │   └── pages/
 │   │       ├── Dashboard.tsx       # Home — 3-column grid, net worth, allocation, payoff, cash flow, AI
 │   │       ├── Plan.tsx            # Strategy / Goals / AI Insights subtabs
@@ -368,7 +369,7 @@ In sandbox mode, use these fake credentials inside the Plaid Link widget:
 - [x] Dashboard col-1 charts: 3-line net worth, 4-slice allocation donut
 - [x] Accounts page: category-first layout (Cash/Investments/Credit/Loans)
 - [x] Institution logos — runtime keyword match, logo.dev delivery, brand-color fallback
-- [x] Credit card chip art on all credit rows and Dashboard priority card
+- [x] Credit card rows — InstitutionLogo + 3px brand-color accent (chip art removed pending redesign)
 - [x] Investment holdings sync (Plaid Investments product, `investment_holdings` subcollection)
 - [x] Stocks & Bonds dual connect CTAs (Plaid + manual)
 

@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
 import InstitutionLogo from '@/components/ui/institution-logo';
-import CreditCardChip from '@/components/ui/credit-card-chip';
+import { getInstitutionBrandColor } from '@/lib/institution-logos';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1006,13 +1006,17 @@ function PlaidWidget({
             const equityPct   = linkedAsset && linkedAsset.current_value > 0
               ? Math.round((equity / linkedAsset.current_value) * 100) : 0;
 
+            const accentColor = isCredit
+              ? (getInstitutionBrandColor(acc.institution_name || acc.name) ?? 'var(--violet-light)')
+              : undefined;
+
             return (
-              <div key={acc.id} className="py-4 flex items-start gap-3">
+              <div key={acc.id} className={cn('relative py-4 flex items-start gap-3', isCredit && 'pl-3')}>
+                {isCredit && (
+                  <div className="absolute left-0 inset-y-0 w-[3px]" style={{ background: accentColor }} />
+                )}
                 <div className="shrink-0 mt-0.5">
-                  {isCredit
-                    ? <CreditCardChip cardName={acc.name} institutionName={acc.institution_name} size={32} />
-                    : <InstitutionLogo name={acc.institution_name || acc.name} size={32} />
-                  }
+                  <InstitutionLogo name={acc.institution_name || acc.name} size={32} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
