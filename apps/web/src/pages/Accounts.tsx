@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  AlertTriangle, Building2, Car, CreditCard, Home, Landmark, Link2,
+  AlertTriangle, Car, CreditCard, Home, Landmark, Link2,
   LineChart as LineChartIcon, Plus, TrendingDown, TrendingUp, Wallet, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -639,42 +639,6 @@ export default function Accounts() {
                       onConfirmDelete={setConfirmDeleteId} onDelete={deleteAsset}
                     />
 
-                    {/* By Institution */}
-                    {accounts.length > 0 && (() => {
-                      const byBank = accounts.reduce<Record<string, Account[]>>((acc, a) => {
-                        const k = a.institution_name || 'Unknown Bank';
-                        (acc[k] = acc[k] || []).push(a);
-                        return acc;
-                      }, {});
-                      return (
-                        <Card className="bg-card border-border shadow-sm">
-                          <CardHeader className="px-5 pt-5 pb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-                                style={{ background: 'var(--blue)22', color: 'var(--blue)' }}>
-                                <Building2 size={13} />
-                              </div>
-                              <CardTitle className="text-sm font-semibold text-foreground">By Institution</CardTitle>
-                              <Badge variant="outline" className="text-[10px] border-border text-muted-foreground px-1.5 py-0">
-                                {Object.keys(byBank).length}
-                              </Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="px-5 pb-5 pt-0 space-y-2">
-                            {Object.entries(byBank).map(([bank, accs]) => (
-                              <div key={bank} className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface-2 border border-border">
-                                <InstitutionLogo name={bank} size={30} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-foreground truncate">{bank}</p>
-                                  <p className="text-xs text-muted-foreground">{accs.length} account{accs.length !== 1 ? 's' : ''}</p>
-                                </div>
-                                <Building2 size={12} className="text-muted-foreground shrink-0" />
-                              </div>
-                            ))}
-                          </CardContent>
-                        </Card>
-                      );
-                    })()}
                   </div>
 
                 </div>
