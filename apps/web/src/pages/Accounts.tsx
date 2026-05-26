@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,9 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  AlertTriangle, Car, CreditCard, Home, Landmark, Link2,
-  LineChart as LineChartIcon, Plus, TrendingDown, TrendingUp, Wallet, X,
+  AlertTriangle, Bell, Car, CreditCard, Home, Landmark, Link2,
+  LineChart as LineChartIcon, Plus, TrendingUp, Wallet, X, Zap,
 } from 'lucide-react';
+import {
+  AreaChart, Area, PieChart, Pie, Cell,
+  XAxis, YAxis,
+} from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
@@ -106,6 +111,8 @@ interface Recommendation {
   programName: string; rewardType: string; notes: string; penalized: boolean; earnedDollars: number | null;
 }
 interface RewardResult { recommendations: Recommendation[]; unmatchedAccounts: string[]; profilesLastUpdated?: string; }
+interface NWSnapshot   { month: string; net_worth: number; }
+interface AllocSlice   { name: string; value: number; color: string; }
 
 function rankLabel(r: number) { return r === 1 ? 'Best' : r === 2 ? '2nd' : r === 3 ? '3rd' : `#${r}`; }
 
@@ -242,6 +249,402 @@ function AssetForm({
   );
 }
 
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
+
+function simulateAvalanche(
+  debts: Array<{ balance: number; apr: number; minimum: number }>,
+  extraPayment: number,
+): { months: number; totalInterest: number } {
+  if (debts.length === 0) return { months: 0, totalInterest: 0 };
+  const balances = debts.map(d => Math.max(0, d.balance));
+  let totalInterest = 0;
+  let months = 0;
+  while (balances.some(b => b > 0.01) && months < 600) {
+    months++;
+    let extra = extraPayment;
+    for (let i = 0; i < debts.length; i++) {
+      if (balances[i] <= 0) continue;
+      const interest = balances[i] * (debts[i].apr / 100 / 12);
+      totalInterest += interest;
+      balances[i] += interest;
+    }
+    for (let i = 0; i < debts.length; i++) {
+      if (balances[i] <= 0) continue;
+      const payment = Math.min(balances[i], debts[i].minimum);
+      balances[i] -= payment;
+      if (balances[i] < 0.01) { extra += debts[i].minimum; balances[i] = 0; }
+    }
+    const sorted = debts.map((d, i) => ({ i, apr: d.apr })).filter(({ i }) => balances[i] > 0).sort((a, b) => b.apr - a.apr);
+    for (const { i } of sorted) {
+      if (extra <= 0) break;
+      const payment = Math.min(extra, balances[i]);
+      balances[i] -= payment;
+      extra -= payment;
+      if (balances[i] < 0.01) { extra += debts[i].minimum; balances[i] = 0; }
+    }
+    for (let i = 0; i < balances.length; i++) if (balances[i] < 0.01) balances[i] = 0;
+  }
+  return { months, totalInterest };
+}
+
+function projectFIPath(
+  startNW: number,
+  monthlyContribution: number,
+  annualReturn: number,
+  years: number,
+): Array<{ year: number; netWorth: number }> {
+  const monthlyRate = annualReturn / 12;
+  const currentYear = new Date().getFullYear();
+  let nw = startNW;
+  const data: Array<{ year: number; netWorth: number }> = [{ year: currentYear, netWorth: Math.round(nw) }];
+  for (let y = 1; y <= years; y++) {
+    for (let m = 0; m < 12; m++) nw = nw * (1 + monthlyRate) + monthlyContribution;
+    data.push({ year: currentYear + y, netWorth: Math.round(nw) });
+  }
+  return data;
+}
+
+// ─── Viz sub-components ────────────────────────────────────────────────────────
+
+function CashBufferGauge({ liquidCash, monthlyExpenses }: { liquidCash: number; monthlyExpenses: number }) {
+  const runway = monthlyExpenses > 0 ? liquidCash / monthlyExpenses : 0;
+  const pct    = Math.min(100, (runway / 6) * 100);
+  const cx = 70, cy = 60, r = 50;
+  const angle = Math.PI * (1 - pct / 100);
+  const px = (cx + r * Math.cos(angle)).toFixed(2);
+  const py = (cy - r * Math.sin(angle)).toFixed(2);
+  const lArc  = pct > 50 ? 1 : 0;
+  const c = runway < 3 ? 'var(--red)' : runway < 6 ? 'var(--amber)' : 'var(--green)';
+  return (
+    <Card className="bg-card border-border shadow-sm">
+      <CardHeader className="pb-0 pt-5 px-5">
+        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Wallet size={13} className="text-muted-foreground shrink-0" />Emergency Runway
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-5 pb-4 pt-2">
+        <svg viewBox="0 0 140 72" className="w-full max-w-[190px] mx-auto block">
+          <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
+            fill="none" stroke="var(--surface-2)" strokeWidth="10" strokeLinecap="round" />
+          {pct > 0.5 && (
+            <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 ${lArc} 0 ${px} ${py}`}
+              fill="none" stroke={c} strokeWidth="10" strokeLinecap="round" />
+          )}
+          <text x={cx} y={cy - 5} textAnchor="middle" fontSize="18" fontWeight="800" style={{ fill: c }}>
+            {runway < 100 ? runway.toFixed(1) : '99+'}
+          </text>
+          <text x={cx} y={cy + 10} textAnchor="middle" fontSize="8" style={{ fill: 'var(--muted-foreground)' }}>
+            months
+          </text>
+        </svg>
+        <div className="flex justify-between text-[10px] mt-1">
+          <span style={{ color: 'var(--red)' }} className="font-medium">&lt;3 critical</span>
+          <span className="text-muted-foreground">{fmt(liquidCash)} liquid</span>
+          <span style={{ color: 'var(--green)' }} className="font-medium">&gt;6 safe</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function UpcomingPayments({ creditAccounts }: { creditAccounts: Account[] }) {
+  const now = Date.now();
+  const items = creditAccounts
+    .filter(a => a.payment_due_date)
+    .map(a => {
+      const d = new Date(a.payment_due_date! + 'T12:00');
+      return { ...a, ts: d.getTime(), days: Math.ceil((d.getTime() - now) / 86400000), label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) };
+    })
+    .filter(a => a.days > -3 && a.days <= 14)
+    .sort((a, b) => a.ts - b.ts);
+  if (items.length === 0) return null;
+  return (
+    <Card className="bg-card border-border shadow-sm">
+      <CardHeader className="pb-0 pt-5 px-5">
+        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Bell size={13} className="text-muted-foreground shrink-0" />Upcoming Payments
+          <Badge variant="outline" className="text-[10px] border-border text-muted-foreground px-1.5 py-0">{items.length}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-5 pb-5 pt-3 space-y-2.5">
+        {items.map(a => {
+          const overdue = a.days < 0;
+          const urgent  = !overdue && a.days <= 3;
+          return (
+            <div key={a.id} className="flex items-center gap-3">
+              <div className={cn('w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', overdue ? 'bg-red' : urgent ? 'bg-amber' : 'bg-muted-foreground/40')} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground truncate">{a.name}</p>
+                <p className={cn('text-[10px]', overdue ? 'text-red font-medium' : urgent ? 'text-amber font-medium' : 'text-muted-foreground')}>
+                  {overdue ? `${Math.abs(a.days)}d overdue` : a.days === 0 ? 'Due today' : `${a.days}d · ${a.label}`}
+                </p>
+              </div>
+              <span className="text-xs font-bold tabular text-foreground shrink-0">
+                {a.minimum_payment != null ? fmtD(a.minimum_payment) : '—'}
+              </span>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function UtilizationDial({ totalDebt, totalLimit, monthlyInterest }: {
+  totalDebt: number; totalLimit: number; monthlyInterest: number;
+}) {
+  if (totalLimit <= 0) return null;
+  const pct  = Math.min(100, (totalDebt / totalLimit) * 100);
+  const cx = 70, cy = 60, r = 50;
+  const angle = Math.PI * (1 - pct / 100);
+  const px = (cx + r * Math.cos(angle)).toFixed(2);
+  const py = (cy - r * Math.sin(angle)).toFixed(2);
+  const lArc = pct > 50 ? 1 : 0;
+  const c    = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--chart-2)';
+  const avail = Math.max(0, totalLimit - totalDebt);
+  return (
+    <Card className="bg-card border-border shadow-sm">
+      <CardHeader className="pb-0 pt-5 px-5">
+        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <CreditCard size={13} className="text-muted-foreground shrink-0" />Credit Utilization
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-5 pb-4 pt-2">
+        <svg viewBox="0 0 140 72" className="w-full max-w-[190px] mx-auto block">
+          <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
+            fill="none" stroke="var(--surface-2)" strokeWidth="10" strokeLinecap="round" />
+          {pct > 0.5 && (
+            <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 ${lArc} 0 ${px} ${py}`}
+              fill="none" stroke={c} strokeWidth="10" strokeLinecap="round" />
+          )}
+          <text x={cx} y={cy - 5} textAnchor="middle" fontSize="18" fontWeight="800" style={{ fill: c }}>
+            {Math.round(pct)}%
+          </text>
+          <text x={cx} y={cy + 10} textAnchor="middle" fontSize="8" style={{ fill: 'var(--muted-foreground)' }}>
+            utilized
+          </text>
+        </svg>
+        <div className="grid grid-cols-3 gap-2 mt-1 text-center">
+          {[
+            { label: 'Balance',      value: fmt(totalDebt)        },
+            { label: 'Available',    value: fmt(avail)            },
+            { label: 'Mo. Interest', value: fmtD(monthlyInterest) },
+          ].map(({ label, value }) => (
+            <div key={label}>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+              <p className="text-xs font-bold tabular text-foreground mt-0.5">{value}</p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AvalancheSimulator({ creditAccounts }: { creditAccounts: Account[] }) {
+  const [extra, setExtra] = useState(100);
+
+  const debts = useMemo(
+    () => creditAccounts
+      .filter(a => a.balance_current > 0 && a.apr !== null)
+      .map(a => ({
+        name:    a.name,
+        balance: a.balance_current,
+        apr:     a.apr!,
+        minimum: a.minimum_payment || Math.max(25, a.balance_current * 0.02),
+      })),
+    [creditAccounts],
+  );
+
+  const baseline = useMemo(() => simulateAvalanche(debts, 0),     [debts]);
+  const result   = useMemo(() => simulateAvalanche(debts, extra),  [debts, extra]);
+
+  if (debts.length === 0) return null;
+
+  const interestSaved = Math.max(0, baseline.totalInterest - result.totalInterest);
+  const monthsSaved   = Math.max(0, baseline.months       - result.months);
+  const debtFreeDate  = (() => {
+    if (result.months === 0) return 'Already paid off';
+    const d = new Date();
+    d.setMonth(d.getMonth() + result.months);
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  })();
+
+  return (
+    <Card className="bg-card border-[var(--primary)]/30 shadow-sm">
+      <CardHeader className="pb-0 pt-5 px-5">
+        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Zap size={13} className="text-violet-light shrink-0" />Avalanche Simulator
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-5 pb-5 pt-3 space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <label className="text-xs text-muted-foreground">Extra monthly payment</label>
+            <span className="text-sm font-bold tabular text-violet-light">{fmtD(extra)}</span>
+          </div>
+          <input
+            type="range" min={0} max={2000} step={25} value={extra}
+            onChange={e => setExtra(Number(e.target.value))}
+            className="w-full h-1.5 rounded-full appearance-none bg-surface-2 cursor-pointer accent-[var(--primary)]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>$0</span><span>$2,000</span>
+          </div>
+        </div>
+        <div className="rounded-xl bg-violet-dim border border-[var(--primary)]/20 p-3.5 space-y-2">
+          <div className="flex justify-between items-baseline">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Debt-Free</span>
+            <span className="text-base font-black text-violet-light">{debtFreeDate}</span>
+          </div>
+          {monthsSaved > 0 && (
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Months Saved</span>
+              <span className="text-sm font-bold text-green">−{monthsSaved} months</span>
+            </div>
+          )}
+          {interestSaved > 0 && (
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Interest Saved</span>
+              <span className="text-sm font-bold text-green">{fmt(interestSaved)}</span>
+            </div>
+          )}
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Attack Order (Avalanche)</p>
+          {[...debts].sort((a, b) => b.apr - a.apr).slice(0, 3).map((d, i) => (
+            <div key={d.name} className="flex items-center gap-2">
+              <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-surface-2 text-muted-foreground shrink-0">{i + 1}</span>
+              <span className="text-xs text-foreground truncate flex-1">{d.name}</span>
+              <span className="text-[10px] font-semibold text-amber shrink-0">{d.apr}% APR</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const ALLOC_CONFIG: ChartConfig = {
+  Cash:          { label: 'Cash',        color: 'var(--chart-2)' },
+  Investments:   { label: 'Investments', color: 'var(--chart-4)' },
+  'Real Estate': { label: 'Real Estate', color: 'var(--chart-1)' },
+  Vehicles:      { label: 'Vehicles',    color: 'var(--chart-5)' },
+  Other:         { label: 'Other',       color: 'var(--chart-3)' },
+};
+
+function AllocationDonut({ slices, totalAssets }: { slices: AllocSlice[]; totalAssets: number }) {
+  if (slices.length === 0 || totalAssets <= 0) return null;
+  return (
+    <Card className="bg-card border-border shadow-sm">
+      <CardHeader className="pb-0 pt-5 px-5">
+        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <TrendingUp size={13} className="text-muted-foreground shrink-0" />Asset Allocation
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-5 pb-5 pt-2">
+        <ChartContainer config={ALLOC_CONFIG} className="aspect-square max-h-[150px] w-full mx-auto">
+          <PieChart>
+            <Pie data={slices} cx="50%" cy="50%" innerRadius="52%" outerRadius="80%" paddingAngle={2} dataKey="value" nameKey="name">
+              {slices.map(s => <Cell key={s.name} fill={s.color} />)}
+            </Pie>
+            <ChartTooltip content={<ChartTooltipContent formatter={(v, n) => [
+              `${fmt(Number(v))} · ${Math.round((Number(v) / totalAssets) * 100)}%`, n as string,
+            ]} />} />
+          </PieChart>
+        </ChartContainer>
+        <div className="space-y-1.5 mt-3">
+          {slices.map(s => (
+            <div key={s.name} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                <span className="text-[11px] text-muted-foreground">{s.name}</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[11px] font-semibold tabular text-foreground">{fmt(s.value)}</span>
+                <span className="text-[10px] text-muted-foreground">{Math.round((s.value / totalAssets) * 100)}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const FI_CONFIG: ChartConfig = {
+  netWorth: { label: 'Net Worth', color: 'var(--violet-light)' },
+};
+
+function FIProjector({ currentNW, userIncome, fiTarget }: { currentNW: number; userIncome: number; fiTarget: number }) {
+  const [savingsRate, setSavingsRate] = useState(20);
+  const monthlyContrib = (userIncome * savingsRate) / 100;
+
+  const chartData = useMemo(
+    () => projectFIPath(currentNW, monthlyContrib, 0.07, 30),
+    [currentNW, monthlyContrib],
+  );
+
+  const fiYear    = chartData.find(d => d.netWorth >= fiTarget);
+  const fiLabel   = fiYear ? `${fiYear.year}` : '30y+';
+  const fiProgress = fiTarget > 0 ? Math.min(100, Math.round((Math.max(0, currentNW) / fiTarget) * 100)) : 0;
+
+  return (
+    <Card className="bg-card border-border shadow-sm">
+      <CardHeader className="pb-0 pt-5 px-5">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <TrendingUp size={13} className="text-muted-foreground shrink-0" />FI Projector
+          </CardTitle>
+          <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{fiProgress}% to FI</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Target <span className="font-semibold text-foreground">{fmt(fiTarget)}</span> · reach by{' '}
+          <span className="font-semibold text-violet-light">{fiLabel}</span>
+        </p>
+      </CardHeader>
+      <CardContent className="px-5 pb-5 pt-2 space-y-3">
+        <div className="aspect-[2/1] w-full">
+          <ChartContainer config={FI_CONFIG} className="h-full w-full">
+            <AreaChart data={chartData} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
+              <defs>
+                <linearGradient id="fiGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--violet-light)" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="var(--violet-light)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
+                tickFormatter={(v: number) => `'${String(v).slice(2)}`} interval={4} />
+              <YAxis hide domain={['auto', 'auto']} />
+              <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']} />} />
+              <Area type="monotone" dataKey="netWorth" stroke="var(--violet-light)" strokeWidth={2} fill="url(#fiGrad)" dot={false} />
+            </AreaChart>
+          </ChartContainer>
+        </div>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <label className="text-xs text-muted-foreground">Savings rate</label>
+            <span className="text-sm font-bold tabular text-foreground">{savingsRate}%</span>
+          </div>
+          <input
+            type="range" min={1} max={60} step={1} value={savingsRate}
+            onChange={e => setSavingsRate(Number(e.target.value))}
+            className="w-full h-1.5 rounded-full appearance-none bg-surface-2 cursor-pointer accent-[var(--primary)]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>1%</span>
+            <span>{fmtD(monthlyContrib)}/mo saved</span>
+            <span>60%</span>
+          </div>
+        </div>
+        <div>
+          <Progress value={fiProgress} className="h-1 [&>div]:bg-violet-light" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Accounts page ────────────────────────────────────────────────────────────
 export default function Accounts() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -259,6 +662,11 @@ export default function Accounts() {
   const [holdings, setHoldings]               = useState<Holding[]>([]);
   const [reconnecting, setReconnecting]       = useState<string | null>(null);
   const [plaidConnecting, setPlaidConnecting] = useState(false);
+
+  // Financial metrics for viz widgets
+  const [userIncome,   setUserIncome]   = useState(0);
+  const [userExpenses, setUserExpenses] = useState(0);
+  const [nwHistory,    setNwHistory]    = useState<NWSnapshot[]>([]);
 
   // Manual assets
   const [manualAssets, setManualAssets]       = useState<ManualAsset[]>([]);
@@ -303,18 +711,27 @@ export default function Accounts() {
   async function loadAll() {
     setAcctState('loading');
     try {
-      const [rAcct, rManual, rHoldings] = await Promise.all([
+      const [rAcct, rManual, rHoldings, rUser, rNWH] = await Promise.all([
         apiFetch('/api/plaid/accounts'),
         apiFetch('/api/manual-assets').catch(() => null),
         apiFetch('/api/plaid/holdings').catch(() => null),
+        apiFetch('/api/user').catch(() => null),
+        apiFetch('/api/net-worth-history').catch(() => null),
       ]);
       if (!rAcct.ok) throw new Error(`Server returned ${rAcct.status}`);
       const dAcct     = await rAcct.json();
       const dManual   = rManual   ? await rManual.json().catch(() => null)   : null;
       const dHoldings = rHoldings ? await rHoldings.json().catch(() => null) : null;
+      const dUser     = rUser     ? await rUser.json().catch(() => null)     : null;
+      const dNWH      = rNWH      ? await rNWH.json().catch(() => null)      : null;
       setAccounts(dAcct.accounts || []);
       setManualAssets(dManual?.assets || []);
       setHoldings(dHoldings?.holdings || []);
+      if (dUser?.user) {
+        setUserIncome(dUser.user.monthly_income || 0);
+        setUserExpenses(dUser.user.monthly_expenses || 0);
+      }
+      setNwHistory(dNWH?.history || []);
       setAcctState('content');
     } catch (e) {
       setAcctError(e instanceof Error ? e.message : 'Could not load accounts');
@@ -440,8 +857,46 @@ export default function Accounts() {
   const creditAccounts   = accounts.filter(a => a.type === 'credit');
   const totalCreditDebt  = creditAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
   const totalCreditLimit = creditAccounts.reduce((s, a) => s + (a.credit_limit || 0), 0);
-  const overallUtilPct   = totalCreditLimit > 0 ? Math.min(100, Math.round((totalCreditDebt / totalCreditLimit) * 100)) : 0;
   const monthlyInterest  = creditAccounts.reduce((s, a) => s + (a.balance_current || 0) * ((a.apr || 0) / 100 / 12), 0);
+
+  // Pulse header metrics
+  const liquidCash       = accounts.filter(a => a.type === 'depository').reduce((s, a) => s + (a.balance_current || 0), 0);
+  const effectiveExpenses = userExpenses > 0
+    ? userExpenses
+    : creditAccounts.reduce((s, a) => s + (a.minimum_payment || 0), 0) + monthlyInterest + 1500;
+  const runwayMonths     = effectiveExpenses > 0 ? liquidCash / effectiveExpenses : 0;
+  const nwDelta          = nwHistory.length >= 2
+    ? nwHistory[nwHistory.length - 1].net_worth - nwHistory[0].net_worth
+    : null;
+
+  const MILESTONES = [10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000];
+  const nextMsIdx   = MILESTONES.findIndex(m => m > netWorth);
+  const hasNextMs   = nextMsIdx >= 0;
+  const nextMsValue = hasNextMs ? MILESTONES[nextMsIdx] : MILESTONES[MILESTONES.length - 1];
+  const prevMsValue = hasNextMs && nextMsIdx > 0 ? MILESTONES[nextMsIdx - 1] : 0;
+  const msProgress  = hasNextMs && nextMsValue > prevMsValue
+    ? Math.min(100, Math.round(((Math.max(0, netWorth) - prevMsValue) / (nextMsValue - prevMsValue)) * 100))
+    : 100;
+
+  const allocationSlices = useMemo<AllocSlice[]>(() => {
+    const invVal = accounts.filter(a => ['investment', 'brokerage'].includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
+    const sbVal  = manualAssets.filter(a => a.asset_type === 'stocks_bonds').reduce((s, a) => s + a.current_value, 0);
+    const reVal  = manualAssets.filter(a => a.asset_type === 'real_estate').reduce((s, a) => s + a.current_value, 0);
+    const vehVal = manualAssets.filter(a => a.asset_type === 'vehicle').reduce((s, a) => s + a.current_value, 0);
+    const othVal = manualAssets.filter(a => a.asset_type === 'other').reduce((s, a) => s + a.current_value, 0);
+    return [
+      { name: 'Cash',        value: liquidCash,    color: 'var(--chart-2)' },
+      { name: 'Investments', value: invVal + sbVal, color: 'var(--chart-4)' },
+      { name: 'Real Estate', value: reVal,          color: 'var(--chart-1)' },
+      { name: 'Vehicles',    value: vehVal,         color: 'var(--chart-5)' },
+      { name: 'Other',       value: othVal,         color: 'var(--chart-3)' },
+    ].filter(s => s.value > 0);
+  }, [liquidCash, accounts, manualAssets]);
+
+  const fiTarget = useMemo(() => {
+    const annualExp = userExpenses > 0 ? userExpenses * 12 : effectiveExpenses * 12;
+    return annualExp > 0 ? Math.round((annualExp * 25) / 1000) * 1000 : 1_000_000;
+  }, [userExpenses, effectiveExpenses]);
 
   // Budget
   async function loadBudgets() {
@@ -522,40 +977,77 @@ export default function Accounts() {
             {acctState === 'content' && (
               <div className="mt-6 space-y-5">
 
-                {/* Net worth summary strip */}
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Total Assets',     value: fmt(totalAssets),      color: 'text-green',      icon: <TrendingUp size={11} />,   sub: 'Liquid + physical'                                  },
-                    { label: 'Total Liabilities', value: fmt(totalLiabilities), color: 'text-foreground', icon: null,                       sub: `${accounts.filter(a => ['credit','loan','mortgage'].includes(a.type)).length} accounts`   },
-                    { label: 'Net Worth',         value: (netWorth < 0 ? '−' : '') + fmt(Math.abs(netWorth)), color: netWorth >= 0 ? 'text-green' : 'text-foreground', icon: netWorth >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />, sub: netWorth >= 0 ? 'Positive' : 'Negative' },
-                  ].map(({ label, value, color, icon, sub }) => (
-                    <Card key={label} className="bg-card border-border shadow-sm">
-                      <CardContent className="p-4">
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-                        <p className={cn('text-xl font-extrabold tabular mt-1 leading-tight', color)}>{value}</p>
-                        <div className={cn('flex items-center gap-1 mt-1.5', color)}>
-                          {icon}
-                          <span className="text-[10px] font-medium">{sub}</span>
+                {/* ── Pulse Header ── */}
+                <Card className="bg-card border-border shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 divide-y md:divide-y-0 md:divide-x divide-border">
+
+                      {/* Emergency Runway */}
+                      <div className="pb-4 md:pb-0 md:pr-4">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Emergency Runway</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className={cn('text-3xl font-black tabular leading-none',
+                            runwayMonths < 3 ? 'text-red' : runwayMonths < 6 ? 'text-amber' : 'text-green')}>
+                            {runwayMonths < 100 ? runwayMonths.toFixed(1) : '99+'}
+                          </span>
+                          <span className="text-sm text-muted-foreground">months</span>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                        <p className="text-[10px] text-muted-foreground mt-1.5">
+                          {fmt(liquidCash)} liquid · {fmtD(effectiveExpenses)}/mo est.
+                        </p>
+                      </div>
+
+                      {/* Net Worth + 30d delta */}
+                      <div className="pt-4 pb-4 md:pt-0 md:pb-0 md:px-4">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Net Worth</p>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-3xl font-black tabular leading-none text-foreground">
+                            {netWorth < 0 ? '−' : ''}{fmt(Math.abs(netWorth))}
+                          </span>
+                          {nwDelta !== null && (
+                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 shrink-0',
+                              nwDelta >= 0 ? 'border-green/30 text-green' : 'border-muted-foreground/30 text-muted-foreground')}>
+                              {nwDelta >= 0 ? '+' : ''}{fmt(nwDelta)} 30d
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1.5">
+                          {fmt(totalAssets)} assets · {fmt(totalLiabilities)} debts
+                        </p>
+                      </div>
+
+                      {/* Next Milestone */}
+                      <div className="pt-4 md:pt-0 md:pl-4">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Next Milestone</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black tabular leading-none text-foreground">{fmt(nextMsValue)}</span>
+                        </div>
+                        <Progress value={msProgress} className="h-1 mt-2.5 [&>div]:bg-violet-light" />
+                        <p className="text-[10px] text-muted-foreground mt-1.5">
+                          {msProgress}% · {fmt(Math.max(0, nextMsValue - netWorth))} to go
+                        </p>
+                      </div>
+
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Mobile column switcher */}
                 <Tabs value={activeCol} onValueChange={v => setActiveCol(v as AccountCol)} className="lg:hidden">
                   <TabsList className="w-full">
-                    <TabsTrigger value="wealth" className="flex-1">Wealth</TabsTrigger>
+                    <TabsTrigger value="wealth" className="flex-1">Liquidity</TabsTrigger>
                     <TabsTrigger value="debt"   className="flex-1">Debt</TabsTrigger>
-                    <TabsTrigger value="real"   className="flex-1">Real Assets</TabsTrigger>
+                    <TabsTrigger value="real"   className="flex-1">Assets</TabsTrigger>
                   </TabsList>
                 </Tabs>
 
                 {/* 3-column grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 xl:gap-8 items-start">
 
-                  {/* ━━━ Column 1 — Wealth ━━━ */}
+                  {/* ━━━ Column 1 — Liquidity & Flow ━━━ */}
                   <div className={cn('flex flex-col gap-5 min-w-0', activeCol !== 'wealth' && 'hidden lg:flex')}>
+                    <CashBufferGauge liquidCash={liquidCash} monthlyExpenses={effectiveExpenses} />
+                    <UpcomingPayments creditAccounts={creditAccounts} />
                     <PlaidWidget
                       label="Cash & Savings" icon={<Wallet size={13} />} accentColor="var(--chart-2)"
                       accounts={accounts} types={['depository']}
@@ -588,24 +1080,10 @@ export default function Accounts() {
                     />
                   </div>
 
-                  {/* ━━━ Column 2 — Debt ━━━ */}
+                  {/* ━━━ Column 2 — Debt & Optimization ━━━ */}
                   <div className={cn('flex flex-col gap-5 min-w-0', activeCol !== 'debt' && 'hidden lg:flex')}>
-                    {creditAccounts.length > 0 && (
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { label: 'Total Debt',   value: fmt(totalCreditDebt)       },
-                          { label: 'Utilization',  value: `${overallUtilPct}%`        },
-                          { label: 'Mo. Interest', value: fmtD(monthlyInterest)       },
-                        ].map(({ label, value }) => (
-                          <Card key={label} className="bg-card border-border shadow-sm">
-                            <CardContent className="p-3.5">
-                              <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground leading-tight">{label}</p>
-                              <p className="text-base font-extrabold tabular mt-1 text-foreground">{value}</p>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
+                    <UtilizationDial totalDebt={totalCreditDebt} totalLimit={totalCreditLimit} monthlyInterest={monthlyInterest} />
+                    <AvalancheSimulator creditAccounts={creditAccounts} />
                     <PlaidWidget
                       label="Credit Cards" icon={<CreditCard size={13} />} accentColor="var(--chart-3)"
                       accounts={accounts} types={['credit']}
@@ -622,8 +1100,10 @@ export default function Accounts() {
                     />
                   </div>
 
-                  {/* ━━━ Column 3 — Real Assets ━━━ */}
+                  {/* ━━━ Column 3 — Assets & Strategy ━━━ */}
                   <div className={cn('flex flex-col gap-5 min-w-0', activeCol !== 'real' && 'hidden lg:flex')}>
+                    <AllocationDonut slices={allocationSlices} totalAssets={totalAssets} />
+                    <FIProjector currentNW={netWorth} userIncome={userIncome} fiTarget={fiTarget} />
                     <ManualWidget
                       sectionType="real_estate"
                       label="Real Estate & Vehicles" icon={<Home size={13} />} accentColor="var(--chart-2)"
@@ -638,7 +1118,6 @@ export default function Accounts() {
                       onSaveEdit={saveEditAsset} onCancelEdit={() => setEditingAssetId(null)}
                       onConfirmDelete={setConfirmDeleteId} onDelete={deleteAsset}
                     />
-
                   </div>
 
                 </div>
