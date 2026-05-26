@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertTriangle, Bell, Car, CreditCard, Home, Landmark, Link2,
-  LineChart as LineChartIcon, Plus, TrendingUp, Wallet, X, Zap,
+  LineChart as LineChartIcon, Plus, TrendingUp, Wallet, X,
 } from 'lucide-react';
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -252,42 +252,6 @@ function AssetForm({
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
-function simulateAvalanche(
-  debts: Array<{ balance: number; apr: number; minimum: number }>,
-  extraPayment: number,
-): { months: number; totalInterest: number } {
-  if (debts.length === 0) return { months: 0, totalInterest: 0 };
-  const balances = debts.map(d => Math.max(0, d.balance));
-  let totalInterest = 0;
-  let months = 0;
-  while (balances.some(b => b > 0.01) && months < 600) {
-    months++;
-    let extra = extraPayment;
-    for (let i = 0; i < debts.length; i++) {
-      if (balances[i] <= 0) continue;
-      const interest = balances[i] * (debts[i].apr / 100 / 12);
-      totalInterest += interest;
-      balances[i] += interest;
-    }
-    for (let i = 0; i < debts.length; i++) {
-      if (balances[i] <= 0) continue;
-      const payment = Math.min(balances[i], debts[i].minimum);
-      balances[i] -= payment;
-      if (balances[i] < 0.01) { extra += debts[i].minimum; balances[i] = 0; }
-    }
-    const sorted = debts.map((d, i) => ({ i, apr: d.apr })).filter(({ i }) => balances[i] > 0).sort((a, b) => b.apr - a.apr);
-    for (const { i } of sorted) {
-      if (extra <= 0) break;
-      const payment = Math.min(extra, balances[i]);
-      balances[i] -= payment;
-      extra -= payment;
-      if (balances[i] < 0.01) { extra += debts[i].minimum; balances[i] = 0; }
-    }
-    for (let i = 0; i < balances.length; i++) if (balances[i] < 0.01) balances[i] = 0;
-  }
-  return { months, totalInterest };
-}
-
 function projectFIPath(
   startNW: number,
   monthlyContribution: number,
@@ -432,99 +396,6 @@ function UtilizationDial({ totalDebt, totalLimit, monthlyInterest }: {
             <div key={label}>
               <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
               <p className="text-xs font-bold tabular text-foreground mt-0.5">{value}</p>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function AvalancheSimulator({ creditAccounts }: { creditAccounts: Account[] }) {
-  const [extra, setExtra] = useState(100);
-
-  const debts = useMemo(
-    () => creditAccounts
-      .filter(a => a.balance_current > 0 && a.apr !== null)
-      .map(a => ({
-        name:    a.name,
-        balance: a.balance_current,
-        apr:     a.apr!,
-        minimum: a.minimum_payment || Math.max(25, a.balance_current * 0.02),
-      })),
-    [creditAccounts],
-  );
-
-  const baseline = useMemo(() => simulateAvalanche(debts, 0),     [debts]);
-  const result   = useMemo(() => simulateAvalanche(debts, extra),  [debts, extra]);
-
-  if (debts.length === 0) return null;
-
-  // baseline.months===600 means minimums can't cover interest (no-extra case is mathematically unsolvable).
-  // In that case, comparisons vs baseline are meaningless — don't show savings metrics.
-  const baselineUnsolvable = baseline.months >= 600;
-  const interestSaved = baselineUnsolvable ? 0 : Math.max(0, baseline.totalInterest - result.totalInterest);
-  const monthsSaved   = baselineUnsolvable ? 0 : Math.max(0, baseline.months - result.months);
-  const debtFreeDate  = (() => {
-    if (result.months === 0) return 'Already paid off';
-    if (result.months >= 600) return '50+ years';
-    const d = new Date();
-    d.setMonth(d.getMonth() + result.months);
-    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  })();
-
-  return (
-    <Card className="bg-card border-[var(--primary)]/30 shadow-sm">
-      <CardHeader className="pb-0 pt-5 px-5">
-        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Zap size={13} className="text-violet-light shrink-0" />Avalanche Simulator
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-5 pb-5 pt-3 space-y-4">
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <label className="text-xs text-muted-foreground">Extra monthly payment</label>
-            <span className="text-sm font-bold tabular text-violet-light">{fmtD(extra)}</span>
-          </div>
-          <input
-            type="range" min={0} max={2000} step={25} value={extra}
-            onChange={e => setExtra(Number(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none bg-surface-2 cursor-pointer accent-[var(--primary)]"
-          />
-          <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>$0</span><span>$2,000</span>
-          </div>
-        </div>
-        <div className="rounded-xl bg-violet-dim border border-[var(--primary)]/20 p-3.5 space-y-2">
-          <div className="flex justify-between items-baseline">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Debt-Free</span>
-            <span className="text-base font-black text-violet-light">{debtFreeDate}</span>
-          </div>
-          {monthsSaved > 0 && (
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Months Saved</span>
-              <span className="text-sm font-bold text-green">{monthsSaved} months sooner</span>
-            </div>
-          )}
-          {interestSaved > 0 && (
-            <div className="flex justify-between items-baseline">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Interest Saved</span>
-              <span className="text-sm font-bold text-green">{fmt(interestSaved)}</span>
-            </div>
-          )}
-          {baselineUnsolvable && extra === 0 && (
-            <p className="text-[10px] text-amber leading-relaxed">
-              Minimums don't cover monthly interest — add an extra payment to see payoff progress.
-            </p>
-          )}
-        </div>
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Attack Order (Avalanche)</p>
-          {[...debts].sort((a, b) => b.apr - a.apr).slice(0, 3).map((d, i) => (
-            <div key={d.name} className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold bg-surface-2 text-muted-foreground shrink-0">{i + 1}</span>
-              <span className="text-xs text-foreground truncate flex-1">{d.name}</span>
-              <span className="text-[10px] font-semibold text-amber shrink-0">{d.apr}% APR</span>
             </div>
           ))}
         </div>
@@ -1091,7 +962,6 @@ export default function Accounts() {
                   {/* ━━━ Column 2 — Debt & Optimization ━━━ */}
                   <div className={cn('flex flex-col gap-5 min-w-0', activeCol !== 'debt' && 'hidden lg:flex')}>
                     <UtilizationDial totalDebt={totalCreditDebt} totalLimit={totalCreditLimit} monthlyInterest={monthlyInterest} />
-                    <AvalancheSimulator creditAccounts={creditAccounts} />
                     <PlaidWidget
                       label="Credit Cards" icon={<CreditCard size={13} />} accentColor="var(--chart-3)"
                       accounts={accounts} types={['credit']}
@@ -1356,7 +1226,7 @@ interface PlaidWidgetProps {
 }
 
 function PlaidWidget({
-  label, icon, accentColor, accounts, types, manualAssets, loanAccounts: _loanAccounts,
+  label, icon, accentColor, accounts, types, manualAssets,
   editing, startEdit, cancelEdit, saveEdit, onEditField,
   holdings = [], reconnecting, onReconnect,
 }: PlaidWidgetProps) {
