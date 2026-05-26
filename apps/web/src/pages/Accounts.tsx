@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
 import InstitutionLogo from '@/components/ui/institution-logo';
+import CreditCardChip from '@/components/ui/credit-card-chip';
 import { getInstitutionBrandColor } from '@/lib/institution-logos';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -313,7 +314,6 @@ function CashBufferGauge({ liquidCash, monthlyExpenses }: { liquidCash: number; 
   const angle = Math.PI * (1 - pct / 100);
   const px = (cx + r * Math.cos(angle)).toFixed(2);
   const py = (cy - r * Math.sin(angle)).toFixed(2);
-  const lArc  = pct > 50 ? 1 : 0;
   const c = runway < 3 ? 'var(--red)' : runway < 6 ? 'var(--amber)' : 'var(--green)';
   return (
     <Card className="bg-card border-border shadow-sm">
@@ -323,11 +323,11 @@ function CashBufferGauge({ liquidCash, monthlyExpenses }: { liquidCash: number; 
         </CardTitle>
       </CardHeader>
       <CardContent className="px-5 pb-4 pt-2">
-        <svg viewBox="0 0 140 72" className="w-full max-w-[190px] mx-auto block">
-          <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
+        <svg viewBox="0 0 140 72" className="w-full max-w-[190px] mx-auto block overflow-visible">
+          <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
             fill="none" stroke="var(--surface-2)" strokeWidth="10" strokeLinecap="round" />
-          {pct > 0.5 && (
-            <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 ${lArc} 0 ${px} ${py}`}
+          {pct > 0 && (
+            <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${px} ${py}`}
               fill="none" stroke={c} strokeWidth="10" strokeLinecap="round" />
           )}
           <text x={cx} y={cy - 5} textAnchor="middle" fontSize="18" fontWeight="800" style={{ fill: c }}>
@@ -399,7 +399,6 @@ function UtilizationDial({ totalDebt, totalLimit, monthlyInterest }: {
   const angle = Math.PI * (1 - pct / 100);
   const px = (cx + r * Math.cos(angle)).toFixed(2);
   const py = (cy - r * Math.sin(angle)).toFixed(2);
-  const lArc = pct > 50 ? 1 : 0;
   const c    = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--chart-2)';
   const avail = Math.max(0, totalLimit - totalDebt);
   return (
@@ -410,11 +409,11 @@ function UtilizationDial({ totalDebt, totalLimit, monthlyInterest }: {
         </CardTitle>
       </CardHeader>
       <CardContent className="px-5 pb-4 pt-2">
-        <svg viewBox="0 0 140 72" className="w-full max-w-[190px] mx-auto block">
-          <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`}
+        <svg viewBox="0 0 140 72" className="w-full max-w-[190px] mx-auto block overflow-visible">
+          <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
             fill="none" stroke="var(--surface-2)" strokeWidth="10" strokeLinecap="round" />
-          {pct > 0.5 && (
-            <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 ${lArc} 0 ${px} ${py}`}
+          {pct > 0 && (
+            <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${px} ${py}`}
               fill="none" stroke={c} strokeWidth="10" strokeLinecap="round" />
           )}
           <text x={cx} y={cy - 5} textAnchor="middle" fontSize="18" fontWeight="800" style={{ fill: c }}>
@@ -461,10 +460,14 @@ function AvalancheSimulator({ creditAccounts }: { creditAccounts: Account[] }) {
 
   if (debts.length === 0) return null;
 
-  const interestSaved = Math.max(0, baseline.totalInterest - result.totalInterest);
-  const monthsSaved   = Math.max(0, baseline.months       - result.months);
+  // baseline.months===600 means minimums can't cover interest (no-extra case is mathematically unsolvable).
+  // In that case, comparisons vs baseline are meaningless — don't show savings metrics.
+  const baselineUnsolvable = baseline.months >= 600;
+  const interestSaved = baselineUnsolvable ? 0 : Math.max(0, baseline.totalInterest - result.totalInterest);
+  const monthsSaved   = baselineUnsolvable ? 0 : Math.max(0, baseline.months - result.months);
   const debtFreeDate  = (() => {
     if (result.months === 0) return 'Already paid off';
+    if (result.months >= 600) return '50+ years';
     const d = new Date();
     d.setMonth(d.getMonth() + result.months);
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -500,7 +503,7 @@ function AvalancheSimulator({ creditAccounts }: { creditAccounts: Account[] }) {
           {monthsSaved > 0 && (
             <div className="flex justify-between items-baseline">
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Months Saved</span>
-              <span className="text-sm font-bold text-green">−{monthsSaved} months</span>
+              <span className="text-sm font-bold text-green">{monthsSaved} months sooner</span>
             </div>
           )}
           {interestSaved > 0 && (
@@ -508,6 +511,11 @@ function AvalancheSimulator({ creditAccounts }: { creditAccounts: Account[] }) {
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Interest Saved</span>
               <span className="text-sm font-bold text-green">{fmt(interestSaved)}</span>
             </div>
+          )}
+          {baselineUnsolvable && extra === 0 && (
+            <p className="text-[10px] text-amber leading-relaxed">
+              Minimums don't cover monthly interest — add an extra payment to see payoff progress.
+            </p>
           )}
         </div>
         <div className="space-y-1.5">
@@ -1458,8 +1466,11 @@ function PlaidWidget({
                 {isCredit && (
                   <div className="absolute left-0 inset-y-0 w-[3px]" style={{ background: accentColor }} />
                 )}
-                <div className="shrink-0 mt-0.5">
-                  <InstitutionLogo name={acc.institution_name || acc.name} size={32} />
+                <div className="shrink-0 mt-0.5 w-14 flex items-center">
+                  {isCredit
+                    ? <CreditCardChip cardName={acc.name} institutionName={acc.institution_name} size={32} />
+                    : <InstitutionLogo name={acc.institution_name || acc.name} size={32} />
+                  }
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
