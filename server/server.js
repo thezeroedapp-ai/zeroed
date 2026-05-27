@@ -16,6 +16,7 @@ const rewardsRoutes      = require('./routes/rewards');
 const budgetsRoutes      = require('./routes/budgets');
 const adminRoutes        = require('./routes/admin');
 const manualAssetsRoutes = require('./routes/manual-assets');
+const valuationsRoutes   = require('./routes/valuations');
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/rewards',       rewardsRoutes);
 app.use('/api/budgets',       budgetsRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/manual-assets', manualAssetsRoutes);
+app.use('/api/valuations',   valuationsRoutes);
 
 app.get('/api/user', async (req, res) => {
   try {

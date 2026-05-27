@@ -201,7 +201,7 @@ export default function Spending() {
                         <p className="text-xs text-muted-foreground mt-0.5">See which cards earn the most on your top categories.</p>
                       </div>
                       <Link to="/accounts?tab=rewards"
-                        className="text-xs font-semibold text-violet-light whitespace-nowrap ml-3 no-underline hover:text-foreground transition-colors">
+                        className="text-xs font-semibold text-violet-light whitespace-nowrap ml-3 no-underline hover:opacity-80 transition-opacity">
                         Explore cards →
                       </Link>
                     </CardContent>

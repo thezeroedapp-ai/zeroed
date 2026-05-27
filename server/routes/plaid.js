@@ -135,6 +135,34 @@ router.get('/holdings', async (req, res) => {
   }
 });
 
+// Returns all liability-type accounts (credit, loan, mortgage) with
+// extended metadata fields that the Asset Aggregation workflows rely on.
+router.get('/liabilities', async (req, res) => {
+  try {
+    const accounts = await db.getAccountsByUser(req.user.uid);
+    const liabilities = accounts
+      .filter(a => ['credit', 'loan', 'mortgage'].includes(a.type))
+      .map(a => ({
+        id:                   a.id,
+        name:                 a.name,
+        type:                 a.type,
+        subtype:              a.subtype    ?? null,
+        institution_name:     a.institution_name ?? null,
+        balance_current:      a.balance_current  ?? 0,
+        balance_available:    a.balance_available ?? null,
+        apr:                  a.apr              ?? null,
+        minimum_payment:      a.minimum_payment  ?? null,
+        payment_due_date:     a.payment_due_date ?? null,
+        plaid_item_id:        a.plaid_item_id    ?? null,
+        property_address:     a.property_address     ?? null,
+        vehicle_description:  a.vehicle_description  ?? null,
+      }));
+    res.json({ accounts: liabilities });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.put('/accounts/:id/credit-details', async (req, res) => {
   try {
     const uid       = req.user.uid;

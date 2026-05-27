@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   AlertTriangle, Bell, Car, CreditCard, Home, Landmark, Link2,
   LineChart as LineChartIcon, Plus, TrendingUp, Wallet, X,
@@ -22,12 +23,16 @@ import { cn } from '@/lib/utils';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import SubNav from '../components/SubNav';
 import InstitutionLogo from '@/components/ui/institution-logo';
+import AssetLedger from '@/components/AssetLedger';
+import AssetDiscoveryBanner from '@/components/AssetDiscoveryBanner';
+import { useWealthAggregator } from '@/hooks/useWealthAggregator';
+import { fetchRealEstateAVM } from '@/services/api/valuationService';
 import CreditCardChip from '@/components/ui/credit-card-chip';
 import { getInstitutionBrandColor } from '@/lib/institution-logos';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AccountTab = 'accounts' | 'budget' | 'rewards';
+type AccountTab = 'accounts' | 'budget' | 'rewards' | 'net-worth';
 type AccountCol = 'wealth' | 'debt' | 'real';
 
 interface Account {
@@ -36,6 +41,7 @@ interface Account {
   apr: number | null; minimum_payment: number | null; credit_limit: number | null;
   payment_due_date: string | null; institution_name: string;
   plaid_item_id?: string;
+  property_address?: string | null;
 }
 interface EditState { apr: string; minimum: string; saving: boolean; }
 
@@ -57,14 +63,16 @@ interface ManualAsset {
   asset_subtype?: string | null;
   current_value: number;
   linked_loan_id?: string | null;
+  address?: string | null;
 }
 interface ManualAssetForm {
   name: string; asset_type: ManualAsset['asset_type'];
   asset_subtype: string; current_value: string; linked_loan_id: string;
+  address: string;
 }
 
 const BLANK_FORM: ManualAssetForm = {
-  name: '', asset_type: 'stocks_bonds', asset_subtype: 'stock', current_value: '', linked_loan_id: '',
+  name: '', asset_type: 'stocks_bonds', asset_subtype: 'stock', current_value: '', linked_loan_id: '', address: '',
 };
 
 const ASSET_SUBTYPES: Record<ManualAsset['asset_type'], { value: string; label: string }[]> = {
@@ -118,9 +126,10 @@ interface AllocSlice   { name: string; value: number; color: string; }
 function rankLabel(r: number) { return r === 1 ? 'Best' : r === 2 ? '2nd' : r === 3 ? '3rd' : `#${r}`; }
 
 const ACCOUNT_TABS = [
-  { id: 'accounts', label: 'Accounts' },
-  { id: 'budget',   label: 'Budget'   },
-  { id: 'rewards',  label: 'Rewards'  },
+  { id: 'accounts',  label: 'Accounts'  },
+  { id: 'net-worth', label: 'Net Worth' },
+  { id: 'budget',    label: 'Budget'    },
+  { id: 'rewards',   label: 'Rewards'   },
 ];
 
 const DIST_PALETTE = [
@@ -183,18 +192,101 @@ function AssetForm({
   onChange: (p: Partial<ManualAssetForm>) => void;
   onSave: () => void; onCancel: () => void; saving: boolean; submitLabel: string;
 }) {
-  const subtypes = ASSET_SUBTYPES[form.asset_type];
+  const [isFetchingValuation, setIsFetchingValuation] = useState(false);
+  const [avmError,            setAvmError]            = useState<string | null>(null);
+  const [suggestions,         setSuggestions]         = useState<string[]>([]);
+  const [showSuggestions,     setShowSuggestions]     = useState(false);
+  const [activeIndex,         setActiveIndex]         = useState(-1);
+
+  const addressWrapRef = useRef<HTMLDivElement>(null);
+  const debounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (addressWrapRef.current && !addressWrapRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
+  function handleAddressChange(value: string) {
+    onChange({ address: value });
+    setAvmError(null);
+    setActiveIndex(-1);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length < 3) { setSuggestions([]); setShowSuggestions(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const r = await apiFetch(`/api/valuations/address-autocomplete?q=${encodeURIComponent(value)}`);
+        if (r.ok) {
+          const data = await r.json();
+          const list = data.suggestions ?? [];
+          setSuggestions(list);
+          setShowSuggestions(list.length > 0);
+        }
+      } catch { /* silent — user can type manually */ }
+    }, 300);
+  }
+
+  function handleSelectSuggestion(address: string) {
+    onChange({ address });
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setActiveIndex(-1);
+    setAvmError(null);
+  }
+
+  function handleAddressKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showSuggestions || suggestions.length === 0) {
+      if (e.key === 'Enter' && !isFetchingValuation && form.address.trim()) handleFetchAVM();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIndex >= 0) handleSelectSuggestion(suggestions[activeIndex]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setActiveIndex(-1);
+    }
+  }
+
+  async function handleFetchAVM() {
+    const address = form.address.trim();
+    if (!address) return;
+    setIsFetchingValuation(true);
+    setAvmError(null);
+    try {
+      const avm = await fetchRealEstateAVM(address);
+      onChange({ current_value: String(avm.estimatedValue) });
+    } catch {
+      setAvmError('Could not fetch estimate. Please enter manually.');
+    } finally {
+      setIsFetchingValuation(false);
+    }
+  }
+
+  const subtypes    = ASSET_SUBTYPES[form.asset_type];
   const showLoanLink = form.asset_type === 'real_estate' || form.asset_type === 'vehicle';
+
   return (
     <div className="p-4 rounded-xl bg-surface-2 border border-border space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Type</Label>
           <Select value={form.asset_type}
-            onValueChange={v => onChange({ asset_type: v as ManualAsset['asset_type'], asset_subtype: ASSET_SUBTYPES[v as ManualAsset['asset_type']][0].value })}>
+            onValueChange={v => onChange({ asset_type: v as ManualAsset['asset_type'], asset_subtype: ASSET_SUBTYPES[v as ManualAsset['asset_type']][0].value, address: '' })}>
             <SelectTrigger className="h-8 text-sm bg-input border-border text-foreground"><SelectValue /></SelectTrigger>
             <SelectContent className="bg-card border-border text-foreground">
-              <SelectItem value="stocks_bonds">Stocks & Bonds</SelectItem>
+              <SelectItem value="stocks_bonds">Stocks &amp; Bonds</SelectItem>
               <SelectItem value="real_estate">Real Estate</SelectItem>
               <SelectItem value="vehicle">Vehicle</SelectItem>
               <SelectItem value="other">Other Asset</SelectItem>
@@ -211,6 +303,7 @@ function AssetForm({
           </Select>
         </div>
       </div>
+
       <div className="space-y-1">
         <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Name</Label>
         <Input
@@ -218,16 +311,74 @@ function AssetForm({
           value={form.name} onChange={e => onChange({ name: e.target.value })}
           className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
       </div>
+
+      {form.asset_type === 'real_estate' && (
+        <div className="space-y-1">
+          <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Property Address</Label>
+          <div className="flex gap-2">
+            <div ref={addressWrapRef} className="relative flex-1">
+              <Input
+                placeholder="e.g. 123 Main St, Austin, TX 78701"
+                value={form.address}
+                onChange={e => handleAddressChange(e.target.value)}
+                onKeyDown={handleAddressKeyDown}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50"
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-lg border border-border bg-card shadow-lg overflow-hidden">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); handleSelectSuggestion(s); }}
+                      className={cn(
+                        'w-full text-left px-3 py-2 text-xs text-foreground hover:bg-surface-2 transition-colors',
+                        activeIndex === i && 'bg-surface-2',
+                      )}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button
+              size="sm"
+              type="button"
+              variant="outline"
+              onClick={handleFetchAVM}
+              disabled={isFetchingValuation || !form.address.trim()}
+              className="h-8 shrink-0 text-xs border-violet-light/30 text-violet-light hover:opacity-80 hover:bg-transparent transition-opacity">
+              {isFetchingValuation ? '…' : 'Get Estimate'}
+            </Button>
+          </div>
+          {avmError && (
+            <p className="text-[10px] text-muted-foreground">{avmError}</p>
+          )}
+        </div>
+      )}
+
       <div className="space-y-1">
         <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Current Value ($)</Label>
-        <Input type="number" min="0" step="1000" placeholder="e.g. 600000"
+        <Input type="number" min="0" step="1000"
+          placeholder={form.asset_type === 'real_estate' ? 'Auto-filled or enter manually' : 'e.g. 600000'}
           value={form.current_value} onChange={e => onChange({ current_value: e.target.value })}
           className="h-8 text-sm bg-input border-border text-foreground focus-visible:ring-[var(--primary)]/50" />
       </div>
+
       {showLoanLink && loanAccounts.length > 0 && (
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Link to Loan (optional)</Label>
-          <Select value={form.linked_loan_id || 'none'} onValueChange={v => onChange({ linked_loan_id: v === 'none' ? '' : v })}>
+          <Select
+            value={form.linked_loan_id || 'none'}
+            onValueChange={v => {
+              const updates: Partial<ManualAssetForm> = { linked_loan_id: v === 'none' ? '' : v };
+              if (form.asset_type === 'real_estate' && v !== 'none') {
+                const loan = loanAccounts.find(a => a.id === v);
+                if (loan?.property_address) updates.address = loan.property_address;
+              }
+              onChange(updates);
+            }}>
             <SelectTrigger className="h-8 text-sm bg-input border-border text-foreground"><SelectValue placeholder="No linked loan" /></SelectTrigger>
             <SelectContent className="bg-card border-border text-foreground">
               <SelectItem value="none">No linked loan</SelectItem>
@@ -237,6 +388,7 @@ function AssetForm({
           <p className="text-[10px] text-muted-foreground">Links this asset to calculate equity automatically.</p>
         </div>
       )}
+
       <div className="flex gap-2 pt-1">
         <Button size="sm" onClick={onSave} disabled={saving || !form.name || !form.current_value}
           className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -455,18 +607,23 @@ const FI_CONFIG: ChartConfig = {
   netWorth: { label: 'Net Worth', color: 'var(--violet-light)' },
 };
 
-function FIProjector({ currentNW, userIncome, fiTarget }: { currentNW: number; userIncome: number; fiTarget: number }) {
-  const [savingsRate, setSavingsRate] = useState(20);
-  const monthlyContrib = (userIncome * savingsRate) / 100;
+interface FIProjectorProps {
+  currentNetWorth: number;
+  targetFI: number;
+  actualMonthlySavings: number;
+  blendedAnnualReturn: number;
+}
 
+function FIProjector({ currentNetWorth, targetFI, actualMonthlySavings, blendedAnnualReturn }: FIProjectorProps) {
   const chartData = useMemo(
-    () => projectFIPath(currentNW, monthlyContrib, 0.07, 30),
-    [currentNW, monthlyContrib],
+    () => projectFIPath(currentNetWorth, actualMonthlySavings, blendedAnnualReturn, 30),
+    [currentNetWorth, actualMonthlySavings, blendedAnnualReturn],
   );
 
-  const fiYear    = chartData.find(d => d.netWorth >= fiTarget);
-  const fiLabel   = fiYear ? `${fiYear.year}` : '30y+';
-  const fiProgress = fiTarget > 0 ? Math.min(100, Math.round((Math.max(0, currentNW) / fiTarget) * 100)) : 0;
+  const fiYear     = chartData.find(d => d.netWorth >= targetFI);
+  const fiLabel    = fiYear ? `${fiYear.year}` : '30y+';
+  const fiProgress = targetFI > 0 ? Math.min(100, Math.round((Math.max(0, currentNetWorth) / targetFI) * 100)) : 0;
+  const returnPct  = (blendedAnnualReturn * 100).toFixed(1);
 
   return (
     <Card className="bg-card border-border shadow-sm">
@@ -478,47 +635,37 @@ function FIProjector({ currentNW, userIncome, fiTarget }: { currentNW: number; u
           <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{fiProgress}% to FI</Badge>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Target <span className="font-semibold text-foreground">{fmt(fiTarget)}</span> · reach by{' '}
+          Target <span className="font-semibold text-foreground">{fmt(targetFI)}</span> · reach by{' '}
           <span className="font-semibold text-violet-light">{fiLabel}</span>
         </p>
       </CardHeader>
-      <CardContent className="px-5 pb-5 pt-2 space-y-3">
+      <CardContent className="px-5 pb-4 pt-2 space-y-3">
         <div className="aspect-[2/1] w-full">
           <ChartContainer config={FI_CONFIG} className="h-full w-full">
-            <AreaChart data={chartData} margin={{ top: 8, right: 4, bottom: 0, left: 4 }}>
+            <AreaChart data={chartData} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="fiGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--violet-light)" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="var(--violet-light)" stopOpacity={0} />
+                  <stop offset="5%"  stopColor="var(--violet-light)" stopOpacity={0.28} />
+                  <stop offset="95%" stopColor="var(--violet-light)" stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
-                tickFormatter={(v: number) => `'${String(v).slice(2)}`} interval={4} />
+              <XAxis hide />
               <YAxis hide domain={['auto', 'auto']} />
               <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']} />} />
-              <Area type="monotone" dataKey="netWorth" stroke="var(--violet-light)" strokeWidth={2} fill="url(#fiGrad)" dot={false} />
+              <Area type="monotone" dataKey="netWorth" stroke="var(--violet-light)" strokeWidth={2.5} fill="url(#fiGrad)" dot={false} />
             </AreaChart>
           </ChartContainer>
         </div>
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <label className="text-xs text-muted-foreground">Savings rate</label>
-            <span className="text-sm font-bold tabular text-foreground">{savingsRate}%</span>
-          </div>
-          <input
-            type="range" min={1} max={60} step={1} value={savingsRate}
-            onChange={e => setSavingsRate(Number(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none bg-surface-2 cursor-pointer accent-[var(--primary)]"
-          />
+        <div className="space-y-1.5">
           <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>1%</span>
-            <span>{fmtD(monthlyContrib)}/mo saved</span>
-            <span>60%</span>
+            <span>{fmtD(actualMonthlySavings)}/mo · {returnPct}% blended return</span>
+            <span>{fiProgress}%</span>
           </div>
-        </div>
-        <div>
           <Progress value={fiProgress} className="h-1 [&>div]:bg-violet-light" />
         </div>
+        <p className="text-[11px] text-violet-light text-right hover:opacity-80 cursor-pointer transition-opacity select-none">
+          Run Scenarios in Forecasting →
+        </p>
       </CardContent>
     </Card>
   );
@@ -530,6 +677,20 @@ export default function Accounts() {
   const tab = (searchParams.get('tab') || 'accounts') as AccountTab;
   function setTab(t: AccountTab) { if (t === 'accounts') setSearchParams({}); else setSearchParams({ tab: t }); }
   const [activeCol, setActiveCol] = useState<AccountCol>('wealth');
+
+  const {
+    status:          wealthStatus,
+    error:           wealthError,
+    result:          wealthResult,
+    liquidAssets:    wealthLiquidAssets,
+    pendingAutoLoans,
+    linkVehicleToLoan,
+    refresh:         refreshWealth,
+  } = useWealthAggregator();
+
+  const [dismissedLoans, setDismissedLoans] = useState<Set<string>>(new Set());
+  const visibleAutoLoans = pendingAutoLoans.filter(l => !dismissedLoans.has(l.liabilityId));
+  function dismissLoan(id: string) { setDismissedLoans(prev => new Set(prev).add(id)); }
 
   // Plaid accounts
   const [acctState, setAcctState] = useState<'loading' | 'error' | 'content'>('loading');
@@ -573,6 +734,7 @@ export default function Accounts() {
   const [rewardResults, setRewardResults]   = useState<RewardResult | null>(null);
   const [updatedNote, setUpdatedNote]       = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => {
@@ -699,14 +861,21 @@ export default function Accounts() {
     try {
       await apiFetch('/api/manual-assets', {
         method: 'POST',
-        body: JSON.stringify({ name: addForm.name, asset_type: addForm.asset_type, asset_subtype: addForm.asset_subtype, current_value: val, linked_loan_id: addForm.linked_loan_id || null }),
+        body: JSON.stringify({
+          name:           addForm.name,
+          asset_type:     addForm.asset_type,
+          asset_subtype:  addForm.asset_subtype,
+          current_value:  val,
+          linked_loan_id: addForm.linked_loan_id || null,
+          address:        addForm.asset_type === 'real_estate' ? (addForm.address.trim() || null) : null,
+        }),
       });
       setAddingSection(null); loadAll();
     } finally { setAddSaving(false); }
   }
   function startEditAsset(a: ManualAsset) {
     setEditingAssetId(a.id);
-    setEditForm({ name: a.name, asset_type: a.asset_type, asset_subtype: a.asset_subtype || '', current_value: String(a.current_value), linked_loan_id: a.linked_loan_id || '' });
+    setEditForm({ name: a.name, asset_type: a.asset_type, asset_subtype: a.asset_subtype || '', current_value: String(a.current_value), linked_loan_id: a.linked_loan_id || '', address: a.address || '' });
   }
   async function saveEditAsset() {
     if (!editingAssetId) return;
@@ -716,7 +885,14 @@ export default function Accounts() {
     try {
       await apiFetch(`/api/manual-assets/${editingAssetId}`, {
         method: 'PUT',
-        body: JSON.stringify({ name: editForm.name, asset_type: editForm.asset_type, asset_subtype: editForm.asset_subtype, current_value: val, linked_loan_id: editForm.linked_loan_id || null }),
+        body: JSON.stringify({
+          name:           editForm.name,
+          asset_type:     editForm.asset_type,
+          asset_subtype:  editForm.asset_subtype,
+          current_value:  val,
+          linked_loan_id: editForm.linked_loan_id || null,
+          address:        editForm.asset_type === 'real_estate' ? (editForm.address.trim() || null) : null,
+        }),
       });
       setEditingAssetId(null); loadAll();
     } finally { setEditSaving(false); }
@@ -777,6 +953,22 @@ export default function Accounts() {
     return annualExp > 0 ? Math.round((annualExp * 25) / 1000) * 1000 : 1_000_000;
   }, [userExpenses, effectiveExpenses]);
 
+  const blendedAnnualReturn = useMemo(() => {
+    const RATES: Record<string, number> = {
+      Cash:          0.035,
+      Investments:   0.07,
+      'Real Estate': 0.05,
+      Vehicles:      -0.02,
+      Other:         0.03,
+    };
+    const total = allocationSlices.reduce((s, sl) => s + sl.value, 0);
+    if (total <= 0) return 0.065;
+    return allocationSlices.reduce(
+      (rate, sl) => rate + (sl.value / total) * (RATES[sl.name] ?? 0.04),
+      0,
+    );
+  }, [allocationSlices]);
+
   // Budget
   async function loadBudgets() {
     setBudgetState('loading');
@@ -825,9 +1017,16 @@ export default function Accounts() {
 
       {/* Sticky header */}
       <div className="sticky top-0 z-10 w-full border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="px-6 md:px-10 lg:px-12 py-5">
-          <h1 className="text-2xl font-bold text-foreground">Accounts</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Assets, liabilities, budgets &amp; rewards</p>
+        <div className="px-6 md:px-10 lg:px-12 py-5 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Accounts</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Assets, liabilities, budgets &amp; rewards</p>
+          </div>
+          <Button
+            onClick={() => setAddAccountOpen(true)}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 text-sm font-semibold rounded-md shrink-0 flex items-center gap-1.5">
+            <Plus size={14} />Add Account
+          </Button>
         </div>
       </div>
 
@@ -933,6 +1132,7 @@ export default function Accounts() {
                       manualAssets={manualAssets} loanAccounts={loanAccounts}
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
+                      onAddAccount={() => setAddAccountOpen(true)}
                     />
                     <PlaidWidget
                       label="Investments" icon={<LineChartIcon size={13} />} accentColor="var(--chart-4)"
@@ -941,6 +1141,7 @@ export default function Accounts() {
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
                       holdings={holdings} reconnecting={reconnecting} onReconnect={reconnectItem}
+                      onAddAccount={() => setAddAccountOpen(true)}
                     />
                     <ManualWidget
                       sectionType="stocks_bonds"
@@ -955,7 +1156,7 @@ export default function Accounts() {
                       onStartEdit={startEditAsset} onEditChange={f => setEditForm(p => ({ ...p, ...f }))}
                       onSaveEdit={saveEditAsset} onCancelEdit={() => setEditingAssetId(null)}
                       onConfirmDelete={setConfirmDeleteId} onDelete={deleteAsset}
-                      onConnectPlaid={connectBrokerageViaPlaid} plaidConnecting={plaidConnecting}
+                      onAddAccount={() => setAddAccountOpen(true)}
                     />
                   </div>
 
@@ -968,6 +1169,7 @@ export default function Accounts() {
                       manualAssets={manualAssets} loanAccounts={loanAccounts}
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
+                      onAddAccount={() => setAddAccountOpen(true)}
                     />
                     <PlaidWidget
                       label="Loans & Mortgages" icon={<Landmark size={13} />} accentColor="var(--chart-5)"
@@ -975,13 +1177,19 @@ export default function Accounts() {
                       manualAssets={manualAssets} loanAccounts={loanAccounts}
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
+                      onAddAccount={() => setAddAccountOpen(true)}
                     />
                   </div>
 
                   {/* ━━━ Column 3 — Assets & Strategy ━━━ */}
                   <div className={cn('flex flex-col gap-5 min-w-0', activeCol !== 'real' && 'hidden lg:flex')}>
                     <AllocationDonut slices={allocationSlices} totalAssets={totalAssets} />
-                    <FIProjector currentNW={netWorth} userIncome={userIncome} fiTarget={fiTarget} />
+                    <FIProjector
+                      currentNetWorth={netWorth}
+                      targetFI={fiTarget}
+                      actualMonthlySavings={Math.max(0, userIncome - userExpenses)}
+                      blendedAnnualReturn={blendedAnnualReturn}
+                    />
                     <ManualWidget
                       sectionType="real_estate"
                       label="Real Estate & Vehicles" icon={<Home size={13} />} accentColor="var(--chart-2)"
@@ -995,6 +1203,7 @@ export default function Accounts() {
                       onStartEdit={startEditAsset} onEditChange={f => setEditForm(p => ({ ...p, ...f }))}
                       onSaveEdit={saveEditAsset} onCancelEdit={() => setEditingAssetId(null)}
                       onConfirmDelete={setConfirmDeleteId} onDelete={deleteAsset}
+                      onAddAccount={() => setAddAccountOpen(true)}
                     />
                   </div>
 
@@ -1204,7 +1413,89 @@ export default function Accounts() {
             )}
           </div>
         )}
+
+        {/* ── NET WORTH TAB ── */}
+        {tab === 'net-worth' && (
+          <div className="max-w-2xl mx-auto mt-6 space-y-4">
+            {wealthStatus === 'loading' && (
+              <div className="flex flex-col items-center py-20 gap-3">
+                <div className="spinner" />
+                <p className="text-sm text-muted-foreground">Aggregating assets…</p>
+              </div>
+            )}
+            {wealthStatus === 'error' && (
+              <div className="flex flex-col items-center py-20 gap-3 text-center">
+                <div className="w-12 h-12 rounded-full bg-amber-dim border border-amber/20 flex items-center justify-center">
+                  <AlertTriangle size={22} className="text-amber" />
+                </div>
+                <p className="font-semibold">Could not aggregate net worth</p>
+                <p className="text-sm text-muted-foreground">{wealthError}</p>
+                <Button onClick={refreshWealth} className="bg-primary hover:bg-primary/90">Try Again</Button>
+              </div>
+            )}
+            {wealthStatus === 'ready' && wealthResult && (
+              <>
+                {visibleAutoLoans.length > 0 && (
+                  <AssetDiscoveryBanner
+                    loans={visibleAutoLoans}
+                    onLink={linkVehicleToLoan}
+                    onDismiss={dismissLoan}
+                  />
+                )}
+                <AssetLedger
+                  result={wealthResult}
+                  liquidAssets={wealthLiquidAssets}
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ── Global Add Account Sheet ── */}
+      <Sheet open={addAccountOpen} onOpenChange={setAddAccountOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md bg-card border-border p-6">
+          <SheetHeader className="mb-6">
+            <SheetTitle className="text-lg font-bold text-foreground">Add Account</SheetTitle>
+            <SheetDescription>
+              Choose how you'd like to connect or add an account.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-3">
+            <button
+              onClick={() => { setAddAccountOpen(false); connectBrokerageViaPlaid(); }}
+              disabled={plaidConnecting}
+              className="w-full p-4 rounded-xl border border-border bg-surface-2 hover:border-[var(--violet-light)] transition-colors text-left disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/50">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-violet-dim flex items-center justify-center shrink-0">
+                  <Link2 size={16} className="text-violet-light" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Link an Institution</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                    Securely connect banks, credit cards, or brokerages via Plaid.
+                  </p>
+                </div>
+              </div>
+            </button>
+            <button
+              onClick={() => { setAddAccountOpen(false); openAdd('stocks_bonds'); }}
+              className="w-full p-4 rounded-xl border border-border bg-surface-2 hover:border-[var(--violet-light)] transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/50">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-violet-dim flex items-center justify-center shrink-0">
+                  <Plus size={16} className="text-violet-light" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Add Manual Asset</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                    Track real estate, vehicles, or unlisted investments.
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -1223,15 +1514,43 @@ interface PlaidWidgetProps {
   holdings?: Holding[];
   reconnecting?: string | null;
   onReconnect?: (plaidItemId: string) => void;
+  onAddAccount?: () => void;
 }
 
 function PlaidWidget({
   label, icon, accentColor, accounts, types, manualAssets,
   editing, startEdit, cancelEdit, saveEdit, onEditField,
-  holdings = [], reconnecting, onReconnect,
+  holdings = [], onAddAccount,
 }: PlaidWidgetProps) {
   const catAccounts = accounts.filter(a => types.includes(a.type));
-  if (catAccounts.length === 0) return null;
+  if (catAccounts.length === 0) {
+    return (
+      <Card className="bg-card border-border shadow-sm">
+        <CardHeader className="px-5 pt-5 pb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+              style={{ background: accentColor + '22', color: accentColor }}>
+              {icon}
+            </div>
+            <CardTitle className="text-sm font-semibold text-foreground truncate">{label}</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 pt-1">
+          <p className="text-[11px] text-muted-foreground">
+            No {label.toLowerCase()} linked yet.{' '}
+            <button onClick={onAddAccount}
+              className="text-violet-light hover:opacity-80 font-medium underline underline-offset-2">
+              Link an institution
+            </button>{' '}or{' '}
+            <button onClick={onAddAccount}
+              className="text-violet-light hover:opacity-80 font-medium underline underline-offset-2">
+              add manually
+            </button>.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const catTotal         = catAccounts.reduce((s, a) => s + (a.balance_current || 0), 0);
   const isCreditSection  = types.includes('credit');
@@ -1266,7 +1585,13 @@ function PlaidWidget({
               {catAccounts.length}
             </Badge>
           </div>
-          <span className="text-sm font-bold tabular text-foreground shrink-0 pl-2">{fmt(catTotal)}</span>
+          <div className="flex items-center gap-2 shrink-0 pl-2">
+            <span className="text-sm font-bold tabular text-foreground">{fmt(catTotal)}</span>
+            <button onClick={onAddAccount} title="Link an institution"
+              className="h-6 px-2 rounded-md flex items-center gap-1 border border-dashed border-violet-light/40 text-violet-light hover:opacity-80 transition-opacity text-[10px] font-medium">
+              <Link2 size={10} />Link
+            </button>
+          </div>
         </div>
       </CardHeader>
 
@@ -1373,20 +1698,17 @@ function PlaidWidget({
                     const acctHoldings = holdings.filter(h => h.account_id === acc.id);
                     if (acctHoldings.length === 0) {
                       return (
-                        <div className="mt-3 p-3 rounded-xl bg-surface-2 border border-border flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-semibold text-foreground">Connect with Plaid</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">Sync your investment positions and holdings.</p>
-                          </div>
-                          {onReconnect && acc.plaid_item_id && (
-                            <Button size="sm" disabled={reconnecting === acc.plaid_item_id}
-                              onClick={() => onReconnect(acc.plaid_item_id!)}
-                              className="h-7 text-xs bg-primary hover:bg-primary/90 shrink-0 flex items-center gap-1.5">
-                              <Link2 size={11} className={reconnecting === acc.plaid_item_id ? 'animate-pulse' : ''} />
-                              {reconnecting === acc.plaid_item_id ? 'Connecting…' : 'Connect with Plaid'}
-                            </Button>
-                          )}
-                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-2">
+                          No holdings yet.{' '}
+                          <button onClick={onAddAccount}
+                            className="text-violet-light hover:opacity-80 font-medium underline underline-offset-2">
+                            Link an institution
+                          </button>{' '}or{' '}
+                          <button onClick={onAddAccount}
+                            className="text-violet-light hover:opacity-80 font-medium underline underline-offset-2">
+                            add manually
+                          </button>.
+                        </p>
                       );
                     }
                     const top = acctHoldings.slice(0, 8);
@@ -1492,7 +1814,7 @@ function PlaidWidget({
                         </div>
                       ) : (
                         <button onClick={() => startEdit(acc)}
-                          className="mt-2 text-[10px] text-muted-foreground hover:text-violet-light transition-colors font-medium">
+                          className="mt-2 text-[10px] text-violet-light hover:opacity-80 transition-colors font-medium">
                           Edit APR / Min →
                         </button>
                       )}
@@ -1527,8 +1849,7 @@ interface ManualWidgetProps {
   onSaveEdit: () => void; onCancelEdit: () => void;
   onConfirmDelete: (id: string | null) => void;
   onDelete: (id: string) => void;
-  onConnectPlaid?: () => void;
-  plaidConnecting?: boolean;
+  onAddAccount?: () => void;
 }
 
 function ManualWidget({
@@ -1539,7 +1860,7 @@ function ManualWidget({
   onOpenAdd, onAdd, onSaveAdd, onCancelAdd,
   onStartEdit, onEditChange, onSaveEdit, onCancelEdit,
   onConfirmDelete, onDelete,
-  onConnectPlaid, plaidConnecting = false,
+  onAddAccount,
 }: ManualWidgetProps) {
   const sectionTotal = manualAssets.reduce((s, a) => s + a.current_value, 0);
   const isAddingHere = addingSection === sectionType
@@ -1565,16 +1886,15 @@ function ManualWidget({
             {sectionTotal > 0 && (
               <span className="text-sm font-bold tabular text-foreground">{fmt(sectionTotal)}</span>
             )}
-            {sectionType === 'stocks_bonds' && onConnectPlaid && (
-              <button onClick={onConnectPlaid} disabled={plaidConnecting}
-                title="Connect via Plaid"
-                className="h-6 px-2 rounded-md flex items-center gap-1 border border-dashed border-border text-muted-foreground hover:text-violet-light hover:border-violet-light transition-colors text-[10px] font-medium disabled:opacity-50">
-                <Link2 size={10} className={plaidConnecting ? 'animate-pulse' : ''} />
-                {plaidConnecting ? 'Connecting…' : 'Link'}
+            {sectionType === 'stocks_bonds' && (
+              <button onClick={onAddAccount}
+                title="Link an institution"
+                className="h-6 px-2 rounded-md flex items-center gap-1 border border-dashed border-violet-light/40 text-violet-light hover:opacity-80 transition-opacity text-[10px] font-medium">
+                <Link2 size={10} />Link
               </button>
             )}
             <button onClick={() => onOpenAdd(sectionType)}
-              className="w-6 h-6 rounded-md flex items-center justify-center border border-dashed border-border text-muted-foreground hover:text-violet-light hover:border-violet-light transition-colors">
+              className="w-6 h-6 rounded-md flex items-center justify-center border border-dashed border-violet-light/40 text-violet-light hover:opacity-80 transition-opacity">
               <Plus size={11} />
             </button>
           </div>
@@ -1589,35 +1909,26 @@ function ManualWidget({
         )}
 
         {manualAssets.length === 0 && !isAddingHere && (
-          sectionType === 'stocks_bonds' && onConnectPlaid ? (
-            <div className="flex flex-col items-center py-8 gap-3 text-center">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-surface-2 border border-border">
-                <LineChartIcon size={18} className="text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">No holdings yet</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Connect a brokerage or add holdings manually.</p>
-              </div>
-              <div className="flex gap-2 mt-1">
-                <Button size="sm" onClick={onConnectPlaid} disabled={plaidConnecting}
-                  className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 text-xs">
-                  <Link2 size={11} className={plaidConnecting ? 'animate-pulse' : ''} />
-                  {plaidConnecting ? 'Connecting…' : 'Connect via Plaid'}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => onOpenAdd(sectionType)}
-                  className="h-8 border-border text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs">
-                  <Plus size={11} />Add Manually
-                </Button>
-              </div>
-            </div>
+          sectionType === 'stocks_bonds' ? (
+            <p className="text-[11px] text-muted-foreground py-6 text-center">
+              No holdings yet.{' '}
+              <button onClick={onAddAccount}
+                className="text-violet-light hover:opacity-80 font-medium underline underline-offset-2">
+                Link an institution
+              </button>{' '}or{' '}
+              <button onClick={onAddAccount}
+                className="text-violet-light hover:opacity-80 font-medium underline underline-offset-2">
+                add manually
+              </button>.
+            </p>
           ) : (
-            <div className="flex flex-col items-center py-8 gap-2 text-center">
-              <p className="text-sm text-muted-foreground">No {label.toLowerCase()} added yet.</p>
-              <button onClick={() => onOpenAdd(sectionType)}
-                className="text-xs text-violet-light font-semibold hover:opacity-80 transition-opacity flex items-center gap-1">
-                <Plus size={11} />Add {sectionType === 'stocks_bonds' ? 'a holding' : 'an asset'}
-              </button>
-            </div>
+            <p className="text-[11px] text-muted-foreground py-6 text-center">
+              No {label.toLowerCase()} added yet.{' '}
+              <button onClick={onAddAccount}
+                className="text-violet-light hover:opacity-80 font-medium underline underline-offset-2">
+                Add an asset
+              </button>.
+            </p>
           )
         )}
 
@@ -1672,7 +1983,7 @@ function ManualWidget({
                       )}
                       <div className="flex items-center gap-3 mt-2">
                         <button onClick={() => onStartEdit(asset)}
-                          className="text-[10px] text-muted-foreground hover:text-violet-light transition-colors font-medium">
+                          className="text-[10px] text-violet-light hover:opacity-80 transition-colors font-medium">
                           Edit →
                         </button>
                         {confirmDeleteId === asset.id ? (
