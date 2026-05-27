@@ -9,9 +9,9 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  AlertTriangle, Bell, Car, CreditCard, Home, Landmark, Link2,
+  AlertTriangle, Bell, Car, ChevronLeft, CreditCard, Home, Landmark, Link2,
   LineChart as LineChartIcon, Plus, TrendingUp, Wallet, X,
 } from 'lucide-react';
 import {
@@ -710,13 +710,15 @@ export default function Accounts() {
 
   // Manual assets
   const [manualAssets, setManualAssets]       = useState<ManualAsset[]>([]);
-  const [addingSection, setAddingSection]     = useState<ManualAsset['asset_type'] | null>(null);
   const [addForm, setAddForm]                 = useState<ManualAssetForm>(BLANK_FORM);
   const [addSaving, setAddSaving]             = useState(false);
   const [editingAssetId, setEditingAssetId]   = useState<string | null>(null);
   const [editForm, setEditForm]               = useState<ManualAssetForm>(BLANK_FORM);
   const [editSaving, setEditSaving]           = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Global Add Account modal
+  const [addModalStep, setAddModalStep] = useState<'selection' | 'manual_form'>('selection');
 
   // Budget
   const [confirmBudgetId, setConfirmBudgetId] = useState<string | null>(null);
@@ -850,9 +852,19 @@ export default function Accounts() {
     } catch { setEditing(p => ({ ...p, [id]: { ...p[id], saving: false } })); }
   }
 
-  function openAdd(type: ManualAsset['asset_type']) {
-    setAddingSection(type);
-    setAddForm({ ...BLANK_FORM, asset_type: type, asset_subtype: ASSET_SUBTYPES[type][0].value });
+  function openAddModal(type?: ManualAsset['asset_type']) {
+    const t = type ?? 'stocks_bonds';
+    setAddForm({ ...BLANK_FORM, asset_type: t, asset_subtype: ASSET_SUBTYPES[t][0].value });
+    setAddModalStep('manual_form');
+    setAddAccountOpen(true);
+  }
+  function openSelectionModal() {
+    setAddModalStep('selection');
+    setAddAccountOpen(true);
+  }
+  function closeAddModal() {
+    setAddAccountOpen(false);
+    setAddModalStep('selection');
   }
   async function saveAdd() {
     const val = parseFloat(addForm.current_value);
@@ -870,7 +882,7 @@ export default function Accounts() {
           address:        addForm.asset_type === 'real_estate' ? (addForm.address.trim() || null) : null,
         }),
       });
-      setAddingSection(null); loadAll();
+      closeAddModal(); loadAll();
     } finally { setAddSaving(false); }
   }
   function startEditAsset(a: ManualAsset) {
@@ -1023,7 +1035,7 @@ export default function Accounts() {
             <p className="text-xs text-muted-foreground mt-0.5">Assets, liabilities, budgets &amp; rewards</p>
           </div>
           <Button
-            onClick={() => setAddAccountOpen(true)}
+            onClick={openSelectionModal}
             className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 text-sm font-semibold rounded-md shrink-0 flex items-center gap-1.5">
             <Plus size={14} />Add Account
           </Button>
@@ -1132,7 +1144,7 @@ export default function Accounts() {
                       manualAssets={manualAssets} loanAccounts={loanAccounts}
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
-                      onAddAccount={() => setAddAccountOpen(true)}
+                      onAddAccount={openSelectionModal}
                     />
                     <PlaidWidget
                       label="Investments" icon={<LineChartIcon size={13} />} accentColor="var(--chart-4)"
@@ -1141,7 +1153,7 @@ export default function Accounts() {
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
                       holdings={holdings} reconnecting={reconnecting} onReconnect={reconnectItem}
-                      onAddAccount={() => setAddAccountOpen(true)}
+                      onAddAccount={openSelectionModal}
                     />
                     <ManualWidget
                       sectionType="stocks_bonds"
@@ -1150,13 +1162,11 @@ export default function Accounts() {
                       loanAccounts={loanAccounts}
                       editingAssetId={editingAssetId} editForm={editForm} editSaving={editSaving}
                       confirmDeleteId={confirmDeleteId}
-                      addingSection={addingSection} addForm={addForm} addSaving={addSaving}
-                      onOpenAdd={openAdd} onAdd={f => setAddForm(p => ({ ...p, ...f }))}
-                      onSaveAdd={saveAdd} onCancelAdd={() => setAddingSection(null)}
+                      onOpenAdd={openAddModal}
                       onStartEdit={startEditAsset} onEditChange={f => setEditForm(p => ({ ...p, ...f }))}
                       onSaveEdit={saveEditAsset} onCancelEdit={() => setEditingAssetId(null)}
                       onConfirmDelete={setConfirmDeleteId} onDelete={deleteAsset}
-                      onAddAccount={() => setAddAccountOpen(true)}
+                      onAddAccount={openSelectionModal}
                     />
                   </div>
 
@@ -1169,7 +1179,7 @@ export default function Accounts() {
                       manualAssets={manualAssets} loanAccounts={loanAccounts}
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
-                      onAddAccount={() => setAddAccountOpen(true)}
+                      onAddAccount={openSelectionModal}
                     />
                     <PlaidWidget
                       label="Loans & Mortgages" icon={<Landmark size={13} />} accentColor="var(--chart-5)"
@@ -1177,7 +1187,7 @@ export default function Accounts() {
                       manualAssets={manualAssets} loanAccounts={loanAccounts}
                       editing={editing} startEdit={startEdit} cancelEdit={cancelEdit}
                       saveEdit={saveEdit} onEditField={updateEditField}
-                      onAddAccount={() => setAddAccountOpen(true)}
+                      onAddAccount={openSelectionModal}
                     />
                   </div>
 
@@ -1197,13 +1207,11 @@ export default function Accounts() {
                       loanAccounts={loanAccounts}
                       editingAssetId={editingAssetId} editForm={editForm} editSaving={editSaving}
                       confirmDeleteId={confirmDeleteId}
-                      addingSection={addingSection} addForm={addForm} addSaving={addSaving}
-                      onOpenAdd={openAdd} onAdd={f => setAddForm(p => ({ ...p, ...f }))}
-                      onSaveAdd={saveAdd} onCancelAdd={() => setAddingSection(null)}
+                      onOpenAdd={openAddModal}
                       onStartEdit={startEditAsset} onEditChange={f => setEditForm(p => ({ ...p, ...f }))}
                       onSaveEdit={saveEditAsset} onCancelEdit={() => setEditingAssetId(null)}
                       onConfirmDelete={setConfirmDeleteId} onDelete={deleteAsset}
-                      onAddAccount={() => setAddAccountOpen(true)}
+                      onAddAccount={openSelectionModal}
                     />
                   </div>
 
@@ -1452,50 +1460,97 @@ export default function Accounts() {
         )}
       </div>
 
-      {/* ── Global Add Account Sheet ── */}
-      <Sheet open={addAccountOpen} onOpenChange={setAddAccountOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md bg-card border-border p-6">
-          <SheetHeader className="mb-6">
-            <SheetTitle className="text-lg font-bold text-foreground">Add Account</SheetTitle>
-            <SheetDescription>
-              Choose how you'd like to connect or add an account.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-3">
-            <button
-              onClick={() => { setAddAccountOpen(false); connectBrokerageViaPlaid(); }}
-              disabled={plaidConnecting}
-              className="w-full p-4 rounded-xl border border-border bg-surface-2 hover:border-[var(--violet-light)] transition-colors text-left disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/50">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-violet-dim flex items-center justify-center shrink-0">
-                  <Link2 size={16} className="text-violet-light" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Link an Institution</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                    Securely connect banks, credit cards, or brokerages via Plaid.
-                  </p>
-                </div>
+      {/* ── Global Add Account Modal ── */}
+      <Dialog open={addAccountOpen} onOpenChange={open => { setAddAccountOpen(open); if (!open) setAddModalStep('selection'); }}>
+        <DialogContent
+          showCloseButton={false}
+          className="bg-card border-border shadow-xl p-0 max-w-sm w-full gap-0">
+
+          {/* ── Step 1: Selection ── */}
+          {addModalStep === 'selection' && (
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-5">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-bold text-foreground">Add Account</DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">Choose how you'd like to connect or add an account.</p>
+                </DialogHeader>
+                <button
+                  onClick={closeAddModal}
+                  className="shrink-0 ml-3 mt-0.5 w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors">
+                  <X size={15} />
+                </button>
               </div>
-            </button>
-            <button
-              onClick={() => { setAddAccountOpen(false); openAdd('stocks_bonds'); }}
-              className="w-full p-4 rounded-xl border border-border bg-surface-2 hover:border-[var(--violet-light)] transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/50">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-violet-dim flex items-center justify-center shrink-0">
-                  <Plus size={16} className="text-violet-light" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Add Manual Asset</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                    Track real estate, vehicles, or unlisted investments.
-                  </p>
-                </div>
+              <div className="space-y-2.5">
+                <button
+                  onClick={() => { closeAddModal(); connectBrokerageViaPlaid(); }}
+                  disabled={plaidConnecting}
+                  className="w-full p-4 rounded-xl border border-border bg-surface-2 hover:border-violet-light/50 hover:bg-violet-dim/20 transition-all text-left disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/50 group">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-violet-dim border border-violet-light/20 flex items-center justify-center shrink-0">
+                      <Link2 size={17} className="text-violet-light" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground group-hover:text-violet-light transition-colors">
+                        Link an Institution
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                        Securely connect banks, credit cards, or brokerages via Plaid.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setAddModalStep('manual_form')}
+                  className="w-full p-4 rounded-xl border border-border bg-surface-2 hover:border-violet-light/50 hover:bg-violet-dim/20 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/50 group">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-violet-dim border border-violet-light/20 flex items-center justify-center shrink-0">
+                      <Plus size={17} className="text-violet-light" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground group-hover:text-violet-light transition-colors">
+                        Add Manual Asset
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                        Track real estate, vehicles, or unlisted investments.
+                      </p>
+                    </div>
+                  </div>
+                </button>
               </div>
-            </button>
-          </div>
-        </SheetContent>
-      </Sheet>
+            </div>
+          )}
+
+          {/* ── Step 2: Manual Asset Form ── */}
+          {addModalStep === 'manual_form' && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-5">
+                <button
+                  onClick={() => setAddModalStep('selection')}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                  <ChevronLeft size={14} />Back
+                </button>
+                <div className="h-3.5 w-px bg-border mx-0.5" />
+                <DialogTitle className="text-base font-bold text-foreground">Add Manual Asset</DialogTitle>
+                <button
+                  onClick={closeAddModal}
+                  className="ml-auto w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors shrink-0">
+                  <X size={15} />
+                </button>
+              </div>
+              <AssetForm
+                form={addForm}
+                loanAccounts={loanAccounts}
+                onChange={f => setAddForm(p => ({ ...p, ...f }))}
+                onSave={saveAdd}
+                onCancel={closeAddModal}
+                saving={addSaving}
+                submitLabel="Add Asset"
+              />
+            </div>
+          )}
+
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1839,11 +1894,7 @@ interface ManualWidgetProps {
   editingAssetId: string | null;
   editForm: ManualAssetForm; editSaving: boolean;
   confirmDeleteId: string | null;
-  addingSection: ManualAsset['asset_type'] | null;
-  addForm: ManualAssetForm; addSaving: boolean;
   onOpenAdd: (t: ManualAsset['asset_type']) => void;
-  onAdd: (p: Partial<ManualAssetForm>) => void;
-  onSaveAdd: () => void; onCancelAdd: () => void;
   onStartEdit: (a: ManualAsset) => void;
   onEditChange: (p: Partial<ManualAssetForm>) => void;
   onSaveEdit: () => void; onCancelEdit: () => void;
@@ -1856,15 +1907,12 @@ function ManualWidget({
   sectionType, label, icon, accentColor,
   manualAssets, loanAccounts,
   editingAssetId, editForm, editSaving, confirmDeleteId,
-  addingSection, addForm, addSaving,
-  onOpenAdd, onAdd, onSaveAdd, onCancelAdd,
+  onOpenAdd,
   onStartEdit, onEditChange, onSaveEdit, onCancelEdit,
   onConfirmDelete, onDelete,
   onAddAccount,
 }: ManualWidgetProps) {
   const sectionTotal = manualAssets.reduce((s, a) => s + a.current_value, 0);
-  const isAddingHere = addingSection === sectionType
-    || (sectionType === 'real_estate' && (addingSection === 'vehicle' || addingSection === 'other'));
   const subtypeLabel = (a: ManualAsset) =>
     ASSET_SUBTYPES[a.asset_type]?.find(s => s.value === a.asset_subtype)?.label ?? a.asset_subtype ?? a.asset_type;
 
@@ -1908,7 +1956,7 @@ function ManualWidget({
           }))} />
         )}
 
-        {manualAssets.length === 0 && !isAddingHere && (
+        {manualAssets.length === 0 && (
           sectionType === 'stocks_bonds' ? (
             <p className="text-[11px] text-muted-foreground py-6 text-center">
               No holdings yet.{' '}
@@ -2007,15 +2055,6 @@ function ManualWidget({
           })}
         </div>
 
-        {isAddingHere && (
-          <div className={cn(manualAssets.length > 0 && 'border-t border-border pt-4 mt-2')}>
-            <AssetForm
-              form={addForm} loanAccounts={loanAccounts}
-              onChange={onAdd} onSave={onSaveAdd} onCancel={onCancelAdd}
-              saving={addSaving} submitLabel="Add Asset"
-            />
-          </div>
-        )}
       </CardContent>
     </Card>
   );

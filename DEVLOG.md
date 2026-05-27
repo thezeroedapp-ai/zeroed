@@ -4,6 +4,206 @@
 
 ---
 
+## 2026-05-27
+
+### v9.1 — Add Account Modal Refactor + ManualWidget State Isolation
+
+**Why:** Screenshots showed the "Add Manual Asset" button in the Sheet sidebar was setting `addingSection` state in the parent (`Accounts`), which caused an inline `<AssetForm />` to appear inside whichever `ManualWidget` matched the `sectionType` check. If the user clicked "Add Manual Asset" from the global header, the form would silently open inside the Stocks & Bonds widget — a state collision that was invisible until the user scrolled to find it. The Sheet UX also felt disconnected: a right-slide-in panel is correct for detail drilldowns, not for a two-choice picker.
+
+---
+
+**What changed:**
+
+**`apps/web/src/components/ui/dialog.tsx`:**
+- `DialogOverlay` className: `bg-black/50` → `bg-black/60 backdrop-blur-sm`
+
+**`apps/web/src/pages/Accounts.tsx`:**
+
+*Imports:*
+- Removed: `Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle`
+- Added: `Dialog, DialogContent, DialogHeader, DialogTitle` from `@/components/ui/dialog`
+- Added: `ChevronLeft` from `lucide-react`
+
+*State:*
+- Removed: `addingSection: ManualAsset['asset_type'] | null` — this was the root cause of the state collision
+- Added: `addModalStep: 'selection' | 'manual_form'` — internal step within the single dialog
+
+*Functions:*
+- Removed: `openAdd(type)` — the function that set `addingSection` and caused the widget-level form
+- Added: `openAddModal(type?)` — sets `addForm`, switches step to `'manual_form'`, opens the dialog
+- Added: `openSelectionModal()` — opens the dialog at the `'selection'` step (used by the header `+ Add Account` button)
+- Added: `closeAddModal()` — closes + resets step to `'selection'`
+- Updated: `saveAdd()` — now calls `closeAddModal()` on success instead of `setAddingSection(null)`
+
+*ManualWidgetProps interface* — removed 6 props:
+- `addingSection`, `addForm`, `addSaving`, `onAdd`, `onSaveAdd`, `onCancelAdd`
+
+*ManualWidget implementation* — removed:
+- `isAddingHere` computed boolean (compared `addingSection` vs `sectionType`)
+- The `{isAddingHere && <AssetForm ... />}` block at the bottom of CardContent
+- The `!isAddingHere` guard on the empty-state paragraph
+
+*ManualWidget call sites* (both `stocks_bonds` and `real_estate` widgets):
+- `onOpenAdd` now wires to `openAddModal` (opens the dialog at `'manual_form'` step, pre-sets type)
+- Removed: `addingSection`, `addForm`, `addSaving`, `onAdd`, `onSaveAdd`, `onCancelAdd` props
+
+*Sheet → Dialog replacement:*
+```
+<Sheet open={addAccountOpen} onOpenChange={setAddAccountOpen}>
+  <SheetContent ...>
+```
+→
+```
+<Dialog open={addAccountOpen} onOpenChange={open => { setAddAccountOpen(open); if (!open) setAddModalStep('selection'); }}>
+  <DialogContent showCloseButton={false} className="bg-card border-border shadow-xl p-0 max-w-sm w-full gap-0">
+```
+
+*Dialog — Selection view (`addModalStep === 'selection'`):*
+- Two premium selection cards with `w-10 h-10 rounded-xl bg-violet-dim` icon containers
+- `group` + `group-hover:text-violet-light` on card title for hover state
+- "Link an Institution" → `closeAddModal(); connectBrokerageViaPlaid()`
+- "Add Manual Asset" → `setAddModalStep('manual_form')` (modal stays open, content transitions)
+- Custom close button in top-right (since `showCloseButton={false}`)
+
+*Dialog — Manual Form view (`addModalStep === 'manual_form'`):*
+- `← Back` button → `setAddModalStep('selection')`
+- `DialogTitle` "Add Manual Asset" with a `|` divider between Back and title
+- Custom close X in top-right
+- Renders `<AssetForm form={addForm} ... onSave={saveAdd} onCancel={closeAddModal} />`
+- On successful save: `closeAddModal()` is called, then `loadAll()` re-fetches
+
+---
+
+**Root cause analysis:**
+
+The prior Sheet implementation called `openAdd(type)` which wrote to `addingSection` state. `ManualWidget` received `addingSection` as a prop and checked `addingSection === sectionType` to decide whether to show its inline form. This means:
+
+1. The add form was rendered inside a widget card — not isolated from the dashboard
+2. If the user had a different widget section open (e.g. real estate visible, stocks collapsed), the form could appear off-screen
+3. The Sheet had to close before the inline form opened — two separate state transitions causing a visible flicker
+
+The fix eliminates `addingSection` entirely. The dialog holds all add-flow state internally. Widgets no longer need to know whether they're "the active add target."
+
+---
+
+**Files changed:**
+- MOD: `apps/web/src/components/ui/dialog.tsx` — overlay backdrop blur
+- MOD: `apps/web/src/pages/Accounts.tsx` — Sheet → Dialog, state-collision fix, ManualWidget cleanup
+
+---
+
+## 2026-05-26
+
+### v9.0 — Asset Aggregation System, Net Worth Tab, Smart Real Estate Valuation
+
+**Why:** The Accounts page had manual asset entry but no way to see how assets and liabilities related to each other, no automated valuation, and no clear net worth picture beyond the Dashboard hero chart. The goal was a full asset ledger with automated valuation workflows — matching what Monarch Money and Origin show in their balance sheet / net worth views.
+
+---
+
+**Architecture decisions:**
+
+**Separation of concerns — new layer stack:**
+
+The prior implementation had Plaid account data, manual assets, and display logic all tangled in page components. Added four new layers:
+
+- `apps/web/src/types/domain.ts` — vendor-agnostic domain types: `PhysicalAsset`, `LiquidAsset`, `Liability`, `NetWorthResult`. These are the internal contract. No Plaid-specific shapes leak into components.
+- `apps/web/src/services/api/plaidService.ts` — `fetchAccounts()` returns typed `RawPlaidAccount[]`. Plaid's shape is a detail; callers work with domain types.
+- `apps/web/src/services/api/valuationService.ts` — `fetchRealEstateAVM(address)` and `fetchVehicleValue(specs)`. Both return typed results; callers don't know whether it's RentCast or MarketCheck.
+- `apps/web/src/engines/netWorthEngine.ts` — pure function: `aggregateNetWorth(liquid, physical, liabilities) → NetWorthResult`. No I/O, fully testable.
+- `apps/web/src/hooks/useWealthAggregator.ts` — orchestrates: parallel Plaid + manual asset fetch → AVM for auto-valued mortgages → pending auto loan detection → engine call → state update. Exposed as `{ status, error, result, liquidAssets, pendingAutoLoans, linkVehicleToLoan, refresh }`.
+
+**Why pure engine:** If we ever add forecasting, what-if scenarios, or server-side net worth calculation, the engine is already extractable — no page state mixed in.
+
+---
+
+**Workflow A — Zero-Touch Mortgage AVM:**
+
+When a Plaid mortgage has `property_address` in its metadata and no manual asset is already linked, `useWealthAggregator` automatically calls `fetchRealEstateAVM(address)` → creates a `PhysicalAsset` with `valuationSource: 'api_automated'` and `id: 'avm_{mortgageId}'` → links it to the mortgage. This requires no user action. The `AssetLedger` component shows an "API: RentCast" source badge on these auto-valued assets.
+
+Design choice: failures are soft — `Promise.allSettled` wraps all AVM calls so a 429 or network error surfaces the mortgage as an unlinked liability rather than crashing the whole aggregation.
+
+---
+
+**Workflow B — Smart-Friction Auto Loans:**
+
+Unlinked auto loans (no `PhysicalAsset.linkedLiabilityId` matching their ID) populate `pendingAutoLoans` in the hook. These surface in `AssetDiscoveryBanner` — an amber banner with one VIN input per loan. User submits VIN → `fetchVehicleValue(specs)` → POST `/api/manual-assets` with `linked_loan_id` → hook `load()` re-runs → loan disappears from banner, appears in ledger as a linked equity pair.
+
+"Smart friction": the banner is dismissible per-loan (`dismissedLoans: Set<string>` in Accounts state), and the vehicleHint from Plaid metadata (e.g. "2021 Toyota Camry") pre-fills a hint in the input so the user knows what they're valuing.
+
+---
+
+**Net Worth tab — AssetLedger component:**
+
+Added `net-worth` as a 4th Accounts subtab (order: Accounts → Net Worth → Budget → Rewards). Uses `useWealthAggregator` directly in `Accounts.tsx`. The `AssetLedger` renders:
+
+1. **Net Worth Summary Strip** — three stat boxes: Total Assets / Total Liabilities / Net Worth, with color-coded delta from prior month.
+2. **Equity Pairings** — each `PhysicalAsset` with a `linkedLiabilityId` gets a paired row: asset value, liability balance, equity = asset − liability, LTV bar (liability / asset as percentage). Source badge in the corner.
+3. **Owned Assets** — `PhysicalAsset` entries without a linked liability. Includes growth coefficient badge.
+4. **Cash & Liquid** — `LiquidAsset` rows (depository, investment, brokerage).
+5. **Unlinked Debt** — `Liability` entries with no `linkedAssetId` (e.g. credit cards, student loans). Shown with outstanding balance only — not colored red (per the color-psychology rules: debt amounts are never red unless urgent-alert threshold).
+
+---
+
+**Smart real estate form — three UX layers:**
+
+The Add/Edit manual asset form detects `asset_type === 'real_estate'` and conditionally shows an address block:
+
+1. **Address autocomplete as-you-type:** 300ms debounce calls `GET /api/valuations/address-autocomplete?q=...` → backend proxies to Nominatim (OpenStreetMap) → returns formatted `"street, city, state, zip"` strings. Dropdown with keyboard nav (↑/↓/Enter/Escape). `onMouseDown + preventDefault` on suggestion buttons prevents blur-before-click race condition.
+
+2. **"Get Estimate" AVM button:** Fires `fetchRealEstateAVM(address)` → pre-fills `current_value` field with the RentCast estimate. User can override it. Button disabled while fetching; error shown inline if RentCast is unavailable.
+
+3. **Auto-fill from linked mortgage:** When user selects a Plaid mortgage in the loan dropdown, if that mortgage has `property_address` in its Plaid metadata, `address` is automatically written into the form. The address then drives autocomplete + AVM on demand.
+
+---
+
+**Backend additions:**
+
+- `server/routes/valuations.js` — three endpoints:
+  - `GET /real-estate?address=…` → calls `valuationService.fetchRealEstateAVM(address)` (RentCast)
+  - `POST /vehicle` → calls `valuationService.fetchVehicleValue(specs)` (MarketCheck, VIN or make/model/year)
+  - `GET /address-autocomplete?q=…` → proxies Nominatim; formats `addressdetails` into clean strings; degrades silently on error
+- `server/routes/plaid.js` — added `GET /liabilities`: returns only `credit`, `loan`, `mortgage` accounts with extended metadata fields (APR, property_address, vehicle_description). Separated from `/accounts` so the wealth aggregator can fetch liabilities efficiently without filtering the full account list client-side.
+- `server/routes/manual-assets.js` — POST + PUT now accept `address` field; stored in Firestore only for `asset_type === 'real_estate'`. PUT always writes `address: null` for non-real-estate to prevent stale data when type changes.
+- `server/server.js` — mounted `valuationsRoutes` at `/api/valuations`.
+
+**Why Nominatim for autocomplete, not Google Places:** Zero cost, no API key, OpenStreetMap data is excellent for US addresses. The backend proxy avoids CORS and adds `User-Agent` (Nominatim requirement). Degrades silently if unavailable — user can still type manually.
+
+---
+
+**Errors encountered and fixed:**
+
+- **`liquidAssets` inline import type cast in JSX:** Initial draft tried `import('@/types/domain').LiquidAsset[]` inside a JSX expression — invalid TypeScript. Fixed by adding `liquidAssets: LiquidAsset[]` to the hook's return type and state, exposing it directly.
+- **Net Worth tab JSX placed outside container div:** When inserting the tab's JSX, the replacement target (`{/* ── Global Add Account Sheet ── */}`) was after the `px-6` container's closing `</div>`, so the new tab rendered outside its padding context. Diagnosed by reading the file at the affected range; repaired by replacing the malformed block (extra `</div>` + tab JSX + Sheet comment) with the correct nesting.
+- **`startEditAsset` missing `address` field:** After adding `address` to `ManualAssetForm`, TypeScript caught that `setEditForm` in `startEditAsset` didn't include it. Fixed by adding `address: a.address || ''`.
+
+---
+
+**Files changed:**
+- NEW: `apps/web/src/types/domain.ts`
+- NEW: `apps/web/src/services/api/plaidService.ts`
+- NEW: `apps/web/src/services/api/valuationService.ts`
+- NEW: `apps/web/src/engines/netWorthEngine.ts`
+- NEW: `apps/web/src/hooks/useWealthAggregator.ts`
+- NEW: `apps/web/src/components/AssetLedger.tsx`
+- NEW: `apps/web/src/components/AssetDiscoveryBanner.tsx`
+- NEW: `server/routes/valuations.js`
+- NEW: `server/services/valuationService.js`
+- MOD: `server/routes/plaid.js` — added `GET /liabilities`
+- MOD: `server/routes/manual-assets.js` — `address` field on POST/PUT
+- MOD: `server/server.js` — mount valuations router
+- MOD: `apps/web/src/pages/Accounts.tsx` — Net Worth tab, AssetForm with autocomplete + AVM, useWealthAggregator integration
+
+---
+
+**Decisions made:**
+
+- **`useWealthAggregator` lives in `hooks/`, not inside Accounts.tsx** — Net Worth data will eventually also feed Dashboard widgets (net worth trend chart needs asset/liability breakdown). Keeping the hook separate means Dashboard can import it without depending on the Accounts page.
+- **AVM fires automatically for mortgages, not for other asset types** — Mortgages are the only case where Plaid reliably supplies a `property_address`. Vehicles don't have a reliably scraped VIN in Plaid data. The asymmetry is intentional.
+- **Manual `current_value` always wins over AVM in the ledger** — If a user has a manual asset with `linked_loan_id` matching a mortgage, the AVM workflow is skipped for that mortgage. Manual data takes precedence.
+- **AssetDiscoveryBanner is dismissible, not blocking** — Net worth renders even if auto loans are unlinked. The amber banner is an invitation, not a gate. Dismissed state is session-only (`useState` not persisted) — reappears on refresh to remind the user.
+
+---
+
 ## 2026-05-23
 
 ### v5.4 — UI Audit + Incremental Fixes + Full Redesign Plan
