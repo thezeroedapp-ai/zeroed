@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Home, Car, TrendingUp, Landmark, AlertTriangle, MoreVertical, Trash2, Unlink } from 'lucide-react';
+import {
+  Home, Car, TrendingUp, Landmark, AlertTriangle,
+  MoreVertical, Trash2, Unlink, Archive, Loader2,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge }  from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,7 +10,7 @@ import { cn }     from '@/lib/utils';
 import { fmt, fmtD } from '@/lib/api';
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -20,11 +23,13 @@ import type {
 } from '@/types/domain';
 import InstitutionLogo from '@/components/ui/institution-logo';
 
-// ─── Pending delete state ─────────────────────────────────────────────────────
+// ─── Pending action state ─────────────────────────────────────────────────────
 
-type PendingDelete =
+type PendingRemove =
   | { kind: 'asset'; id: string; name: string }
   | { kind: 'institution'; plaidItemId: string; institutionName: string };
+
+type DeletingAction = 'archive' | 'delete' | null;
 
 // ─── Source badge ─────────────────────────────────────────────────────────────
 
@@ -56,12 +61,12 @@ function AssetIcon({ type, size = 13 }: { type: PhysicalAsset['assetType']; size
 // ─── Row ellipsis menu ────────────────────────────────────────────────────────
 
 interface EllipsisMenuProps {
-  onDelete: () => void;
+  onRemove: () => void;
   label: string;
   icon: React.ReactNode;
 }
 
-function EllipsisMenu({ onDelete, label, icon }: EllipsisMenuProps) {
+function EllipsisMenu({ onRemove, label, icon }: EllipsisMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -75,7 +80,7 @@ function EllipsisMenu({ onDelete, label, icon }: EllipsisMenuProps) {
       <DropdownMenuContent align="end">
         <DropdownMenuItem
           className="text-destructive focus:text-destructive"
-          onSelect={onDelete}
+          onSelect={onRemove}
         >
           {icon}
           {label}
@@ -89,13 +94,13 @@ function EllipsisMenu({ onDelete, label, icon }: EllipsisMenuProps) {
 
 interface EquityPairingRowProps {
   pairing: EquityPairing;
-  onRequestDelete?: (item: PendingDelete) => void;
+  onRequestRemove?: (item: PendingRemove) => void;
 }
 
-function EquityPairingRow({ pairing, onRequestDelete }: EquityPairingRowProps) {
+function EquityPairingRow({ pairing, onRequestRemove }: EquityPairingRowProps) {
   const { asset, liability, grossValue, outstandingDebt, netEquity, equityPercent, ltvPercent } = pairing;
   const equityPositive = netEquity >= 0;
-  const canDelete = onRequestDelete && asset.valuationSource === 'manual_override';
+  const canRemove = onRequestRemove && asset.valuationSource === 'manual_override';
 
   return (
     <div className="py-4 border-b border-border last:border-0 group/row">
@@ -113,11 +118,11 @@ function EquityPairingRow({ pairing, onRequestDelete }: EquityPairingRowProps) {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <span className="text-sm font-bold tabular text-foreground">{fmt(grossValue)}</span>
-          {canDelete && (
+          {canRemove && (
             <EllipsisMenu
-              label="Delete Asset"
+              label="Remove Asset"
               icon={<Trash2 size={13} />}
-              onDelete={() => onRequestDelete({ kind: 'asset', id: asset.id, name: asset.name })}
+              onRemove={() => onRequestRemove({ kind: 'asset', id: asset.id, name: asset.name })}
             />
           )}
         </div>
@@ -181,11 +186,11 @@ function EquityPairingRow({ pairing, onRequestDelete }: EquityPairingRowProps) {
 
 interface UnlinkedAssetRowProps {
   asset: PhysicalAsset;
-  onRequestDelete?: (item: PendingDelete) => void;
+  onRequestRemove?: (item: PendingRemove) => void;
 }
 
-function UnlinkedAssetRow({ asset, onRequestDelete }: UnlinkedAssetRowProps) {
-  const canDelete = onRequestDelete && asset.valuationSource === 'manual_override';
+function UnlinkedAssetRow({ asset, onRequestRemove }: UnlinkedAssetRowProps) {
+  const canRemove = onRequestRemove && asset.valuationSource === 'manual_override';
 
   return (
     <div className="flex items-center justify-between gap-3 py-3 border-b border-border last:border-0 group/row">
@@ -199,11 +204,11 @@ function UnlinkedAssetRow({ asset, onRequestDelete }: UnlinkedAssetRowProps) {
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <span className="text-sm font-bold tabular text-foreground">{fmt(asset.currentValue)}</span>
-        {canDelete && (
+        {canRemove && (
           <EllipsisMenu
-            label="Delete Asset"
+            label="Remove Asset"
             icon={<Trash2 size={13} />}
-            onDelete={() => onRequestDelete({ kind: 'asset', id: asset.id, name: asset.name })}
+            onRemove={() => onRequestRemove({ kind: 'asset', id: asset.id, name: asset.name })}
           />
         )}
       </div>
@@ -215,11 +220,11 @@ function UnlinkedAssetRow({ asset, onRequestDelete }: UnlinkedAssetRowProps) {
 
 interface LiquidAssetRowProps {
   asset: LiquidAsset;
-  onRequestDelete?: (item: PendingDelete) => void;
+  onRequestRemove?: (item: PendingRemove) => void;
 }
 
-function LiquidAssetRow({ asset, onRequestDelete }: LiquidAssetRowProps) {
-  const canUnlink = onRequestDelete && !!asset.plaidItemId;
+function LiquidAssetRow({ asset, onRequestRemove }: LiquidAssetRowProps) {
+  const canRemove = onRequestRemove && !!asset.plaidItemId;
 
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border last:border-0 group/row">
@@ -240,11 +245,11 @@ function LiquidAssetRow({ asset, onRequestDelete }: LiquidAssetRowProps) {
             Plaid Sync
           </Badge>
         </div>
-        {canUnlink && (
+        {canRemove && (
           <EllipsisMenu
-            label="Unlink Institution"
+            label="Remove Institution"
             icon={<Unlink size={13} />}
-            onDelete={() => onRequestDelete({
+            onRemove={() => onRequestRemove({
               kind: 'institution',
               plaidItemId: asset.plaidItemId!,
               institutionName: asset.institutionName || asset.name,
@@ -319,6 +324,88 @@ function LedgerSection({
   );
 }
 
+// ─── Remove dialog ────────────────────────────────────────────────────────────
+
+interface RemoveDialogProps {
+  pending: PendingRemove | null;
+  deletingAction: DeletingAction;
+  onArchive: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}
+
+function RemoveDialog({ pending, deletingAction, onArchive, onDelete, onClose }: RemoveDialogProps) {
+  const isAsset       = pending?.kind === 'asset';
+  const entityName    = isAsset ? (pending as { name: string }).name : (pending as { institutionName: string } | null)?.institutionName ?? '';
+  const busy          = deletingAction !== null;
+
+  return (
+    <AlertDialog
+      open={pending !== null}
+      onOpenChange={open => { if (!open && !busy) onClose(); }}
+    >
+      <AlertDialogContent className="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {isAsset ? 'Remove Asset' : 'Remove Institution'}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            What happened to <span className="font-medium text-foreground">{entityName}</span>? Choose how you want to handle your historical data.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="flex flex-col gap-3 mt-1">
+          {/* Archive — soft delete, preserves history */}
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={onArchive}
+            className="h-auto w-full justify-between px-4 py-3 text-left"
+          >
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                {isAsset ? 'I sold or closed it.' : 'I closed this account.'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Preserves your past net worth history.
+              </p>
+            </div>
+            {deletingAction === 'archive'
+              ? <Loader2 size={14} className="text-muted-foreground animate-spin shrink-0 ml-3" />
+              : <Archive  size={14} className="text-muted-foreground shrink-0 ml-3" />
+            }
+          </Button>
+
+          {/* Hard delete — rewrites history */}
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={onDelete}
+            className="h-auto w-full justify-between px-4 py-3 text-left border-destructive text-destructive hover:bg-destructive/5 hover:text-destructive focus-visible:ring-destructive"
+          >
+            <div>
+              <p className="text-sm font-medium">It was a mistake.</p>
+              <p className="text-xs text-destructive/70 mt-0.5">
+                {isAsset
+                  ? 'Permanently deletes this asset and rewrites history.'
+                  : 'Permanently disconnects and deletes all linked data.'}
+              </p>
+            </div>
+            {deletingAction === 'delete'
+              ? <Loader2 size={14} className="animate-spin shrink-0 ml-3" />
+              : <Trash2  size={14} className="shrink-0 ml-3" />
+            }
+          </Button>
+
+          <AlertDialogCancel disabled={busy} onClick={onClose}>
+            Cancel
+          </AlertDialogCancel>
+        </div>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 // ─── AssetLedger ──────────────────────────────────────────────────────────────
 
 interface AssetLedgerProps {
@@ -326,6 +413,8 @@ interface AssetLedgerProps {
   liquidAssets: LiquidAsset[];
   onRemoveAsset?: (assetId: string) => Promise<void>;
   onRemoveInstitution?: (plaidItemId: string) => Promise<void>;
+  onArchiveAsset?: (assetId: string) => Promise<void>;
+  onArchiveInstitution?: (plaidItemId: string) => Promise<void>;
 }
 
 export default function AssetLedger({
@@ -333,6 +422,8 @@ export default function AssetLedger({
   liquidAssets,
   onRemoveAsset,
   onRemoveInstitution,
+  onArchiveAsset,
+  onArchiveInstitution,
 }: AssetLedgerProps) {
   const {
     equityPairings,
@@ -344,27 +435,42 @@ export default function AssetLedger({
     netWorth,
   } = result;
 
-  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
-  const [deleting, setDeleting]           = useState(false);
+  const [pendingRemove,  setPendingRemove]  = useState<PendingRemove | null>(null);
+  const [deletingAction, setDeletingAction] = useState<DeletingAction>(null);
 
   const pairedAssetsTotal   = equityPairings.reduce((s, p) => s + p.grossValue, 0);
   const unlinkedAssetsTotal = unlinkedPhysicalAssets.reduce((s, a) => s + a.currentValue, 0);
   const unlinkedDebtTotal   = unlinkedLiabilities.reduce((s, l) => s + l.currentBalance, 0);
 
-  const hasDeleteCallbacks = !!(onRemoveAsset || onRemoveInstitution);
+  const hasActionCallbacks = !!(onRemoveAsset || onRemoveInstitution || onArchiveAsset || onArchiveInstitution);
 
-  async function handleConfirmDelete() {
-    if (!pendingDelete) return;
-    setDeleting(true);
+  async function handleArchive() {
+    if (!pendingRemove) return;
+    setDeletingAction('archive');
     try {
-      if (pendingDelete.kind === 'asset' && onRemoveAsset) {
-        await onRemoveAsset(pendingDelete.id);
-      } else if (pendingDelete.kind === 'institution' && onRemoveInstitution) {
-        await onRemoveInstitution(pendingDelete.plaidItemId);
+      if (pendingRemove.kind === 'asset' && onArchiveAsset) {
+        await onArchiveAsset(pendingRemove.id);
+      } else if (pendingRemove.kind === 'institution' && onArchiveInstitution) {
+        await onArchiveInstitution(pendingRemove.plaidItemId);
       }
-      setPendingDelete(null);
+      setPendingRemove(null);
     } finally {
-      setDeleting(false);
+      setDeletingAction(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!pendingRemove) return;
+    setDeletingAction('delete');
+    try {
+      if (pendingRemove.kind === 'asset' && onRemoveAsset) {
+        await onRemoveAsset(pendingRemove.id);
+      } else if (pendingRemove.kind === 'institution' && onRemoveInstitution) {
+        await onRemoveInstitution(pendingRemove.plaidItemId);
+      }
+      setPendingRemove(null);
+    } finally {
+      setDeletingAction(null);
     }
   }
 
@@ -376,9 +482,9 @@ export default function AssetLedger({
         <CardContent className="p-5">
           <div className="grid grid-cols-3 gap-4 divide-x divide-border">
             {[
-              { label: 'Gross Assets',    value: fmt(totalLiquidAssets + totalPhysicalAssets), color: 'text-foreground' },
-              { label: 'Total Debt',      value: fmt(totalLiabilities), color: 'text-foreground' },
-              { label: 'Net Worth',       value: `${netWorth < 0 ? '−' : ''}${fmt(Math.abs(netWorth))}`, color: netWorth >= 0 ? 'text-green' : 'text-foreground' },
+              { label: 'Gross Assets',  value: fmt(totalLiquidAssets + totalPhysicalAssets), color: 'text-foreground' },
+              { label: 'Total Debt',    value: fmt(totalLiabilities),                         color: 'text-foreground' },
+              { label: 'Net Worth',     value: `${netWorth < 0 ? '−' : ''}${fmt(Math.abs(netWorth))}`, color: netWorth >= 0 ? 'text-green' : 'text-foreground' },
             ].map(({ label, value, color }) => (
               <div key={label} className="px-4 first:pl-0 last:pr-0 text-center">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
@@ -389,7 +495,7 @@ export default function AssetLedger({
         </CardContent>
       </Card>
 
-      {/* Equity Pairings — the core of the ledger */}
+      {/* Equity Pairings */}
       <LedgerSection
         title="Equity Pairings"
         total={pairedAssetsTotal}
@@ -398,7 +504,7 @@ export default function AssetLedger({
           <EquityPairingRow
             key={p.asset.id}
             pairing={p}
-            onRequestDelete={hasDeleteCallbacks ? setPendingDelete : undefined}
+            onRequestRemove={hasActionCallbacks ? setPendingRemove : undefined}
           />
         ))}
       </LedgerSection>
@@ -412,7 +518,7 @@ export default function AssetLedger({
           <UnlinkedAssetRow
             key={a.id}
             asset={a}
-            onRequestDelete={hasDeleteCallbacks ? setPendingDelete : undefined}
+            onRequestRemove={hasActionCallbacks ? setPendingRemove : undefined}
           />
         ))}
       </LedgerSection>
@@ -426,7 +532,7 @@ export default function AssetLedger({
           <LiquidAssetRow
             key={a.id}
             asset={a}
-            onRequestDelete={hasDeleteCallbacks ? setPendingDelete : undefined}
+            onRequestRemove={hasActionCallbacks ? setPendingRemove : undefined}
           />
         ))}
       </LedgerSection>
@@ -443,35 +549,14 @@ export default function AssetLedger({
         </LedgerSection>
       )}
 
-      {/* Confirm Delete / Unlink AlertDialog */}
-      <AlertDialog
-        open={pendingDelete !== null}
-        onOpenChange={open => { if (!open && !deleting) setPendingDelete(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingDelete?.kind === 'institution' ? 'Unlink Institution' : 'Delete Asset'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete?.kind === 'institution'
-                ? `Disconnect ${pendingDelete.institutionName} and remove all linked accounts and transactions? This cannot be undone.`
-                : `Remove "${pendingDelete?.name}" from your net worth? This cannot be undone.`
-              }
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <Button
-              disabled={deleting}
-              className="bg-destructive text-white hover:bg-destructive/90 focus:ring-destructive"
-              onClick={handleConfirmDelete}
-            >
-              {deleting ? 'Deleting…' : 'Confirm Delete'}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Archive vs. Delete dialog */}
+      <RemoveDialog
+        pending={pendingRemove}
+        deletingAction={deletingAction}
+        onArchive={handleArchive}
+        onDelete={handleDelete}
+        onClose={() => setPendingRemove(null)}
+      />
 
     </div>
   );

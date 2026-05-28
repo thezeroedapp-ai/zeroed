@@ -685,7 +685,9 @@ export default function Accounts() {
     liquidAssets:    wealthLiquidAssets,
     pendingAutoLoans,
     linkVehicleToLoan,
+    archiveAsset,
     removeAsset,
+    archiveInstitution,
     removeInstitution,
     refresh:         refreshWealth,
   } = useWealthAggregator();
@@ -1455,7 +1457,9 @@ export default function Accounts() {
                 <AssetLedger
                   result={wealthResult}
                   liquidAssets={wealthLiquidAssets}
+                  onArchiveAsset={archiveAsset}
                   onRemoveAsset={removeAsset}
+                  onArchiveInstitution={archiveInstitution}
                   onRemoveInstitution={removeInstitution}
                 />
               </>

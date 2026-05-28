@@ -6,6 +6,74 @@
 
 ## 2026-05-27
 
+### v9.3 — Archive vs. Hard Delete ("Rewriting History" Pattern)
+
+**Why:** A single "delete" button is too blunt for a financial app. There are two distinct user intents: (1) "I sold this asset / closed this account" — the event happened and should be reflected in history; (2) "I made a mistake adding this" — the row should never have existed. Treating both the same destroys historical net worth data for users in case 1. The solution is a two-path removal dialog that makes the distinction explicit and preserves data by default.
+
+---
+
+**What changed:**
+
+**`server/db/database.js`**
+- `getAccountsByUser(uid, opts)` — accepts `{ includeArchived: boolean }` (default `false`). Fetches all, filters `a.archived_at` in JS (Firestore has no `!= null` index filter). Backwards-compatible: all existing callers receive active-only accounts unchanged
+- `getManualAssets(uid, opts)` — same pattern: `{ includeArchived: boolean }`, default `false`
+- `archiveManualAsset(uid, id)` — sets `archived_at: FieldValue.serverTimestamp()` on the `manual_assets` doc
+- `archivePlaidItem(uid, itemId)` — sets `archived_at` on the `plaid_items` doc, then uses a Firestore `where('plaid_item_id', '==', itemId)` query + batch update to stamp `archived_at` on every account in that item. Does NOT revoke Plaid token; does NOT delete any data
+
+**`server/routes/manual-assets.js`**
+- `GET /` — passes `includeArchived` from `req.query.includeArchived === 'true'`
+- `PUT /:id/archive` — calls `db.archiveManualAsset(req.user.uid, req.params.id)`
+
+**`server/routes/plaid.js`**
+- `GET /accounts` — passes `includeArchived` from query params
+- `PUT /items/:itemId/archive` — validates item exists, calls `db.archivePlaidItem(uid, itemId)`
+
+**`apps/web/src/types/domain.ts`**
+- `PhysicalAsset`: added `archivedAt?: string | null`
+- `LiquidAsset`: added `archivedAt?: string | null`
+
+**`apps/web/src/services/api/plaidService.ts`**
+- `RawPlaidAccount`: added `archived_at?: string | null`
+- `fetchAccounts(opts?)` — accepts `{ includeArchived?: boolean }`, appends `?includeArchived=true` when set
+- `archiveInstitution(itemId)` — calls `PUT /api/plaid/items/:itemId/archive`
+
+**`apps/web/src/services/api/manualAssetService.ts`**
+- `archiveManualAsset(assetId)` — calls `PUT /api/manual-assets/:id/archive`
+
+**`apps/web/src/hooks/useWealthAggregator.ts`**
+- Interface: added `archiveAsset` and `archiveInstitution` alongside existing remove functions
+- `load()`: now fetches `?includeArchived=true` for both accounts and manual assets
+- Active filtering before `aggregateNetWorth()`: `liquidAssets = allLiquid.filter(a => !a.archivedAt)`, `manualPhysical = allManualPhysical.filter(a => !a.archivedAt)`, liabilities filtered from `accounts.filter(a => !a.archived_at)` before `toLiabilities()`
+- `toLiquidAssets` and `toPhysicalAssets` mappers: propagate `archived_at → archivedAt`
+- `archiveAsset` and `archiveInstitution` callbacks: same pattern as remove — await service call, call `load()`
+
+**`apps/web/src/components/AssetLedger.tsx`**
+- `PendingDelete` renamed to `PendingRemove` — neutral name since the action may be archive or delete
+- `DeletingAction: 'archive' | 'delete' | null` — replaces `deleting: boolean`; tracks which path is in-flight
+- `AssetLedgerProps` — added `onArchiveAsset?` and `onArchiveInstitution?`
+- `EllipsisMenu` — label changed from "Delete Asset" → "Remove Asset", "Unlink Institution" → "Remove Institution"
+- New `RemoveDialog` sub-component: extracts the AlertDialog into its own component for readability
+  - Title: "Remove Asset" or "Remove Institution"
+  - Description: references the entity name, explains the choice
+  - Button 1 (Archive, outline): "I sold or closed it." / "Preserves your past net worth history." — `Archive` icon, spinner when `deletingAction === 'archive'`
+  - Button 2 (Hard delete, outline + `border-destructive text-destructive`): "It was a mistake." / destruction warning — `Trash2` icon, spinner when `deletingAction === 'delete'`
+  - Cancel: `AlertDialogCancel`, disabled while any action is in flight
+- `handleArchive` and `handleDelete`: separate async functions; each sets `deletingAction`, awaits the correct callback, clears `pendingRemove`, resets `deletingAction` in `finally`
+
+**`apps/web/src/pages/Accounts.tsx`**
+- Destructured `archiveAsset` and `archiveInstitution` from `useWealthAggregator()`
+- Passed `onArchiveAsset={archiveAsset}` and `onArchiveInstitution={archiveInstitution}` to `<AssetLedger />`
+
+---
+
+**Decisions:**
+- **Soft delete via `archived_at` timestamp, not a status enum** — timestamps are more useful (when was this archived?), and the filter `!a.archived_at` is simpler than `a.status === 'active'`
+- **Filter in JS, not Firestore query** — Firestore doesn't support `!= null` filters cleanly without a composite index. Fetching all and filtering in JS is correct for data volumes typical in this app (one user's assets, <100 docs)
+- **Plaid archive does NOT revoke token** — the whole point of archive is preservation. The institution may be reconnected later, and keeping the token open costs nothing. Token is only revoked on hard delete
+- **Liabilities can't be archived** — they come from Plaid sync. If a user closes a loan account, Plaid will stop syncing it. If they want it gone from the current view, they archive the whole institution
+
+---
+
 ### v9.2 — Deletion & Unlinking
 
 **Why:** The Net Worth tab had no way to remove data. Manual assets couldn't be deleted; Plaid institution connections couldn't be revoked from the ledger. Users who added the wrong asset or wanted to remove a stale bank connection had no path. Both backend DELETE endpoints already existed (`DELETE /api/manual-assets/:id` and `DELETE /api/plaid/items/:itemId` with full cascade) — this was a pure frontend wiring task.

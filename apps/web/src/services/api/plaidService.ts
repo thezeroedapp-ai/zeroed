@@ -16,6 +16,7 @@ export interface RawPlaidAccount {
   payment_due_date: string | null;
   institution_name: string;
   plaid_item_id?: string;
+  archived_at?: string | null;
 }
 
 // Extends RawPlaidAccount with fields populated by Plaid's liabilities product
@@ -64,8 +65,11 @@ export async function syncAll(): Promise<void> {
 
 // ─── Data fetching ────────────────────────────────────────────────────────────
 
-export async function fetchAccounts(): Promise<{ accounts: RawPlaidAccount[] }> {
-  const r = await apiFetch('/api/plaid/accounts');
+export async function fetchAccounts(
+  opts: { includeArchived?: boolean } = {},
+): Promise<{ accounts: RawPlaidAccount[] }> {
+  const qs = opts.includeArchived ? '?includeArchived=true' : '';
+  const r  = await apiFetch(`/api/plaid/accounts${qs}`);
   if (!r.ok) throw new Error(`fetch-accounts failed: ${r.status}`);
   return r.json();
 }
@@ -74,6 +78,13 @@ export async function fetchLiabilities(): Promise<{ liabilities: RawPlaidLiabili
   const r = await apiFetch('/api/plaid/liabilities');
   if (!r.ok) throw new Error(`fetch-liabilities failed: ${r.status}`);
   return r.json();
+}
+
+export async function archiveInstitution(itemId: string): Promise<void> {
+  const r = await apiFetch(`/api/plaid/items/${encodeURIComponent(itemId)}/archive`, {
+    method: 'PUT',
+  });
+  if (!r.ok) throw new Error(`Archive institution failed: ${r.status}`);
 }
 
 export async function unlinkInstitution(itemId: string): Promise<void> {

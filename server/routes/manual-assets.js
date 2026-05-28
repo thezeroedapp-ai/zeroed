@@ -4,7 +4,8 @@ const db      = require('../db/database');
 
 router.get('/', async (req, res) => {
   try {
-    const assets = await db.getManualAssets(req.user.uid);
+    const includeArchived = req.query.includeArchived === 'true';
+    const assets = await db.getManualAssets(req.user.uid, { includeArchived });
     res.json({ assets });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -47,6 +48,13 @@ router.put('/:id', async (req, res) => {
                         : null,
     };
     await db.updateManualAsset(req.user.uid, req.params.id, data);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/:id/archive', async (req, res) => {
+  try {
+    await db.archiveManualAsset(req.user.uid, req.params.id);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

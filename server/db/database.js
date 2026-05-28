@@ -49,9 +49,10 @@ async function upsertUser(uid, data) {
 
 // --- Accounts ---
 
-async function getAccountsByUser(uid) {
+async function getAccountsByUser(uid, { includeArchived = false } = {}) {
   const snap = await userRef(uid).collection('accounts').get();
-  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+  const all  = snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+  return includeArchived ? all : all.filter(a => !a.archived_at);
 }
 
 async function upsertAccount(uid, account) {
@@ -288,9 +289,30 @@ async function getNetWorthHistory(uid, limit = 12) {
 
 // --- Manual Assets ---
 
-async function getManualAssets(uid) {
+async function getManualAssets(uid, { includeArchived = false } = {}) {
   const snap = await userRef(uid).collection('manual_assets').orderBy('created_at', 'desc').get();
-  return snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+  const all  = snap.docs.map(d => ({ id: d.id, ...toObj(d) }));
+  return includeArchived ? all : all.filter(a => !a.archived_at);
+}
+
+async function archiveManualAsset(uid, id) {
+  await userRef(uid).collection('manual_assets').doc(id).update({
+    archived_at: FieldValue.serverTimestamp(),
+  });
+}
+
+async function archivePlaidItem(uid, itemId) {
+  const now = FieldValue.serverTimestamp();
+  await userRef(uid).collection('plaid_items').doc(itemId).update({ archived_at: now });
+
+  // Batch-archive all accounts that belong to this item
+  const snap = await userRef(uid).collection('accounts')
+    .where('plaid_item_id', '==', itemId).get();
+  if (!snap.empty) {
+    const batch = firestore.batch();
+    snap.docs.forEach(d => batch.update(d.ref, { archived_at: now }));
+    await batch.commit();
+  }
 }
 
 async function addManualAsset(uid, data) {
@@ -381,6 +403,7 @@ module.exports = {
   getBudgets, upsertBudget, deleteBudget,
   recordNetWorthSnapshot, getNetWorthHistory,
   getDashboardConfig, saveDashboardConfig,
-  getManualAssets, addManualAsset, updateManualAsset, deleteManualAsset,
+  getManualAssets, addManualAsset, updateManualAsset, deleteManualAsset, archiveManualAsset,
+  archivePlaidItem,
   saveHoldings, getHoldings,
 };

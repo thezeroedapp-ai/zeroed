@@ -14,6 +14,17 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
+**v9.3 — Archive vs. Hard Delete ("Rewriting History" pattern)** *(2026-05-27)*
+
+- **Two-path removal dialog:** The ellipsis menu now opens a choice dialog — "I sold or closed it" (soft delete, preserves history) vs. "It was a mistake" (hard delete, rewrites history). Per-button `Loader2` spinner while in-flight; both buttons + Cancel disabled during any pending action
+- **Archive (soft delete):** `PUT /api/manual-assets/:id/archive` sets `archived_at` timestamp on the doc. `PUT /api/plaid/items/:itemId/archive` sets `archived_at` on the plaid_item and batch-updates all its accounts — Plaid token is NOT revoked, data is preserved
+- **Hard delete (unchanged behavior):** `DELETE /api/manual-assets/:id` and `DELETE /api/plaid/items/:itemId` still do full cascade and token revocation
+- **Hook filtering:** `useWealthAggregator` now fetches with `?includeArchived=true` to get all assets. Active-only filter (`!a.archivedAt`) applied before `aggregateNetWorth()` — archived assets are invisible in the current ledger but their data lives on in Firestore for net worth history
+- **New DB functions:** `archiveManualAsset(uid, id)` and `archivePlaidItem(uid, itemId)` in `database.js`
+- **Domain types:** `PhysicalAsset.archivedAt` and `LiquidAsset.archivedAt` added
+
+---
+
 **v9.2 — Deletion & Unlinking** *(2026-05-27)*
 
 - **Delete manual assets:** Every manual PhysicalAsset row (Equity Pairings, Owned Assets) shows a `MoreVertical` ellipsis `DropdownMenu` on hover. Clicking "Delete Asset" opens an `AlertDialog` with `bg-black/60 backdrop-blur-sm` overlay and a red "Confirm Delete" button. Disabled + "Deleting…" while in-flight; dialog blocks cancel during deletion
@@ -49,6 +60,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v9.3 | 2026-05-27 | Archive vs. Hard Delete: two-path removal dialog (preserve history / rewrite); PUT archive routes; archivePlaidItem batch; hook fetches all + filters active; archivedAt on domain types |
 | v9.2 | 2026-05-27 | Deletion & Unlinking: DropdownMenu + AlertDialog on asset rows; delete manual assets; unlink Plaid institutions; alert-dialog.tsx + dropdown-menu.tsx primitives; manualAssetService.ts; useWealthAggregator adds removeAsset + removeInstitution |
 | v9.1 | 2026-05-27 | Add Account Sheet → multi-step Dialog; addingSection state-collision bug fixed; ManualWidget is now a pure display ledger; DialogOverlay backdrop-blur |
 | v9.0 | 2026-05-26 | Asset aggregation system (domain types, service/engine/hook layers); Net Worth tab with equity pairings + LTV bars + source badges; Workflow A zero-touch mortgage AVM; Workflow B smart-friction auto loan VIN flow; property address autocomplete (Nominatim, debounced, keyboard nav); AVM pre-fill via RentCast; address persisted to Firestore; global Add Account modal; FI Projector static redesign; /api/valuations/{real-estate,vehicle,address-autocomplete}; /api/plaid/liabilities |

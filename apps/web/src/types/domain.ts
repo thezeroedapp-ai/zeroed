@@ -20,6 +20,7 @@ export interface PhysicalAsset {
   /** Annual appreciation/depreciation as a decimal. e.g. 0.05 = +5%, -0.12 = −12%. */
   annualGrowthCoefficient: number;
   lastValuedAt: string; // ISO 8601
+  archivedAt?: string | null;
   metadata?: {
     address?: string;
     vin?: string;
@@ -38,6 +39,7 @@ export interface LiquidAsset {
   currentBalance: number;
   availableBalance: number | null;
   plaidItemId?: string;
+  archivedAt?: string | null;
   lastSyncedAt: string; // ISO 8601
 }
 

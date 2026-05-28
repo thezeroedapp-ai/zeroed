@@ -71,7 +71,8 @@ router.post('/sync', async (req, res) => {
 
 router.get('/accounts', async (req, res) => {
   try {
-    const accounts = await db.getAccountsByUser(req.user.uid);
+    const includeArchived = req.query.includeArchived === 'true';
+    const accounts = await db.getAccountsByUser(req.user.uid, { includeArchived });
     res.json({ accounts });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -90,6 +91,22 @@ router.get('/items', async (req, res) => {
       })),
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/items/:itemId/archive', async (req, res) => {
+  try {
+    const uid    = req.user.uid;
+    const itemId = req.params.itemId;
+    const items  = await db.getPlaidItems(uid);
+    if (!items.find(i => i.id === itemId)) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    await db.archivePlaidItem(uid, itemId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('archive-item:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

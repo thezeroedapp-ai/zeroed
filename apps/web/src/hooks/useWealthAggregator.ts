@@ -4,12 +4,12 @@ import type {
   PhysicalAsset, LiquidAsset, Liability,
   NetWorthResult, LiquidAccountType,
 } from '@/types/domain';
-import * as plaidSvc          from '@/services/api/plaidService';
-import * as valuationSvc      from '@/services/api/valuationService';
-import type { VehicleSpecsPayload } from '@/services/api/valuationService';
-import { deleteManualAsset }  from '@/services/api/manualAssetService';
-import { aggregateNetWorth }  from '@/engines/netWorthEngine';
-import { apiFetch }           from '@/lib/api';
+import * as plaidSvc                           from '@/services/api/plaidService';
+import * as valuationSvc                       from '@/services/api/valuationService';
+import type { VehicleSpecsPayload }            from '@/services/api/valuationService';
+import { archiveManualAsset, deleteManualAsset } from '@/services/api/manualAssetService';
+import { aggregateNetWorth }                   from '@/engines/netWorthEngine';
+import { apiFetch }                            from '@/lib/api';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -30,9 +30,13 @@ export interface UseWealthAggregatorReturn {
   pendingAutoLoans: PendingAutoLoan[];
   /** Workflow B resolution — user submits VIN/specs, we value + persist + re-aggregate. */
   linkVehicleToLoan: (liabilityId: string, specs: VehicleSpecsPayload) => Promise<void>;
-  /** Delete a manual PhysicalAsset and re-aggregate. */
+  /** Soft-delete: marks asset archived_at, preserves history. */
+  archiveAsset: (assetId: string) => Promise<void>;
+  /** Hard-delete: removes manual PhysicalAsset from DB entirely. */
   removeAsset: (assetId: string) => Promise<void>;
-  /** Revoke a Plaid institution connection (full cascade) and re-aggregate. */
+  /** Soft-delete: marks institution + all its accounts archived_at, preserves history. */
+  archiveInstitution: (plaidItemId: string) => Promise<void>;
+  /** Hard-delete: revokes Plaid token + cascades all account/transaction deletion. */
   removeInstitution: (plaidItemId: string) => Promise<void>;
   refresh: () => void;
 }
@@ -50,6 +54,7 @@ function toLiquidAssets(raw: plaidSvc.RawPlaidAccount[]): LiquidAsset[] {
       currentBalance:   a.balance_current  ?? 0,
       availableBalance: a.balance_available ?? null,
       plaidItemId:      a.plaid_item_id,
+      archivedAt:       a.archived_at ?? null,
       lastSyncedAt:     new Date().toISOString(),
     }));
 }
@@ -89,6 +94,7 @@ function toLiabilities(raw: plaidSvc.RawPlaidAccount[]): Liability[] {
 interface RawManualAsset {
   id: string; name: string; asset_type: string;
   asset_subtype?: string; current_value: number; linked_loan_id?: string | null;
+  archived_at?: string | null;
 }
 
 const GROWTH_RATES: Record<string, number> = {
@@ -108,6 +114,7 @@ function toPhysicalAssets(raw: RawManualAsset[]): PhysicalAsset[] {
     valuationSource:         'manual_override' as const,
     linkedLiabilityId:       a.linked_loan_id ?? null,
     annualGrowthCoefficient: GROWTH_RATES[a.asset_type] ?? 0.03,
+    archivedAt:              a.archived_at ?? null,
     lastValuedAt:            new Date().toISOString(),
   }));
 }
@@ -130,17 +137,24 @@ export function useWealthAggregator(): UseWealthAggregatorReturn {
     setError(null);
 
     try {
-      // ── 1. Parallel fetch: Plaid accounts + manual assets ─────────────────
+      // ── 1. Parallel fetch: Plaid accounts + manual assets (all, incl. archived) ─
       const [accountsRes, manualRes] = await Promise.all([
-        plaidSvc.fetchAccounts(),
-        apiFetch('/api/manual-assets')
+        plaidSvc.fetchAccounts({ includeArchived: true }),
+        apiFetch('/api/manual-assets?includeArchived=true')
           .then(r => r.ok ? r.json() : { assets: [] })
           .catch(() => ({ assets: [] })),
       ]);
 
-      const liquidAssets:   LiquidAsset[]   = toLiquidAssets(accountsRes.accounts ?? []);
-      const liabilities:    Liability[]     = toLiabilities(accountsRes.accounts ?? []);
-      const manualPhysical: PhysicalAsset[] = toPhysicalAssets(manualRes.assets ?? []);
+      // All includes archived — used for historical reference; active is for display
+      const allLiquid:       LiquidAsset[]   = toLiquidAssets(accountsRes.accounts ?? []);
+      const allManualPhysical: PhysicalAsset[] = toPhysicalAssets(manualRes.assets ?? []);
+
+      // Filter archived items out of the current net worth calculation
+      const liquidAssets:   LiquidAsset[]   = allLiquid.filter(a => !a.archivedAt);
+      const liabilities:    Liability[]     = toLiabilities(
+        (accountsRes.accounts ?? []).filter((a: plaidSvc.RawPlaidAccount) => !a.archived_at),
+      );
+      const manualPhysical: PhysicalAsset[] = allManualPhysical.filter(a => !a.archivedAt);
 
       // ── 2. Workflow A — Zero-Touch Mortgage AVM ───────────────────────────
       // Mortgages that carry a property_address but have no manual asset yet
@@ -236,8 +250,18 @@ export function useWealthAggregator(): UseWealthAggregatorReturn {
     load();
   }, [load]);
 
+  const archiveAsset = useCallback(async (assetId: string) => {
+    await archiveManualAsset(assetId);
+    load();
+  }, [load]);
+
   const removeAsset = useCallback(async (assetId: string) => {
     await deleteManualAsset(assetId);
+    load();
+  }, [load]);
+
+  const archiveInstitution = useCallback(async (plaidItemId: string) => {
+    await plaidSvc.archiveInstitution(plaidItemId);
     load();
   }, [load]);
 
@@ -246,5 +270,11 @@ export function useWealthAggregator(): UseWealthAggregatorReturn {
     load();
   }, [load]);
 
-  return { status, error, result, liquidAssets, pendingAutoLoans, linkVehicleToLoan, removeAsset, removeInstitution, refresh: load };
+  return {
+    status, error, result, liquidAssets, pendingAutoLoans,
+    linkVehicleToLoan,
+    archiveAsset, removeAsset,
+    archiveInstitution, removeInstitution,
+    refresh: load,
+  };
 }
