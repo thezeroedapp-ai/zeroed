@@ -6,6 +6,67 @@
 
 ## 2026-05-27
 
+### v9.2 — Deletion & Unlinking
+
+**Why:** The Net Worth tab had no way to remove data. Manual assets couldn't be deleted; Plaid institution connections couldn't be revoked from the ledger. Users who added the wrong asset or wanted to remove a stale bank connection had no path. Both backend DELETE endpoints already existed (`DELETE /api/manual-assets/:id` and `DELETE /api/plaid/items/:itemId` with full cascade) — this was a pure frontend wiring task.
+
+---
+
+**What changed:**
+
+**`apps/web/src/components/ui/alert-dialog.tsx`** *(new file)*
+- Full AlertDialog primitive using `import { AlertDialog as AlertDialogPrimitive } from "radix-ui"` (monolithic package, no new dependencies)
+- Overlay: `bg-black/60 backdrop-blur-sm` — matches Dialog
+- Exports: `AlertDialog`, `AlertDialogContent`, `AlertDialogHeader`, `AlertDialogFooter`, `AlertDialogTitle`, `AlertDialogDescription`, `AlertDialogAction`, `AlertDialogCancel`
+- Controlled via `open` prop — no auto-close surprises during async operations
+
+**`apps/web/src/components/ui/dropdown-menu.tsx`** *(new file)*
+- Minimal DropdownMenu primitive using `import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"`
+- Exports: `DropdownMenu`, `DropdownMenuTrigger`, `DropdownMenuContent`, `DropdownMenuItem`, `DropdownMenuSeparator`
+- `DropdownMenuContent` renders via portal with fade+zoom animation
+
+**`apps/web/src/services/api/manualAssetService.ts`** *(new file)*
+- `deleteManualAsset(assetId)` — calls `DELETE /api/manual-assets/:id` via `apiFetch`
+
+**`apps/web/src/services/api/plaidService.ts`**
+- Added `unlinkInstitution(itemId)` — calls `DELETE /api/plaid/items/:itemId`
+
+**`apps/web/src/hooks/useWealthAggregator.ts`**
+- Interface: added `removeAsset(assetId)` and `removeInstitution(plaidItemId)` to `UseWealthAggregatorReturn`
+- Implementation: both are `useCallback` — await the service call, then call `load()` to re-aggregate
+- Import: added `deleteManualAsset` from `manualAssetService`
+
+**`apps/web/src/components/AssetLedger.tsx`**
+- Added `onRemoveAsset?` and `onRemoveInstitution?` props to `AssetLedgerProps`
+- Added `PendingDelete` discriminated union type: `{ kind: 'asset'; id; name } | { kind: 'institution'; plaidItemId; institutionName }`
+- Added `pendingDelete` and `deleting` state at the `AssetLedger` level
+- Added `EllipsisMenu` sub-component: `DropdownMenu` trigger with `MoreVertical` icon, `opacity-0 group-hover/row:opacity-40 hover:!opacity-100` visibility — only appears on row hover
+- `EquityPairingRow` + `UnlinkedAssetRow`: ellipsis shows only when `valuationSource === 'manual_override'` — AVM assets (`api_automated`) are protected
+- `LiquidAssetRow`: ellipsis shows only when `asset.plaidItemId` is present; calls `onRequestDelete` with `kind: 'institution'`
+- `UnlinkedLiabilityRow`: no ellipsis (liabilities come from Plaid; removing them requires unlinking the institution at the account level)
+- `AlertDialog` at `AssetLedger` root: shows title/description tailored to delete vs. unlink; red `bg-destructive text-white` confirm button; `disabled` + "Deleting…" label during in-flight; `onOpenChange` blocked while `deleting` is true
+
+**`apps/web/src/pages/Accounts.tsx`**
+- Destructured `removeAsset` and `removeInstitution` from `useWealthAggregator()`
+- Passed both as `onRemoveAsset` and `onRemoveInstitution` to `<AssetLedger />`
+
+---
+
+**Decisions:**
+- **No new backend routes** — `DELETE /api/manual-assets/:id` and `DELETE /api/plaid/items/:itemId` already existed with full cascade
+- **State lives in AssetLedger, not in rows** — a single `AlertDialog` at the container level, rows just call `onRequestDelete(item)` to signal intent
+- **Re-fetch over optimistic update** — after deletion, `load()` re-runs the full aggregation pipeline; this is correct because AVM assets may need to be regenerated and equity pairings recomputed
+- **AVM assets uneditable** — `api_automated` assets are ephemeral (regenerated on each load from the Plaid mortgage's `property_address`). Allowing "deletion" would just cause them to reappear on next load. Instead they are silently protected
+- **Unlink operates at institution level, not account level** — a single Plaid item ID covers all accounts at that institution. Showing the menu on each account but labeling it "Unlink Institution" makes the scope clear; the warning text in the AlertDialog reinforces this
+
+---
+
+**Next:**
+- Edit manual assets in-place (pencil icon on rows, same Dialog as add flow)
+- Net worth trend chart (monthly snapshots over time) in the Net Worth tab
+
+---
+
 ### v9.1 — Add Account Modal Refactor + ManualWidget State Isolation
 
 **Why:** Screenshots showed the "Add Manual Asset" button in the Sheet sidebar was setting `addingSection` state in the parent (`Accounts`), which caused an inline `<AssetForm />` to appear inside whichever `ManualWidget` matched the `sectionType` check. If the user clicked "Add Manual Asset" from the global header, the form would silently open inside the Stocks & Bonds widget — a state collision that was invisible until the user scrolled to find it. The Sheet UX also felt disconnected: a right-slide-in panel is correct for detail drilldowns, not for a two-choice picker.

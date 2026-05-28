@@ -14,6 +14,16 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 ## Current Status
 
+**v9.2 — Deletion & Unlinking** *(2026-05-27)*
+
+- **Delete manual assets:** Every manual PhysicalAsset row (Equity Pairings, Owned Assets) shows a `MoreVertical` ellipsis `DropdownMenu` on hover. Clicking "Delete Asset" opens an `AlertDialog` with `bg-black/60 backdrop-blur-sm` overlay and a red "Confirm Delete" button. Disabled + "Deleting…" while in-flight; dialog blocks cancel during deletion
+- **Unlink Plaid institutions:** Liquid account rows get an "Unlink Institution" menu item — calls `DELETE /api/plaid/items/:itemId` which revokes the Plaid token and cascades all account + transaction deletion
+- **New UI primitives:** `alert-dialog.tsx` and `dropdown-menu.tsx` added using the existing `radix-ui ^1.4.3` monolithic package — zero new dependencies
+- **API layer:** `manualAssetService.ts` (`deleteManualAsset`); `plaidService.ts` gains `unlinkInstitution`; `useWealthAggregator` exposes `removeAsset` and `removeInstitution` which await the call then re-trigger `load()`
+- **AVM assets protected:** `api_automated` PhysicalAssets (RentCast AVM, auto-generated from Plaid mortgage `property_address`) are not deletable — no ellipsis menu rendered for those rows
+
+---
+
 **v9.1 — Add Account modal, ManualWidget state isolation** *(2026-05-27)*
 
 - **Multi-step Dialog replaces Sheet:** The global "Add Account" entry point is now a centered Radix Dialog with two views: Selection (Link Institution / Add Manual Asset) and Manual Form. Smooth step transitions, "← Back" button, reset on close
@@ -39,6 +49,7 @@ Built as a mobile-first React PWA. Backend runs on Firebase Cloud Functions.
 
 | Version | Date | What shipped |
 |---------|------|--------------|
+| v9.2 | 2026-05-27 | Deletion & Unlinking: DropdownMenu + AlertDialog on asset rows; delete manual assets; unlink Plaid institutions; alert-dialog.tsx + dropdown-menu.tsx primitives; manualAssetService.ts; useWealthAggregator adds removeAsset + removeInstitution |
 | v9.1 | 2026-05-27 | Add Account Sheet → multi-step Dialog; addingSection state-collision bug fixed; ManualWidget is now a pure display ledger; DialogOverlay backdrop-blur |
 | v9.0 | 2026-05-26 | Asset aggregation system (domain types, service/engine/hook layers); Net Worth tab with equity pairings + LTV bars + source badges; Workflow A zero-touch mortgage AVM; Workflow B smart-friction auto loan VIN flow; property address autocomplete (Nominatim, debounced, keyboard nav); AVM pre-fill via RentCast; address persisted to Firestore; global Add Account modal; FI Projector static redesign; /api/valuations/{real-estate,vehicle,address-autocomplete}; /api/plaid/liabilities |
 | v8.5 | 2026-05-26 | SVG gauge arc fix (sweep-flag=1, overflow-visible); CreditCardChip restored on all credit rows and Dashboard priority card; AvalancheSimulator component removed from Accounts tab |
@@ -240,20 +251,21 @@ zeroed/
 │   │   ├── types/
 │   │   │   └── domain.ts           # Vendor-agnostic domain types: PhysicalAsset, LiquidAsset, Liability, NetWorthResult
 │   │   ├── services/api/
-│   │   │   ├── plaidService.ts     # fetchAccounts() — typed wrapper for /api/plaid/accounts + /liabilities
-│   │   │   └── valuationService.ts # fetchRealEstateAVM(), fetchVehicleValue() — typed wrappers for /api/valuations/*
+│   │   │   ├── plaidService.ts     # fetchAccounts(), unlinkInstitution() — typed wrappers for /api/plaid/*
+│   │   │   ├── valuationService.ts # fetchRealEstateAVM(), fetchVehicleValue() — typed wrappers for /api/valuations/*
+│   │   │   └── manualAssetService.ts # deleteManualAsset() — DELETE /api/manual-assets/:id
 │   │   ├── engines/
 │   │   │   └── netWorthEngine.ts   # Pure math: aggregateNetWorth(liquid, physical, liabilities) → NetWorthResult
 │   │   ├── hooks/
-│   │   │   └── useWealthAggregator.ts # Orchestrates Plaid fetch + AVM + manual assets; exposes status/result/pendingAutoLoans/linkVehicleToLoan
+│   │   │   └── useWealthAggregator.ts # Orchestrates Plaid fetch + AVM + manual assets; exposes status/result/pendingAutoLoans/linkVehicleToLoan/removeAsset/removeInstitution
 │   │   ├── components/
 │   │   │   ├── Layout.tsx          # Wraps SideNav + main + BottomNav
 │   │   │   ├── SideNav.tsx         # Desktop sidebar (5 tabs + theme toggle)
 │   │   │   ├── BottomNav.tsx       # Mobile bottom nav (5 tabs)
 │   │   │   ├── SubNav.tsx          # Reusable horizontal subtab bar
-│   │   │   ├── AssetLedger.tsx     # Net Worth ledger: summary strip, equity pairings, LTV bars, source badges
+│   │   │   ├── AssetLedger.tsx     # Net Worth ledger: summary strip, equity pairings, LTV bars, source badges; DropdownMenu + AlertDialog for delete/unlink
 │   │   │   ├── AssetDiscoveryBanner.tsx # Amber banner for unlinked auto loans with per-loan VIN input
-│   │   │   └── ui/                 # shadcn/ui primitives + institution-logo.tsx, avatar-circle.tsx
+│   │   │   └── ui/                 # shadcn/ui primitives + alert-dialog.tsx, dropdown-menu.tsx, institution-logo.tsx, avatar-circle.tsx
 │   │   └── pages/
 │   │       ├── Dashboard.tsx       # Home — 3-column grid, net worth, allocation, payoff, cash flow, AI
 │   │       ├── Plan.tsx            # Strategy / Goals / AI Insights subtabs

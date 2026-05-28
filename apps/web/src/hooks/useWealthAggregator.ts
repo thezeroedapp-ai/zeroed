@@ -4,11 +4,12 @@ import type {
   PhysicalAsset, LiquidAsset, Liability,
   NetWorthResult, LiquidAccountType,
 } from '@/types/domain';
-import * as plaidSvc      from '@/services/api/plaidService';
-import * as valuationSvc  from '@/services/api/valuationService';
+import * as plaidSvc          from '@/services/api/plaidService';
+import * as valuationSvc      from '@/services/api/valuationService';
 import type { VehicleSpecsPayload } from '@/services/api/valuationService';
-import { aggregateNetWorth }        from '@/engines/netWorthEngine';
-import { apiFetch }                 from '@/lib/api';
+import { deleteManualAsset }  from '@/services/api/manualAssetService';
+import { aggregateNetWorth }  from '@/engines/netWorthEngine';
+import { apiFetch }           from '@/lib/api';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -29,6 +30,10 @@ export interface UseWealthAggregatorReturn {
   pendingAutoLoans: PendingAutoLoan[];
   /** Workflow B resolution — user submits VIN/specs, we value + persist + re-aggregate. */
   linkVehicleToLoan: (liabilityId: string, specs: VehicleSpecsPayload) => Promise<void>;
+  /** Delete a manual PhysicalAsset and re-aggregate. */
+  removeAsset: (assetId: string) => Promise<void>;
+  /** Revoke a Plaid institution connection (full cascade) and re-aggregate. */
+  removeInstitution: (plaidItemId: string) => Promise<void>;
   refresh: () => void;
 }
 
@@ -231,5 +236,15 @@ export function useWealthAggregator(): UseWealthAggregatorReturn {
     load();
   }, [load]);
 
-  return { status, error, result, liquidAssets, pendingAutoLoans, linkVehicleToLoan, refresh: load };
+  const removeAsset = useCallback(async (assetId: string) => {
+    await deleteManualAsset(assetId);
+    load();
+  }, [load]);
+
+  const removeInstitution = useCallback(async (plaidItemId: string) => {
+    await plaidSvc.unlinkInstitution(plaidItemId);
+    load();
+  }, [load]);
+
+  return { status, error, result, liquidAssets, pendingAutoLoans, linkVehicleToLoan, removeAsset, removeInstitution, refresh: load };
 }

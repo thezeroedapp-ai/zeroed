@@ -75,3 +75,10 @@ export async function fetchLiabilities(): Promise<{ liabilities: RawPlaidLiabili
   if (!r.ok) throw new Error(`fetch-liabilities failed: ${r.status}`);
   return r.json();
 }
+
+export async function unlinkInstitution(itemId: string): Promise<void> {
+  const r = await apiFetch(`/api/plaid/items/${encodeURIComponent(itemId)}`, {
+    method: 'DELETE',
+  });
+  if (!r.ok) throw new Error(`unlink institution failed: ${r.status}`);
+}
