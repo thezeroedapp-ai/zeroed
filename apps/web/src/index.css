@@ -1,3 +1,4 @@
+@import "@fontsource-variable/geist";
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -5,6 +6,9 @@
 
 /* ── Map shadcn tokens → Tailwind color utilities ── */
 @theme inline {
+  --font-sans: 'Geist Variable', 'system-ui', sans-serif;
+  --font-mono: 'Geist Variable', 'Menlo', 'Consolas', monospace;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -110,9 +114,9 @@
   --chart-4: oklch(0.42 0.18 264);   /* dark blue */
   --chart-5: oklch(0.46 0.22 22);    /* dark red */
 
-  --font-heading: 'Montserrat', 'Segoe UI', sans-serif;
-  --font-body:    'Montserrat', 'Segoe UI', sans-serif;
-  --font-mono:    'Menlo', 'Consolas', 'Monaco', monospace;
+  --font-heading: 'Geist Variable', 'system-ui', sans-serif;
+  --font-body:    'Geist Variable', 'system-ui', sans-serif;
+  --font-mono:    'Geist Variable', 'Menlo', 'Consolas', monospace;
 
   --gradient-orange-shimmer: linear-gradient(
     90deg,
@@ -129,11 +133,11 @@
 html.dark {
   /* Surfaces */
   --background:   oklch(0.135 0.003 55);   /* deep charcoal */
-  --foreground:   oklch(0.920 0.006 55);   /* warm off-white */
+  --foreground:   oklch(1 0 0);            /* pure white */
   --card:         oklch(0.172 0.004 55);   /* slightly lighter charcoal */
-  --card-foreground: oklch(0.920 0.006 55);
+  --card-foreground: oklch(1 0 0);
   --popover:      oklch(0.172 0.004 55);
-  --popover-foreground: oklch(0.920 0.006 55);
+  --popover-foreground: oklch(1 0 0);
   --surface-2:    oklch(0.215 0.004 55);   /* inputs / nested bg */
   --nav-bg:       oklch(0.160 0.004 55);   /* lighter sidebar — elevated surface in dark mode */
 
@@ -151,9 +155,9 @@ html.dark {
 
   /* Secondary / muted */
   --secondary:           oklch(0.215 0.004 55);
-  --secondary-foreground: oklch(0.920 0.006 55);
+  --secondary-foreground: oklch(1 0 0);
   --muted:               oklch(0.215 0.004 55);
-  --muted-foreground:    oklch(0.560 0.008 55);
+  --muted-foreground:    oklch(0.72 0 0);  /* white/70 — secondary text stays distinct but clearly white-toned */
 
   /* Accent */
   --accent:          oklch(0.570 0.170 38);
@@ -287,22 +291,6 @@ h1, h2, h3, h4, h5 {
   }
 }
 
-/* ── Widget drag-and-drop ── */
-.widget-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-@media (min-width: 768px) {
-  .widget-grid { grid-template-columns: 1fr 1fr; gap: 20px; }
-}
-@media (min-width: 1280px) {
-  .widget-grid { grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
-}
-/* ADD THIS: 4 columns for ultra-wide monitors */
-@media (min-width: 1600px) {
-  .widget-grid { grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px; }
-}
 
 
 /* ── Pills / subtab filter row ── */

@@ -4,7 +4,8 @@ import {
   BarChart, Bar, XAxis, YAxis,
 } from 'recharts';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Widget, WidgetHeader } from '@/components/ui/widget';
+import { PageLayout } from '@/components/ui/page-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
@@ -150,15 +151,20 @@ export default function Spending() {
 
   return (
     <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold text-foreground">Spending</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Transactions, trends, and subscriptions</p>
+      <div className="sticky top-0 z-20 w-full bg-background/60 backdrop-blur-2xl border-b border-white/10">
+        <div className="w-full max-w-[2560px] mx-auto px-4 sm:px-6 md:px-10 lg:px-12 xl:px-16">
+          <div className="flex items-center justify-between gap-4 pt-5 pb-2">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Spending</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Transactions, trends, and subscriptions</p>
+            </div>
+          </div>
+          <SubNav tabs={SPENDING_TABS} active={tab} onChange={t => setTab(t as Tab)}
+            className="mb-0 border-b-0 mx-0 px-0 py-2" />
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto">
-        <SubNav tabs={SPENDING_TABS} active={tab} onChange={t => setTab(t as Tab)} />
+      <PageLayout className="pt-4 pb-20 md:pb-10">
 
         {/* ── TRANSACTIONS TAB ── */}
         {tab === 'transactions' && (
@@ -194,18 +200,16 @@ export default function Spending() {
                 </div>
 
                 {filtered.length > 0 && filter !== 'payments' && (
-                  <Card className="mb-4 border-[var(--primary)]/25 bg-gradient-to-r from-[var(--primary)]/10 to-blue/8">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><CreditCard size={14} className="shrink-0" />Using the right card?</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">See which cards earn the most on your top categories.</p>
-                      </div>
-                      <Link to="/accounts?tab=rewards"
-                        className="text-xs font-semibold text-violet-light whitespace-nowrap ml-3 no-underline hover:opacity-80 transition-opacity">
-                        Explore cards →
-                      </Link>
-                    </CardContent>
-                  </Card>
+                  <Widget className="mb-4 border-[var(--primary)]/25 bg-gradient-to-r from-[var(--primary)]/10 to-blue/8 flex-row items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5"><CreditCard size={14} className="shrink-0" />Using the right card?</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">See which cards earn the most on your top categories.</p>
+                    </div>
+                    <Link to="/accounts?tab=rewards"
+                      className="text-xs font-semibold text-violet-light whitespace-nowrap ml-3 no-underline hover:opacity-80 transition-opacity">
+                      Explore cards →
+                    </Link>
+                  </Widget>
                 )}
 
                 {filtered.length === 0 ? (
@@ -224,27 +228,25 @@ export default function Spending() {
                             <p className="text-sm font-semibold text-foreground">{month}</p>
                             {monthTotal > 0 && <p className="text-sm font-semibold text-muted-foreground">{fmtD(monthTotal)}</p>}
                           </div>
-                          <Card className="bg-card border-border">
-                            <CardContent className="p-0">
-                              {txs.map((tx, idx) => (
-                                <div key={tx.id} className={cn(
-                                  'flex items-center gap-3 px-5 py-4',
-                                  idx < txs.length - 1 && 'border-b border-border',
-                                )}>
-                                  <AvatarCircle name={tx.description} size={36} color={tx.amount < 0 ? '#10b981' : undefined} />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                      {accountMap[tx.account_id] || tx.category || ''}
-                                    </p>
-                                  </div>
-                                  <p className={cn('text-sm font-bold tabular shrink-0', tx.amount < 0 ? 'text-green' : 'text-red')}>
-                                    {tx.amount < 0 ? '+' : ''}{fmtD(Math.abs(tx.amount))}
+                          <Widget className="p-0 overflow-hidden">
+                            {txs.map((tx, idx) => (
+                              <div key={tx.id} className={cn(
+                                'flex items-center gap-3 px-5 py-4',
+                                idx < txs.length - 1 && 'border-b border-border',
+                              )}>
+                                <AvatarCircle name={tx.description} size={36} color={tx.amount < 0 ? '#10b981' : undefined} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground truncate">{tx.description}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                                    {accountMap[tx.account_id] || tx.category || ''}
                                   </p>
                                 </div>
-                              ))}
-                            </CardContent>
-                          </Card>
+                                <p className={cn('text-sm font-bold tabular shrink-0', tx.amount < 0 ? 'text-green' : 'text-red')}>
+                                  {tx.amount < 0 ? '+' : ''}{fmtD(Math.abs(tx.amount))}
+                                </p>
+                              </div>
+                            ))}
+                          </Widget>
                         </div>
                       );
                     })}
@@ -279,54 +281,48 @@ export default function Spending() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <Card className="bg-card border-border">
-                    <CardHeader className="pt-5 pb-2 px-5">
-                      <CardTitle className="text-sm font-semibold">Monthly Spending by Category</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                      <ChartContainer config={buildChartConfig(trends.categories)} className="h-[220px] w-full">
-                        <BarChart data={trends.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                          <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                          <YAxis
-                            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
-                            tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
-                            width={38}
+                  <Widget>
+                    <WidgetHeader title="Monthly Spending by Category" />
+                    <ChartContainer config={buildChartConfig(trends.categories)} className="h-[220px] w-full">
+                      <BarChart data={trends.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
+                          tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+                          width={38}
+                        />
+                        <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                        {trends.categories.map((cat, i) => (
+                          <Bar
+                            key={cat} dataKey={cat} stackId="a"
+                            fill={CHART_PALETTE[i % CHART_PALETTE.length]}
+                            radius={i === trends.categories.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                           />
-                          <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                          {trends.categories.map((cat, i) => (
-                            <Bar
-                              key={cat} dataKey={cat} stackId="a"
-                              fill={CHART_PALETTE[i % CHART_PALETTE.length]}
-                              radius={i === trends.categories.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                            />
-                          ))}
-                        </BarChart>
-                      </ChartContainer>
-                    </CardContent>
-                  </Card>
+                        ))}
+                      </BarChart>
+                    </ChartContainer>
+                  </Widget>
 
                   <div>
                     <p className="text-sm font-semibold text-foreground mb-2">Top Categories</p>
-                    <Card className="bg-card border-border">
-                      <CardContent className="p-0">
-                        {trends.categories.map((cat, i) => {
-                          const total = trends.data.reduce((s, d) => s + (Number(d[cat]) || 0), 0);
-                          return (
-                            <div key={cat} className={cn(
-                              'flex items-center gap-3 px-5 py-4',
-                              i < trends.categories.length - 1 && 'border-b border-border',
-                            )}>
-                              <div className="w-2.5 h-2.5 rounded-sm shrink-0"
-                                style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
-                              <p className="flex-1 text-sm font-medium text-foreground">{cat}</p>
-                              <p className="text-sm text-muted-foreground tabular">
-                                {fmtD(total / Math.max(1, trends.data.length))}/mo avg
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </CardContent>
-                    </Card>
+                    <Widget className="p-0 overflow-hidden">
+                      {trends.categories.map((cat, i) => {
+                        const total = trends.data.reduce((s, d) => s + (Number(d[cat]) || 0), 0);
+                        return (
+                          <div key={cat} className={cn(
+                            'flex items-center gap-3 px-5 py-4',
+                            i < trends.categories.length - 1 && 'border-b border-border',
+                          )}>
+                            <div className="w-2.5 h-2.5 rounded-sm shrink-0"
+                              style={{ background: CHART_PALETTE[i % CHART_PALETTE.length] }} />
+                            <p className="flex-1 text-sm font-medium text-foreground">{cat}</p>
+                            <p className="text-sm text-muted-foreground tabular">
+                              {fmtD(total / Math.max(1, trends.data.length))}/mo avg
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </Widget>
                   </div>
                 </div>
               )
@@ -358,47 +354,43 @@ export default function Spending() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <Card className="bg-card border-border">
-                    <CardContent className="p-5">
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Estimated Annual Subscriptions</p>
-                      <p className="text-[40px] font-extrabold text-red mt-1 tabular leading-none">{fmtD(annualRecurring)}</p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {fmtD(annualRecurring / 12)}/mo across {sortedRecurring.length} recurring charge{sortedRecurring.length !== 1 ? 's' : ''}
-                      </p>
-                    </CardContent>
-                  </Card>
+                  <Widget>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Estimated Annual Subscriptions</p>
+                    <p className="text-[40px] font-extrabold text-red tabular leading-none">{fmtD(annualRecurring)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {fmtD(annualRecurring / 12)}/mo across {sortedRecurring.length} recurring charge{sortedRecurring.length !== 1 ? 's' : ''}
+                    </p>
+                  </Widget>
 
                   <div>
                     <p className="text-sm font-semibold text-foreground mb-2">Detected Recurring Charges</p>
-                    <Card className="bg-card border-border">
-                      <CardContent className="p-0">
-                        {sortedRecurring.map((r, i) => (
-                          <div key={i} className={cn(
-                            'flex items-center justify-between gap-3 px-5 py-4',
-                            i < sortedRecurring.length - 1 && 'border-b border-border',
-                          )}>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-foreground truncate">{r.description}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{r.category}</Badge>
-                                <span className="text-xs text-muted-foreground">{r.months} month{r.months !== 1 ? 's' : ''}</span>
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-bold text-red tabular">{fmtD(r.avgAmount)}/mo</p>
-                              <p className="text-xs text-muted-foreground tabular mt-0.5">{fmtD(r.annualEstimate)}/yr</p>
+                    <Widget className="p-0 overflow-hidden">
+                      {sortedRecurring.map((r, i) => (
+                        <div key={i} className={cn(
+                          'flex items-center justify-between gap-3 px-5 py-4',
+                          i < sortedRecurring.length - 1 && 'border-b border-border',
+                        )}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{r.description}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">{r.category}</Badge>
+                              <span className="text-xs text-muted-foreground">{r.months} month{r.months !== 1 ? 's' : ''}</span>
                             </div>
                           </div>
-                        ))}
-                      </CardContent>
-                    </Card>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-bold text-red tabular">{fmtD(r.avgAmount)}/mo</p>
+                            <p className="text-xs text-muted-foreground tabular mt-0.5">{fmtD(r.annualEstimate)}/yr</p>
+                          </div>
+                        </div>
+                      ))}
+                    </Widget>
                   </div>
                 </div>
               )
             )}
           </>
         )}
-      </div>
+      </PageLayout>
     </div>
   );
 }

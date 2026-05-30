@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Widget, WidgetHeader } from '@/components/ui/widget';
+import { PageLayout } from '@/components/ui/page-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -157,20 +158,21 @@ export default function Settings() {
 
   return (
     <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
-        <div className="max-w-3xl mx-auto">
+      <div className="sticky top-0 z-10 w-full bg-background/60 backdrop-blur-2xl border-b border-white/10">
+        <div className="w-full max-w-[2560px] mx-auto px-4 sm:px-6 md:px-10 lg:px-12 xl:px-16 py-6">
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Preferences, banks, and account</p>
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto space-y-8">
+      <PageLayout className="pt-6 pb-20 md:pb-10">
+        <div className="max-w-3xl mx-auto space-y-8">
 
         {/* Monthly Income */}
         <section>
           <p className="text-sm font-semibold text-foreground mb-3">Monthly Income</p>
-          <Card className="bg-card border-border">
-            <CardContent className="p-5 space-y-3">
+          <Widget>
+            <div className="space-y-3">
               <div className="flex gap-2 items-end">
                 <div className="flex-1 space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Take-home pay (after tax)</Label>
@@ -186,8 +188,8 @@ export default function Settings() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">Used to calculate monthly surplus for your payoff plan.</p>
-            </CardContent>
-          </Card>
+            </div>
+          </Widget>
         </section>
 
         {/* Sinking Funds */}
@@ -203,39 +205,35 @@ export default function Settings() {
           </p>
 
           {sinkingFunds.length > 0 && (
-            <Card className="bg-card border-border mb-3">
-              <CardContent className="p-0">
-                {sinkingFunds.map((f, i) => (
-                  <div key={f.id} className={cn(
-                    'flex items-center justify-between px-4 py-4',
-                    i < sinkingFunds.length - 1 && 'border-b border-border',
-                  )}>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground capitalize">
-                        {f.label || f.category.charAt(0).toUpperCase() + f.category.slice(1)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{fmtD(f.monthly_amount)}/mo</p>
-                    </div>
-                    {confirmFundId === f.id ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Delete?</span>
-                        <Button variant="outline" size="sm" onClick={() => deleteFund(f.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Yes</Button>
-                        <Button variant="outline" size="sm" onClick={() => setConfirmFundId(null)} className="h-7 text-xs border-border text-muted-foreground">No</Button>
-                      </div>
-                    ) : (
-                      <Button variant="outline" size="sm" onClick={() => setConfirmFundId(f.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red/10">Delete</Button>
-                    )}
+            <Widget className="p-0 mb-3 overflow-hidden">
+              {sinkingFunds.map((f, i) => (
+                <div key={f.id} className={cn(
+                  'flex items-center justify-between px-4 py-4',
+                  i < sinkingFunds.length - 1 && 'border-b border-border',
+                )}>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground capitalize">
+                      {f.label || f.category.charAt(0).toUpperCase() + f.category.slice(1)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{fmtD(f.monthly_amount)}/mo</p>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                  {confirmFundId === f.id ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Delete?</span>
+                      <Button variant="outline" size="sm" onClick={() => deleteFund(f.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red-dim">Yes</Button>
+                      <Button variant="outline" size="sm" onClick={() => setConfirmFundId(null)} className="h-7 text-xs border-border text-muted-foreground">No</Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => setConfirmFundId(f.id)} className="h-7 text-xs border-red/30 text-red hover:bg-red/10">Delete</Button>
+                  )}
+                </div>
+              ))}
+            </Widget>
           )}
 
-          <Card className="bg-card border-border">
-            <CardHeader className="pt-5 pb-2 px-5">
-              <CardTitle className="text-sm font-semibold">{sinkingFunds.length === 0 ? 'Add Your First Fund' : 'Add Fund'}</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-3">
+          <Widget>
+            <WidgetHeader title={sinkingFunds.length === 0 ? 'Add Your First Fund' : 'Add Fund'} />
+            <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Category</Label>
                 <Select value={sfForm.category} onValueChange={v => setSfForm(p => ({ ...p, category: v }))}>
@@ -262,8 +260,8 @@ export default function Settings() {
               <Button onClick={addFund} disabled={sfSaving || !sfForm.amount} className="w-full bg-primary hover:bg-primary/90">
                 {sfSaving ? '…' : 'Add Sinking Fund'}
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </Widget>
         </section>
 
         {/* Connected Banks */}
@@ -271,53 +269,49 @@ export default function Settings() {
           <p className="text-sm font-semibold text-foreground mb-3">Connected Banks</p>
 
           {plaidItems.length === 0 ? (
-            <Card className="bg-card border-border mb-3">
-              <CardContent className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">No banks connected yet.</p>
-              </CardContent>
-            </Card>
+            <Widget className="mb-3">
+              <p className="text-sm text-muted-foreground text-center">No banks connected yet.</p>
+            </Widget>
           ) : (
             <div className="space-y-2 mb-3">
               {plaidItems.map(item => (
-                <Card key={item.item_id} className="bg-card border-border">
-                  <CardContent className="p-4">
-                    {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
-                      <div className="flex items-center gap-2 bg-red/10 border border-red/25 rounded-lg px-3 py-2 mb-3">
-                        <AlertTriangle size={14} className="text-red shrink-0" />
-                        <p className="text-xs text-red">Bank connection expired — please reconnect to resume syncing.</p>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <InstitutionLogo name={item.institution_name} size={36} />
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{item.institution_name}</p>
-                          {item.last_synced && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Synced {relativeTime(item.last_synced)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 shrink-0 items-center">
-                        {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
-                          <Button size="sm" onClick={() => reconnectItem(item.item_id)} disabled={plaidLoading}
-                            className="h-8 bg-primary hover:bg-primary/90">Reconnect</Button>
-                        )}
-                        {confirmDisconnectId === item.item_id ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-muted-foreground">Disconnect?</span>
-                            <Button size="sm" onClick={() => disconnectItem(item.item_id)} className="h-8 border-red/30 text-red hover:bg-red-dim" variant="outline">Yes</Button>
-                            <Button size="sm" variant="outline" onClick={() => setConfirmDisconnectId(null)} className="h-8 border-border text-muted-foreground">No</Button>
-                          </div>
-                        ) : (
-                          <Button variant="outline" size="sm" onClick={() => setConfirmDisconnectId(item.item_id)}
-                            className="h-8 border-red/30 text-red hover:bg-red/10">Disconnect</Button>
+                <Widget key={item.item_id}>
+                  {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
+                    <div className="flex items-center gap-2 bg-red/10 border border-red/25 rounded-lg px-3 py-2">
+                      <AlertTriangle size={14} className="text-red shrink-0" />
+                      <p className="text-xs text-red">Bank connection expired — please reconnect to resume syncing.</p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <InstitutionLogo name={item.institution_name} size={36} />
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{item.institution_name}</p>
+                        {item.last_synced && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Synced {relativeTime(item.last_synced)}
+                          </p>
                         )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="flex gap-2 shrink-0 items-center">
+                      {item.error_status === 'ITEM_LOGIN_REQUIRED' && (
+                        <Button size="sm" onClick={() => reconnectItem(item.item_id)} disabled={plaidLoading}
+                          className="h-8 bg-primary hover:bg-primary/90">Reconnect</Button>
+                      )}
+                      {confirmDisconnectId === item.item_id ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Disconnect?</span>
+                          <Button size="sm" onClick={() => disconnectItem(item.item_id)} className="h-8 border-red/30 text-red hover:bg-red-dim" variant="outline">Yes</Button>
+                          <Button size="sm" variant="outline" onClick={() => setConfirmDisconnectId(null)} className="h-8 border-border text-muted-foreground">No</Button>
+                        </div>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => setConfirmDisconnectId(item.item_id)}
+                          className="h-8 border-red/30 text-red hover:bg-red/10">Disconnect</Button>
+                      )}
+                    </div>
+                  </div>
+                </Widget>
               ))}
             </div>
           )}
@@ -338,17 +332,16 @@ export default function Settings() {
         {/* Account */}
         <section>
           <p className="text-sm font-semibold text-foreground mb-3">Account</p>
-          <Card className="bg-card border-red/20">
-            <CardContent className="p-5">
-              <p className="text-xs text-muted-foreground mb-4">Signing out will end your current session.</p>
-              <Button variant="outline" onClick={handleSignOut}
-                className="w-full border-red/30 text-red hover:bg-red-dim">Sign Out</Button>
-            </CardContent>
-          </Card>
+          <Widget className="border-red/20">
+            <p className="text-xs text-muted-foreground">Signing out will end your current session.</p>
+            <Button variant="outline" onClick={handleSignOut}
+              className="w-full border-red/30 text-red hover:bg-red-dim">Sign Out</Button>
+          </Widget>
         </section>
 
         <p className="text-center text-xs text-muted-foreground pb-2">Zeroed v6.1</p>
-      </div>
+        </div>
+      </PageLayout>
     </div>
   );
 }

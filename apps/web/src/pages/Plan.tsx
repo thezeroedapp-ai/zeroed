@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Widget, WidgetHeader } from '@/components/ui/widget';
+import { PageLayout } from '@/components/ui/page-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { SlimProgress } from '@/components/ui/slim-progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -192,15 +193,20 @@ export default function Plan() {
 
   return (
     <div className="min-h-dvh">
-      <div className="sticky top-0 z-10 px-5 lg:px-10 py-5 top-bar border-b border-border">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold text-foreground">Plan</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Your debt-free roadmap</p>
+      <div className="sticky top-0 z-20 w-full bg-background/60 backdrop-blur-2xl border-b border-white/10">
+        <div className="w-full max-w-[2560px] mx-auto px-4 sm:px-6 md:px-10 lg:px-12 xl:px-16">
+          <div className="flex items-center justify-between gap-4 pt-5 pb-2">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Plan</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Your debt-free roadmap</p>
+            </div>
+          </div>
+          <SubNav tabs={PLAN_TABS} active={tab} onChange={t => setTab(t as PlanTab)}
+            className="mb-0 border-b-0 mx-0 px-0 py-2" />
         </div>
       </div>
 
-      <div className="px-6 lg:px-10 pb-[calc(var(--nav-h)+24px)] md:pb-10 pt-8 max-w-3xl mx-auto">
-        <SubNav tabs={PLAN_TABS} active={tab} onChange={t => setTab(t as PlanTab)} />
+      <PageLayout className="pt-4 pb-20 md:pb-10">
 
         {/* ── STRATEGY TAB ── */}
         {tab === 'strategy' && (
@@ -247,17 +253,15 @@ export default function Plan() {
                 </div>
 
                 {/* Debt-free summary */}
-                <Card className="bg-card border-border">
-                  <CardContent className="p-6">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Debt-Free Date</p>
-                    <p className="text-4xl font-extrabold text-foreground">{plan.debtFreeDate}</p>
-                    <div className="flex flex-wrap gap-3 mt-3">
-                      <span className="text-xs text-muted-foreground">{plan.months} months</span>
-                      <span className="text-xs text-red">{fmtD(plan.totalInterest)} total interest</span>
-                      <span className="text-xs text-green">{fmtD(plan.surplus)}/mo surplus</span>
-                    </div>
-                  </CardContent>
-                </Card>
+                <Widget>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Debt-Free Date</p>
+                  <p className="text-4xl font-extrabold text-foreground">{plan.debtFreeDate}</p>
+                  <div className="flex flex-wrap gap-3">
+                    <span className="text-xs text-muted-foreground">{plan.months} months</span>
+                    <span className="text-xs text-red">{fmtD(plan.totalInterest)} total interest</span>
+                    <span className="text-xs text-green">{fmtD(plan.surplus)}/mo surplus</span>
+                  </div>
+                </Widget>
 
                 {/* Scenarios */}
                 {plan.scenarios && plan.scenarios.length > 0 && (
@@ -265,14 +269,12 @@ export default function Plan() {
                     <p className="text-sm font-semibold text-muted-foreground mb-3">Pay More Scenarios</p>
                     <div className="grid grid-cols-3 gap-2">
                       {plan.scenarios.map((sc, i) => (
-                        <Card key={i} className="bg-surface-2 border-border text-center">
-                          <CardContent className="p-3">
-                            <p className="text-xs text-muted-foreground font-semibold">+{fmt(sc.extra)}/mo</p>
-                            <p className="text-2xl font-extrabold text-foreground my-1">{sc.months}</p>
-                            <p className="text-xs text-muted-foreground">months</p>
-                            <p className="text-xs text-green font-semibold mt-1">Save {fmt(sc.interestSaved)}</p>
-                          </CardContent>
-                        </Card>
+                        <Widget key={i} className="text-center items-center">
+                          <p className="text-xs text-muted-foreground font-semibold">+{fmt(sc.extra)}/mo</p>
+                          <p className="text-2xl font-extrabold text-foreground">{sc.months}</p>
+                          <p className="text-xs text-muted-foreground">months</p>
+                          <p className="text-xs text-green font-semibold">Save {fmt(sc.interestSaved)}</p>
+                        </Widget>
                       ))}
                     </div>
                   </div>
@@ -281,31 +283,27 @@ export default function Plan() {
                 {/* Attack order */}
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground mb-3">Attack Order</p>
-                  <Card className="bg-card border-border">
-                    <CardContent className="p-0">
-                      {plan.cards.map((c, i) => (
-                        <div key={i} className={cn('flex items-center gap-3 px-5 py-4', i < plan.cards.length - 1 && 'border-b border-border')}>
-                          <div className="w-7 h-7 rounded-full bg-violet-dim border border-[var(--primary)]/30 text-violet-light text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{c.apr}% APR · {fmtD(c.minimum_payment)}/mo min</p>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-sm font-bold tabular text-foreground">{fmtD(c.balance_current)}</p>
-                            {c.payoffDate && <p className="text-xs text-green mt-0.5">Free {c.payoffDate}</p>}
-                          </div>
+                  <Widget className="p-0 overflow-hidden">
+                    {plan.cards.map((c, i) => (
+                      <div key={i} className={cn('flex items-center gap-3 px-5 py-4', i < plan.cards.length - 1 && 'border-b border-border')}>
+                        <div className="w-7 h-7 rounded-full bg-violet-dim border border-[var(--primary)]/30 text-violet-light text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{c.apr}% APR · {fmtD(c.minimum_payment)}/mo min</p>
                         </div>
-                      ))}
-                    </CardContent>
-                  </Card>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold tabular text-foreground">{fmtD(c.balance_current)}</p>
+                          {c.payoffDate && <p className="text-xs text-green mt-0.5">Free {c.payoffDate}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </Widget>
                 </div>
 
                 {/* Lump-sum */}
-                <Card className="bg-card border-border">
-                  <CardHeader className="pb-2 pt-5 px-5">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><DollarSign size={14} className="text-muted-foreground shrink-0" />Lump-Sum Simulator</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-5 pb-5 space-y-3">
+                <Widget>
+                  <WidgetHeader title="Lump-Sum Simulator" icon={<DollarSign size={14} />} />
+                  <div className="space-y-3">
                     <div className="flex gap-2">
                       <Input
                         type="number" min="1" placeholder="$ extra payment"
@@ -323,16 +321,16 @@ export default function Plan() {
                         <p className="mt-0.5 text-xs">Saves {lumpResult.monthsSaved} month{lumpResult.monthsSaved !== 1 ? 's' : ''} and {fmtD(lumpResult.interestSaved)} in interest</p>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </Widget>
 
                 {/* Required payment */}
-                <Card className="bg-card border-border">
-                  <CardHeader className="pb-2 pt-5 px-5">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2"><CalendarDays size={14} className="text-muted-foreground shrink-0" />Required Payment Calculator</CardTitle>
-                    <p className="text-xs text-muted-foreground">How much extra/mo to be debt-free by a target date?</p>
-                  </CardHeader>
-                  <CardContent className="px-5 pb-5 space-y-3">
+                <Widget>
+                  <div>
+                    <WidgetHeader title="Required Payment Calculator" icon={<CalendarDays size={14} />} />
+                    <p className="text-xs text-muted-foreground mt-1">How much extra/mo to be debt-free by a target date?</p>
+                  </div>
+                  <div className="space-y-3">
                     <div className="flex gap-2">
                       <Input
                         type="date" value={reqDate}
@@ -354,8 +352,8 @@ export default function Plan() {
                         )}
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </Widget>
               </div>
             )}
           </>
@@ -388,9 +386,8 @@ export default function Plan() {
                 )}
 
                 {goals.map(g => (
-                  <Card key={g.id} className={cn('bg-card border-border border-l-4', g.onTrack ? 'border-l-green' : 'border-l-amber')}>
-                    <CardContent className="p-5">
-                      <div className="flex items-start justify-between gap-3">
+                  <Widget key={g.id} className={cn('border-l-4', g.onTrack ? 'border-l-green' : 'border-l-amber')}>
+                    <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{g.goal_type.replace(/_/g, ' ')}</p>
                           <p className="text-base font-semibold text-foreground mt-0.5">{goalLabel(g)}</p>
@@ -415,11 +412,11 @@ export default function Plan() {
 
                       {g.progress != null && (
                         <div className="mt-3">
-                          <Progress value={Math.min(g.progress, 100)} className="h-1.5" />
-                          <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                            <span>{g.progress.toFixed(0)}% complete</span>
-                            {g.projectedDate && <span>Projected: {g.projectedDate}</span>}
-                          </div>
+                          <SlimProgress
+                            value={Math.min(g.progress, 100)}
+                            label={`${g.progress.toFixed(0)}% complete`}
+                            sublabel={g.projectedDate ?? undefined}
+                          />
                         </div>
                       )}
 
@@ -443,16 +440,13 @@ export default function Plan() {
                           ))}
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
+                  </Widget>
                 ))}
 
                 {showForm && (
-                  <Card className="bg-card border-border">
-                    <CardHeader className="pt-5 pb-2 px-5">
-                      <CardTitle className="text-base font-semibold">New Goal</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-5 pb-5 space-y-3">
+                  <Widget>
+                    <WidgetHeader title="New Goal" />
+                    <div className="space-y-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">Type</Label>
                         <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
@@ -489,8 +483,8 @@ export default function Plan() {
                         <Button onClick={addGoal} disabled={saving} className="bg-primary hover:bg-primary/90">{saving ? '…' : 'Add Goal'}</Button>
                         <Button variant="outline" onClick={() => setShowForm(false)} className="border-border text-muted-foreground hover:text-foreground">Cancel</Button>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </Widget>
                 )}
 
                 {!showForm && (
@@ -518,28 +512,24 @@ export default function Plan() {
             )}
             {insightState === 'content' && insightData && (
               <div className="space-y-4">
-                <Card className="bg-card border-border">
-                  <CardHeader className="pt-5 pb-3 px-5">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Spending Analysis</CardTitle>
-                        {insightData.insight?.generated_at && (
-                          <p className="text-xs text-muted-foreground mt-1">{new Date(insightData.insight.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                        )}
-                      </div>
-                      <Badge variant="outline" className="text-xs border-border text-muted-foreground">
-                        {insightData.isPro ? 'Pro — unlimited' : `${insightData.used}/${insightData.limit} this month`}
-                      </Badge>
+                <Widget>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Spending Analysis</p>
+                      {insightData.insight?.generated_at && (
+                        <p className="text-xs text-muted-foreground mt-1">{new Date(insightData.insight.generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                      )}
                     </div>
-                  </CardHeader>
-                  <CardContent className="px-5 pb-5">
-                    {insightData.insight ? (
-                      <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{insightData.insight.insight}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground leading-relaxed">No analysis yet. Generate your first AI spending insight — Claude will review your debt profile and transactions to surface personalized recommendations.</p>
-                    )}
-                  </CardContent>
-                </Card>
+                    <Badge variant="outline" className="text-xs border-border text-muted-foreground">
+                      {insightData.isPro ? 'Pro — unlimited' : `${insightData.used}/${insightData.limit} this month`}
+                    </Badge>
+                  </div>
+                  {insightData.insight ? (
+                    <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{insightData.insight.insight}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground leading-relaxed">No analysis yet. Generate your first AI spending insight — Claude will review your debt profile and transactions to surface personalized recommendations.</p>
+                  )}
+                </Widget>
 
                 <Button
                   onClick={generateInsight}
@@ -559,7 +549,7 @@ export default function Plan() {
             )}
           </>
         )}
-      </div>
+      </PageLayout>
     </div>
   );
 }

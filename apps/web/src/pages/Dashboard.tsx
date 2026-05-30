@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
   PieChart, Pie,
-  XAxis, YAxis, ReferenceLine, CartesianGrid, Cell,
+  XAxis, YAxis, Cell,
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, ArrowRight, BarChart2, ShoppingCart,
@@ -12,15 +12,16 @@ import {
 } from 'lucide-react';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Widget, WidgetHeader } from '@/components/ui/widget';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { SlimProgress } from '@/components/ui/slim-progress';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig,
 } from '@/components/ui/chart';
 import { cn } from '@/lib/utils';
+import { WidgetGrid } from '@/components/ui/widget-grid';
 import { apiFetch, fmt, fmtD } from '../lib/api';
 import InstitutionLogo from '@/components/ui/institution-logo';
 import { getInstitutionBrandColor } from '@/lib/institution-logos';
@@ -235,7 +236,7 @@ export default function Dashboard() {
                           <span className="font-medium text-foreground">{c.category}</span>
                           <span className="tabular text-muted-foreground">{fmtD(c.total)}</span>
                         </div>
-                        <Progress value={pct} className="h-1.5" />
+                        <SlimProgress value={pct} />
                       </div>
                     );
                   })}
@@ -276,12 +277,10 @@ export default function Dashboard() {
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">6-Month Trend</p>
               <ChartContainer config={netWorthChartConfig} className="h-[160px] w-full">
                 <LineChart data={netWorthHistory} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                  <ReferenceLine y={0} stroke="var(--border)" strokeDasharray="3 3" />
+                  <XAxis hide />
+                  <YAxis hide domain={['auto', 'auto']} />
                   <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Net Worth']} />} />
-                  <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--violet-light)', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={3} dot={false} activeDot={{ r: 5, fill: 'var(--violet-light)', strokeWidth: 0 }} />
                 </LineChart>
               </ChartContainer>
             </div>
@@ -327,8 +326,8 @@ export default function Dashboard() {
     <div className="flex flex-col min-h-dvh bg-background text-foreground w-full items-center">
 
       {/* ── Top bar — greeting only, fixed height ── */}
-      <div className="sticky top-0 z-10 w-full border-b border-border bg-background flex flex-col items-center">
-        <div className="w-full max-w-[1600px] px-6 md:px-10 lg:px-12 py-6">
+      <div className="sticky top-0 z-10 w-full bg-background/60 backdrop-blur-2xl border-b border-white/10 flex flex-col items-center">
+        <div className="w-full max-w-[2560px] px-4 sm:px-6 md:px-10 lg:px-12 xl:px-16 py-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-[22px] font-bold text-foreground leading-tight">
@@ -342,7 +341,7 @@ export default function Dashboard() {
 
       {/* ── Page body ── */}
       <div className="flex-1 w-full flex flex-col items-center pb-16">
-        <div className="w-full max-w-[1600px] px-6 md:px-10 lg:px-12">
+        <div className="w-full max-w-[2560px] px-4 sm:px-6 md:px-10 lg:px-12 xl:px-16">
 
           {/* Context row — onboarding stepper or command-center strip */}
           <div className="pt-6 pb-2">
@@ -445,7 +444,7 @@ export default function Dashboard() {
 
         {/* Loading skeleton — mirrors 3-column layout */}
         {state === 'loading' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 xl:gap-8 items-start w-full">
+          <WidgetGrid>
             {[1, 2, 3].map(col => (
               <div key={col} className="flex flex-col gap-6 w-full min-w-0">
                 <div className="rounded-xl border border-border bg-card shadow-sm p-6 min-h-[140px]">
@@ -464,7 +463,7 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
-          </div>
+          </WidgetGrid>
         )}
 
         {/* Error */}
@@ -492,7 +491,7 @@ export default function Dashboard() {
             </TabsList>
 
             {/* ── 3-column terminal grid ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 xl:gap-8 items-start w-full">
+            <WidgetGrid>
 
               {/* ━━━ Column 1 — Wealth ━━━ */}
               <div className={cn('flex flex-col gap-6 w-full min-w-0', activeTab !== 'wealth' && 'hidden lg:flex')}>
@@ -504,16 +503,14 @@ export default function Dashboard() {
                   const DeltaIcon = delta >= 0 ? TrendingUp : TrendingDown;
                   const hasBreakdown = netWorthHistory[0]?.total_assets !== undefined;
                   return (
-                    <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full flex-1 min-h-[300px] cursor-pointer group"
-                      onClick={() => navigate('/accounts')}>
-                      <CardHeader className="pb-0 pt-6 px-6">
-                        <div className="flex justify-between items-start">
-                          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <BarChart2 size={14} className="text-muted-foreground shrink-0" />Net Worth
-                          </CardTitle>
-                          <ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />
-                        </div>
-                        <div className="flex items-end gap-3 mt-1">
+                    <Widget className="flex flex-col flex-1 min-h-[300px] cursor-pointer group" onClick={() => navigate('/accounts')}>
+                      <WidgetHeader
+                        title="Net Worth"
+                        icon={<BarChart2 size={14} />}
+                        action={<ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />}
+                      />
+                      <div>
+                        <div className="flex items-end gap-3">
                           <span className={cn('text-4xl xl:text-5xl font-black tracking-tight tabular-nums', latest.net_worth >= 0 ? 'text-green' : 'text-foreground')}>
                             {latest.net_worth < 0 ? '−' : ''}{fmt(Math.abs(latest.net_worth))}
                           </span>
@@ -532,26 +529,23 @@ export default function Dashboard() {
                             <span className="text-[11px] text-muted-foreground">Liabilities <span className="font-semibold text-foreground">{fmt(latest.total_liabilities ?? data.totalLiabilities ?? 0)}</span></span>
                           </div>
                         </div>
-                      </CardHeader>
-                      <CardContent className="p-6">
-                        <div className="flex-1 min-h-[200px] min-w-0">
-                          <ChartContainer config={netWorthChartConfig} className="h-[180px] w-full">
-                            <LineChart data={netWorthHistory} margin={{ top: 16, right: 16, bottom: 4, left: 16 }}>
-                              <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(netWorthHistory.length / 5))} />
-                              <YAxis hide domain={['auto', 'auto']} />
-                              <ReferenceLine y={0} stroke="var(--border)" strokeDasharray="3 3" />
-                              <ChartTooltip content={<ChartTooltipContent formatter={(v, name) => {
-                                const labels: Record<string, string> = { net_worth: 'Net Worth', total_assets: 'Assets', total_liabilities: 'Liabilities' };
-                                return [`$${Number(v).toLocaleString()}`, labels[name as string] ?? String(name)];
-                              }} />} />
-                              {hasBreakdown && <Line type="monotone" dataKey="total_assets" stroke="var(--green)" strokeWidth={1.5} dot={false} strokeDasharray="4 3" activeDot={{ r: 3 }} />}
-                              {hasBreakdown && <Line type="monotone" dataKey="total_liabilities" stroke="var(--muted-foreground)" strokeWidth={1.5} dot={false} strokeDasharray="4 3" activeDot={{ r: 3 }} />}
-                              <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: 'var(--violet-light)', strokeWidth: 0 }} />
-                            </LineChart>
-                          </ChartContainer>
-                        </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                      <div className="flex-1 min-h-[200px] min-w-0">
+                        <ChartContainer config={netWorthChartConfig} className="h-[180px] w-full">
+                          <LineChart data={netWorthHistory} margin={{ top: 16, right: 16, bottom: 4, left: 16 }}>
+                            <XAxis hide />
+                            <YAxis hide domain={['auto', 'auto']} />
+                            <ChartTooltip content={<ChartTooltipContent formatter={(v, name) => {
+                              const labels: Record<string, string> = { net_worth: 'Net Worth', total_assets: 'Assets', total_liabilities: 'Liabilities' };
+                              return [`$${Number(v).toLocaleString()}`, labels[name as string] ?? String(name)];
+                            }} />} />
+                            {hasBreakdown && <Line type="monotone" dataKey="total_assets" stroke="var(--green)" strokeWidth={1.5} dot={false} strokeDasharray="4 3" activeDot={{ r: 3 }} />}
+                            {hasBreakdown && <Line type="monotone" dataKey="total_liabilities" stroke="var(--muted-foreground)" strokeWidth={1.5} dot={false} strokeDasharray="4 3" activeDot={{ r: 3 }} />}
+                            <Line type="monotone" dataKey="net_worth" stroke="var(--violet-light)" strokeWidth={3} dot={false} activeDot={{ r: 4, fill: 'var(--violet-light)', strokeWidth: 0 }} />
+                          </LineChart>
+                        </ChartContainer>
+                      </div>
+                    </Widget>
                   );
                 })()}
 
@@ -566,41 +560,35 @@ export default function Dashboard() {
                   const total = slices.reduce((s, c) => s + c.value, 0);
                   if (slices.length === 0) return null;
                   return (
-                    <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full flex-1 min-h-[300px] cursor-pointer group"
-                      onClick={() => navigate('/accounts')}>
-                      <CardHeader className="pb-0 pt-6 px-6">
-                        <div className="flex justify-between items-start">
-                          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <BarChart2 size={14} className="text-muted-foreground shrink-0" />Allocation
-                          </CardTitle>
-                          <ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-6">
-                        <ChartContainer config={allocationChartConfig} className="h-[160px] w-full">
-                          <PieChart>
-                            <Pie data={slices} cx="50%" cy="50%" innerRadius="52%" outerRadius="78%" paddingAngle={3} dataKey="value" nameKey="name">
-                              {slices.map(s => <Cell key={s.name} fill={s.color} />)}
-                            </Pie>
-                            <ChartTooltip content={<ChartTooltipContent formatter={(v, n) => [`$${Number(v).toLocaleString()}`, n as string]} />} />
-                          </PieChart>
-                        </ChartContainer>
-                        <div className="space-y-2 mt-4">
-                          {slices.map(s => (
-                            <div key={s.name} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
-                                <span className="text-xs text-muted-foreground">{s.name}</span>
-                              </div>
-                              <div className="flex items-baseline gap-1.5">
-                                <span className="text-xs font-semibold tabular text-foreground">{fmt(s.value)}</span>
-                                <span className="text-[10px] text-muted-foreground">{Math.round((s.value / total) * 100)}%</span>
-                              </div>
+                    <Widget className="flex flex-col flex-1 min-h-[300px] cursor-pointer group" onClick={() => navigate('/accounts')}>
+                      <WidgetHeader
+                        title="Allocation"
+                        icon={<BarChart2 size={14} />}
+                        action={<ArrowRight size={13} className="text-muted-foreground group-hover:text-violet-light transition-colors" />}
+                      />
+                      <ChartContainer config={allocationChartConfig} className="h-[160px] w-full">
+                        <PieChart>
+                          <Pie data={slices} cx="50%" cy="50%" innerRadius="52%" outerRadius="78%" paddingAngle={3} dataKey="value" nameKey="name">
+                            {slices.map(s => <Cell key={s.name} fill={s.color} />)}
+                          </Pie>
+                          <ChartTooltip content={<ChartTooltipContent formatter={(v, n) => [`$${Number(v).toLocaleString()}`, n as string]} />} />
+                        </PieChart>
+                      </ChartContainer>
+                      <div className="space-y-2">
+                        {slices.map(s => (
+                          <div key={s.name} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                              <span className="text-xs text-muted-foreground">{s.name}</span>
                             </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xs font-semibold tabular text-foreground">{fmt(s.value)}</span>
+                              <span className="text-[10px] text-muted-foreground">{Math.round((s.value / total) * 100)}%</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Widget>
                   );
                 })()}
 
@@ -610,68 +598,57 @@ export default function Dashboard() {
               <div className={cn('flex flex-col gap-6 w-full min-w-0', activeTab !== 'payoff' && 'hidden lg:flex')}>
 
                 {/* Total Debt hero */}
-                <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
-                  <CardContent className="p-6">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80 mb-3">Total Debt</p>
-                    <div className="text-4xl xl:text-5xl font-black tracking-tight tabular-nums text-foreground leading-none">
-                      {fmt(data.totalDebt)}
-                    </div>
-                    {data.debtFreeDate && (
-                      <p className="text-sm font-semibold text-violet-light mt-3">
-                        Debt-free by <span className="text-base">{data.debtFreeDate}</span>
+                <Widget className="flex flex-col min-h-[260px]">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80">Total Debt</p>
+                  <div className="text-4xl xl:text-5xl font-black tracking-tight tabular-nums text-foreground leading-none">
+                    {fmt(data.totalDebt)}
+                  </div>
+                  {data.debtFreeDate && (
+                    <p className="text-sm font-semibold text-violet-light">
+                      Debt-free by <span className="text-base">{data.debtFreeDate}</span>
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80 mb-1">Minimums</p>
+                      <p className="text-sm font-bold tabular text-foreground">
+                        {fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span>
                       </p>
-                    )}
-                    <div className="grid grid-cols-2 gap-4 mt-5 pt-4 border-t border-border">
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80 mb-1">Minimums</p>
-                        <p className="text-sm font-bold tabular text-foreground">
-                          {fmtD(data.totalMinimums)}<span className="text-xs font-normal text-muted-foreground">/mo</span>
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80 mb-1">Accounts</p>
-                        <p className="text-sm font-bold tabular text-foreground">{data.accountCount}</p>
-                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80 mb-1">Accounts</p>
+                      <p className="text-sm font-bold tabular text-foreground">{data.accountCount}</p>
+                    </div>
+                  </div>
+                </Widget>
 
                 {/* Payoff Projection */}
                 {chartData.length > 2 && (
-                  <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full flex-1 min-h-[300px]">
-                    <CardHeader className="pb-0 pt-6 px-6">
-                      <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        <TrendingDown size={14} className="text-muted-foreground shrink-0" />Payoff Projection
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      <div className="flex-1 min-h-[200px] min-w-0">
-                        <ChartContainer config={debtChartConfig} className="h-[180px] w-full">
-                          <AreaChart data={chartData} margin={{ top: 16, right: 16, bottom: 4, left: 16 }}>
-                            <defs>
-                              <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.3} />
-                                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} interval={Math.max(1, Math.floor(chartData.length / 5))} />
-                            <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Balance']} />} />
-                            <Area type="monotone" dataKey="balance" stroke="var(--primary)" strokeWidth={2} fill="url(#debtGrad)" dot={false} activeDot={{ r: 4, fill: 'var(--violet-light)', strokeWidth: 0 }} />
-                          </AreaChart>
-                        </ChartContainer>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <Widget className="flex-1 min-h-[300px]">
+                    <WidgetHeader title="Payoff Projection" icon={<TrendingDown size={14} />} />
+                    <div className="flex-1 min-h-[200px] min-w-0">
+                      <ChartContainer config={debtChartConfig} className="h-[180px] w-full">
+                        <AreaChart data={chartData} margin={{ top: 16, right: 16, bottom: 4, left: 16 }}>
+                          <defs>
+                            <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.25} />
+                              <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis hide />
+                          <YAxis hide domain={['auto', 'auto']} />
+                          <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Balance']} />} />
+                          <Area type="monotone" dataKey="balance" stroke="var(--primary)" strokeWidth={3} fill="url(#debtGrad)" dot={false} activeDot={{ r: 4, fill: 'var(--violet-light)', strokeWidth: 0 }} />
+                        </AreaChart>
+                      </ChartContainer>
+                    </div>
+                  </Widget>
                 )}
 
                 {/* Priority Attack */}
-                <Card className="bg-card border-[var(--primary)]/30 shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
-                  <CardHeader className="pb-0 pt-6 px-6">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <Zap size={14} className="text-violet-light shrink-0" />Priority Attack
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
+                <Widget>
+                  <WidgetHeader title="Priority Attack" icon={<Zap size={14} className="text-violet-light" />} />
+                  <div>
                     {data.priorityCard ? (
                       <>
                         <div className="relative pl-3 flex items-center gap-3 mb-3">
@@ -698,31 +675,21 @@ export default function Dashboard() {
                     ) : (
                       <p className="text-sm text-muted-foreground">No debt cards found.</p>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </Widget>
 
                 {/* Monthly Interest */}
-                <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
-                  <CardHeader className="pb-0 pt-6 px-6">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <Flame size={14} className="text-muted-foreground shrink-0" />Monthly Interest
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="text-4xl font-black tracking-tight tabular-nums text-foreground mt-1">{fmtD(data.monthlyInterest)}</div>
-                    <p className="text-xs text-muted-foreground mt-1">cost of carrying debt</p>
-                  </CardContent>
-                </Card>
+                <Widget>
+                  <WidgetHeader title="Monthly Interest" icon={<Flame size={14} />} />
+                  <div className="text-4xl font-black tracking-tight tabular-nums text-foreground">{fmtD(data.monthlyInterest)}</div>
+                  <p className="text-xs text-white/40 font-medium -mt-2">cost of carrying debt</p>
+                </Widget>
 
                 {/* Alerts */}
                 {data.alerts && data.alerts.length > 0 && (
-                  <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
-                    <CardHeader className="pb-0 pt-6 px-6">
-                      <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        <Bell size={14} className="text-muted-foreground shrink-0" />Alerts
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6 space-y-3">
+                  <Widget>
+                    <WidgetHeader title="Alerts" icon={<Bell size={14} />} />
+                    <div className="flex flex-col gap-3">
                       {data.alerts.map((a, i) => (
                         <div key={i} className="flex gap-3 p-3 rounded-lg bg-amber-dim border border-amber/20">
                           <span className="shrink-0 mt-0.5">
@@ -736,8 +703,8 @@ export default function Dashboard() {
                           </div>
                         </div>
                       ))}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </Widget>
                 )}
 
               </div>
@@ -746,77 +713,60 @@ export default function Dashboard() {
               <div className={cn('flex flex-col gap-6 w-full min-w-0', activeTab !== 'cashflow' && 'hidden lg:flex')}>
 
                 {/* Monthly Surplus */}
-                <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
-                  <CardHeader className="pb-0 pt-6 px-6">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <Wallet size={14} className="text-muted-foreground shrink-0" />Monthly Surplus
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className={cn('text-4xl xl:text-5xl font-black tracking-tight tabular-nums mt-1', data.surplus >= 0 ? 'text-green' : 'text-foreground')}>
-                      {fmt(data.surplus)}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">available for extra payments</p>
-                  </CardContent>
-                </Card>
+                <Widget className="flex flex-col min-h-[260px]">
+                  <WidgetHeader title="Monthly Surplus" icon={<Wallet size={14} />} />
+                  <div className={cn('text-4xl xl:text-5xl font-black tracking-tight tabular-nums', data.surplus >= 0 ? 'text-green' : 'text-foreground')}>
+                    {fmt(data.surplus)}
+                  </div>
+                  <p className="text-xs text-white/40 font-medium -mt-2">available for extra payments</p>
+                </Widget>
 
                 {/* Spending by Category */}
                 {spendingData.length > 0 && (() => {
                   const top5 = spendingData.slice(0, 5);
                   return (
-                    <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full flex-1 min-h-[300px]">
-                      <CardHeader className="pb-0 pt-6 px-6">
-                        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          <ShoppingCart size={14} className="text-muted-foreground shrink-0" />Spending by Category
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-6">
-                        <div className="flex-1 min-h-[200px] min-w-0">
-                          <ChartContainer config={spendingChartConfig} className="h-[180px] w-full">
-                            <BarChart
-                              data={top5}
-                              layout="vertical"
-                              margin={{ top: 8, right: 16, bottom: 8, left: 4 }}
-                              barSize={10}
-                              onClick={(data: unknown) => {
-                                const p = (data as { activePayload?: { payload: SpendingCategory }[] } | null)?.activePayload?.[0]?.payload;
-                                if (p) setSheet({ open: true, type: 'spending', payload: p });
+                    <Widget className="flex-1 min-h-[300px]">
+                      <WidgetHeader title="Spending by Category" icon={<ShoppingCart size={14} />} />
+                      <div className="flex-1 min-h-[200px] min-w-0">
+                        <ChartContainer config={spendingChartConfig} className="h-[180px] w-full">
+                          <BarChart
+                            data={top5}
+                            layout="vertical"
+                            margin={{ top: 8, right: 16, bottom: 8, left: 4 }}
+                            barSize={10}
+                            onClick={(data: unknown) => {
+                              const p = (data as { activePayload?: { payload: SpendingCategory }[] } | null)?.activePayload?.[0]?.payload;
+                              if (p) setSheet({ open: true, type: 'spending', payload: p });
+                            }}
+                          >
+                            <XAxis type="number" hide />
+                            <YAxis type="category" dataKey="category"
+                              tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} tickLine={false} axisLine={false} width={86}
+                              tickFormatter={(v: string) => {
+                                const s = v.replace(/_/g, ' ').replace(/AND /gi, '& ');
+                                return s.length > 13 ? s.slice(0, 12) + '…' : s;
                               }}
-                            >
-                              <XAxis type="number" hide />
-                              <YAxis type="category" dataKey="category"
-                                tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} width={90}
-                                tickFormatter={(v: string) => {
-                                  const s = v.replace(/_/g, ' ').replace(/AND /gi, '& ');
-                                  return s.length > 13 ? s.slice(0, 12) + '…' : s;
-                                }}
-                              />
-                              <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Spent']} />} />
-                              <Bar dataKey="total" radius={[0, 4, 4, 0]} cursor="pointer">
-                                {top5.map((_, i) => <Cell key={i} fill={SPENDING_COLORS[i % SPENDING_COLORS.length]} />)}
-                              </Bar>
-                            </BarChart>
-                          </ChartContainer>
-                        </div>
-                      </CardContent>
-                    </Card>
+                            />
+                            <ChartTooltip content={<ChartTooltipContent formatter={(v) => [`$${Number(v).toLocaleString()}`, 'Spent']} />} />
+                            <Bar dataKey="total" radius={[0, 4, 4, 0]} cursor="pointer">
+                              {top5.map((_, i) => <Cell key={i} fill={SPENDING_COLORS[i % SPENDING_COLORS.length]} />)}
+                            </Bar>
+                          </BarChart>
+                        </ChartContainer>
+                      </div>
+                    </Widget>
                   );
                 })()}
 
                 {/* Goals */}
                 {goals.length > 0 && (
-                  <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
-                    <CardHeader className="pb-0 pt-6 px-6">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          <Target size={14} className="text-muted-foreground shrink-0" />Goals
-                        </CardTitle>
-                        <Link to="/plan?tab=goals" className="text-xs text-violet-light font-semibold no-underline flex items-center gap-0.5 hover:opacity-80">
-                          All <ArrowRight size={11} />
-                        </Link>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-6 space-y-3">
+                  <Widget>
+                    <WidgetHeader
+                      title="Goals"
+                      icon={<Target size={14} />}
+                      action={<Link to="/plan?tab=goals" className="text-xs text-violet-light font-semibold no-underline flex items-center gap-0.5 hover:opacity-80">All <ArrowRight size={11} /></Link>}
+                    />
+                    <div className="flex flex-col gap-3">
                       {goals.slice(0, 3).map(g => {
                         const label = g.label || (g.goal_type === 'debt_free_date' ? 'Debt-Free Date' : g.account_name ? `Pay off ${g.account_name}` : 'Goal');
                         return (
@@ -832,18 +782,14 @@ export default function Dashboard() {
                           </button>
                         );
                       })}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </Widget>
                 )}
 
                 {/* AI Insights */}
-                <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden flex flex-col w-full">
-                  <CardHeader className="pb-0 pt-6 px-6">
-                    <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <Sparkles size={14} className="text-muted-foreground shrink-0" />AI Insights
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
+                <Widget>
+                  <WidgetHeader title="AI Insights" icon={<Sparkles size={14} />} />
+                  <div>
                     {aiState === 'loading' && (
                       <div className="flex flex-col items-center py-4 gap-2">
                         <div className="spinner" />
@@ -896,12 +842,12 @@ export default function Dashboard() {
                     {aiState === 'error' && (
                       <p className="text-xs text-red text-center py-3">{aiError}</p>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </Widget>
 
               </div>
 
-            </div>
+            </WidgetGrid>
           </Tabs>
           </div>
         )}

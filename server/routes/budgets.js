@@ -53,6 +53,20 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT /api/budgets/:id — update monthly_limit
+router.put('/:id', async (req, res) => {
+  try {
+    const { monthly_limit } = req.body;
+    if (monthly_limit == null) return res.status(400).json({ error: 'monthly_limit required' });
+    const budget = await db.upsertBudget(req.user.uid, req.params.id, {
+      monthly_limit: parseFloat(monthly_limit),
+    });
+    res.json({ budget });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/budgets/:id
 router.delete('/:id', async (req, res) => {
   try {

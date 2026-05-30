@@ -266,9 +266,19 @@ async function recordNetWorthSnapshot(uid, accounts) {
   const assetTypes     = ['depository', 'investment', 'brokerage'];
   const liabilityTypes = ['credit', 'loan', 'mortgage'];
 
-  const totalAssets      = accounts.filter(a => assetTypes.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
+  const plaidAssets      = accounts.filter(a => assetTypes.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
   const totalLiabilities = accounts.filter(a => liabilityTypes.includes(a.type)).reduce((s, a) => s + (a.balance_current || 0), 0);
-  const netWorth         = totalAssets - totalLiabilities;
+
+  // Include non-archived manual assets (real estate, vehicles, stocks & bonds, etc.)
+  // so the historical series matches the live net worth total.
+  // Fetch all and filter in JS — archived_at is absent (not null) on new docs.
+  const manualSnap   = await userRef(uid).collection('manual_assets').get();
+  const manualAssets = manualSnap.docs
+    .filter(d => !d.data().archived_at)
+    .reduce((s, d) => s + (d.data().current_value || 0), 0);
+
+  const totalAssets = plaidAssets + manualAssets;
+  const netWorth    = totalAssets - totalLiabilities;
 
   const yearMonth = new Date().toISOString().slice(0, 7);
   const ref = userRef(uid).collection('net_worth_history').doc(yearMonth);
@@ -297,6 +307,12 @@ async function getManualAssets(uid, { includeArchived = false } = {}) {
 
 async function archiveManualAsset(uid, id) {
   await userRef(uid).collection('manual_assets').doc(id).update({
+    archived_at: FieldValue.serverTimestamp(),
+  });
+}
+
+async function archivePlaidAccount(uid, accountId) {
+  await userRef(uid).collection('accounts').doc(accountId).update({
     archived_at: FieldValue.serverTimestamp(),
   });
 }
@@ -404,6 +420,6 @@ module.exports = {
   recordNetWorthSnapshot, getNetWorthHistory,
   getDashboardConfig, saveDashboardConfig,
   getManualAssets, addManualAsset, updateManualAsset, deleteManualAsset, archiveManualAsset,
-  archivePlaidItem,
+  archivePlaidItem, archivePlaidAccount,
   saveHoldings, getHoldings,
 };
